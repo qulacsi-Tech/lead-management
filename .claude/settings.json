@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -X POST http://127.0.0.1:8010/api/auth/register -H \"Content-Type: application/json\" -d '{\"name\":\"Test Student\",\"email\":\"student1@test.com\",\"password\":\"password123\",\"role\":\"Student\"}')",
+      "Bash(curl -s -X POST http://127.0.0.1:8010/api/auth/login -H \"Content-Type: application/x-www-form-urlencoded\" -d \"username=student1@test.com&password=password123\")"
+    ]
+  }
+}

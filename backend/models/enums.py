@@ -4,6 +4,9 @@ class UserRole(str, Enum):
     ADMIN = "Admin"
     MANAGER = "Manager"
     AGENT = "Agent"
+    STUDENT = "Student"
+    MENTOR = "Mentor"
+    INSTITUTE = "Institute"
 
 class LeadStatus(str, Enum):
     NEW = "New"

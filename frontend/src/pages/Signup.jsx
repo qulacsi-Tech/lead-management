@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, ApiError } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import { Input, Label } from '../components/ui/Field';
 import { isValidEmail, required } from '../utils/validate';
@@ -13,7 +13,7 @@ const ROLES = [
 
 export default function Signup() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { register } = useAuth();
 
   const [role, setRole] = useState('student');
   const [name, setName] = useState('');
@@ -24,7 +24,7 @@ export default function Signup() {
 
   const roleHome = (r) => (r === 'student' ? '/student' : r === 'mentor' ? '/mentor' : '/institute');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const nextErrors = {};
     if (!required(name)) nextErrors.name = 'Enter your full name.';
@@ -34,11 +34,14 @@ export default function Signup() {
     if (Object.keys(nextErrors).length) return;
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      login(role, name.trim().split(' ')[0]);
+    try {
+      await register({ name: name.trim(), email, password, role });
       navigate(roleHome(role));
-    }, 600);
+    } catch (err) {
+      setErrors({ form: err instanceof ApiError ? err.message : 'Unable to create account. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -80,6 +83,7 @@ export default function Signup() {
             <Label>Password</Label>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password" error={errors.password} />
           </div>
+          {errors.form && <p className="text-error text-xs m-0">{errors.form}</p>}
           <Button type="submit" disabled={isSubmitting} className="w-full">
             {isSubmitting ? 'Creating account…' : 'Create Account'}
           </Button>

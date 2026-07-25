@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, ApiError } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import { Input } from '../components/ui/Field';
 import { isValidEmail, isValidMobile } from '../utils/validate';
@@ -26,9 +26,9 @@ export default function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const roleHome = (r) => (r === 'student' ? '/student' : r === 'mentor' ? '/mentor' : '/institute');
+  const roleHome = (r) => (r === 'student' ? '/student' : r === 'mentor' ? '/mentor' : r === 'institute' ? '/institute' : '/login');
 
-  const handleEmailSubmit = (e) => {
+  const handleEmailSubmit = async (e) => {
     e.preventDefault();
     if (!isValidEmail(email)) {
       setError('Please enter a valid email address.');
@@ -40,13 +40,14 @@ export default function Login() {
     }
     setError('');
     setIsSubmitting(true);
-    setTimeout(() => {
-      const first = email.split('@')[0].split(/[.\d_]/)[0];
-      const name = first ? first[0].toUpperCase() + first.slice(1) : role[0].toUpperCase() + role.slice(1);
+    try {
+      const user = await login(email, password);
+      navigate(roleHome(user.role.toLowerCase()));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
+    } finally {
       setIsSubmitting(false);
-      login(role, name);
-      navigate(roleHome(role));
-    }, 600);
+    }
   };
 
   const handleMobileSubmit = (e) => {
@@ -68,13 +69,7 @@ export default function Login() {
       setError('Enter the 6-digit OTP sent to your phone.');
       return;
     }
-    setError('');
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      login(role, 'Student');
-      navigate(roleHome(role));
-    }, 600);
+    setError('Mobile OTP sign-in is not available yet. Please use email sign-in.');
   };
 
   return (

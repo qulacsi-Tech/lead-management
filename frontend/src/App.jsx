@@ -31,7 +31,8 @@ import InstituteProfile from './pages/institute/InstituteProfile';
 import BuyLeads from './pages/institute/BuyLeads';
 
 function RequireRole({ role, children }) {
-  const { role: currentRole } = useAuth();
+  const { role: currentRole, initializing } = useAuth();
+  if (initializing) return null;
   if (!currentRole) return <Navigate to="/login" replace />;
   if (currentRole !== role) return <Navigate to={`/${currentRole}`} replace />;
   return children;
