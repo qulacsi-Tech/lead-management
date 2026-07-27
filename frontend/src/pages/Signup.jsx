@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, ApiError } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import Button from '../components/ui/Button';
 import { Input, Label } from '../components/ui/Field';
 import { isValidEmail, required } from '../utils/validate';
@@ -14,6 +15,7 @@ const ROLES = [
 export default function Signup() {
   const navigate = useNavigate();
   const { register } = useAuth();
+  const { autoRegisterUser } = useData();
 
   const [role, setRole] = useState('student');
   const [name, setName] = useState('');
@@ -22,7 +24,14 @@ export default function Signup() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const roleHome = (r) => (r === 'student' ? '/student' : r === 'mentor' ? '/mentor' : '/institute');
+  const roleHome = (r) =>
+    r === 'admin'
+      ? '/admin'
+      : r === 'student'
+      ? '/student'
+      : r === 'mentor'
+      ? '/mentor'
+      : '/institute';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,6 +44,8 @@ export default function Signup() {
 
     setIsSubmitting(true);
     try {
+      // Auto-add to DataContext admin management lists instantly upon registration
+      autoRegisterUser({ name: name.trim(), email, role });
       await register({ name: name.trim(), email, password, role });
       navigate(roleHome(role));
     } catch (err) {

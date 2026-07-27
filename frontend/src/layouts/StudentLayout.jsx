@@ -14,17 +14,12 @@ const NAV = [
 ];
 
 export default function StudentLayout() {
-  const { displayName, logout, switchRole } = useAuth();
+  const { displayName, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
-  };
-
-  const handleSwitchToMentor = () => {
-    switchRole('mentor');
-    navigate('/mentor');
   };
 
   return (
@@ -43,12 +38,6 @@ export default function StudentLayout() {
             </button>
             <button className="flex items-center gap-3 px-4 py-2 text-sm text-on-surface-variant rounded-lg hover:bg-surface-container-high bg-transparent border-none cursor-pointer text-left">
               <span className="material-symbols-outlined">help</span>Support
-            </button>
-            <button
-              onClick={handleSwitchToMentor}
-              className="flex items-center gap-3 px-4 py-2 text-xs font-semibold text-primary rounded-lg hover:bg-surface-container-high bg-transparent border-none cursor-pointer text-left"
-            >
-              <span className="material-symbols-outlined">swap_horiz</span>Switch to Mentor View
             </button>
             <button
               onClick={handleLogout}

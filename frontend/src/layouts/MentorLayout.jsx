@@ -13,17 +13,12 @@ const NAV = [
 ];
 
 export default function MentorLayout() {
-  const { displayName, logout, switchRole } = useAuth();
+  const { displayName, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
-  };
-
-  const handleSwitchToStudent = () => {
-    switchRole('student');
-    navigate('/student');
   };
 
   return (
@@ -37,12 +32,6 @@ export default function MentorLayout() {
             <Button variant="soft" icon="help_center" className="w-full mb-2">
               Help Center
             </Button>
-            <button
-              onClick={handleSwitchToStudent}
-              className="flex items-center gap-3 px-4 py-2 text-xs font-semibold text-primary rounded-lg hover:bg-surface-container-high bg-transparent border-none cursor-pointer text-left"
-            >
-              <span className="material-symbols-outlined">swap_horiz</span>Switch to Student View
-            </button>
             <button
               onClick={handleLogout}
               className="flex items-center gap-3 px-4 py-2 text-sm text-error rounded-lg hover:bg-error-container bg-transparent border-none cursor-pointer text-left"

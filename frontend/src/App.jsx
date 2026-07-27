@@ -30,6 +30,13 @@ import InstituteDashboard from './pages/institute/Dashboard';
 import InstituteProfile from './pages/institute/InstituteProfile';
 import BuyLeads from './pages/institute/BuyLeads';
 
+import AdminLayout from './layouts/AdminLayout';
+import AdminDashboard from './pages/admin/Dashboard';
+import ManageInstitutes from './pages/admin/ManageInstitutes';
+import ManageStudents from './pages/admin/ManageStudents';
+import ManageMentors from './pages/admin/ManageMentors';
+import AdminSettings from './pages/admin/AdminSettings';
+
 function RequireRole({ role, children }) {
   const { role: currentRole, initializing } = useAuth();
   if (initializing) return null;
@@ -91,6 +98,21 @@ function AppRoutes() {
         <Route path="buy-leads" element={<BuyLeads />} />
       </Route>
 
+      <Route
+        path="/admin"
+        element={
+          <RequireRole role="admin">
+            <AdminLayout />
+          </RequireRole>
+        }
+      >
+        <Route index element={<AdminDashboard />} />
+        <Route path="institutes" element={<ManageInstitutes />} />
+        <Route path="students" element={<ManageStudents />} />
+        <Route path="mentors" element={<ManageMentors />} />
+        <Route path="settings" element={<AdminSettings />} />
+      </Route>
+
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
@@ -111,3 +133,4 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+

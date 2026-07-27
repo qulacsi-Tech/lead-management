@@ -9,6 +9,7 @@ const ROLES = [
   { id: 'student', label: 'Student', icon: 'school' },
   { id: 'mentor', label: 'Mentor', icon: 'person' },
   { id: 'institute', label: 'Institute', icon: 'account_balance' },
+  { id: 'admin', label: 'Admin', icon: 'admin_panel_settings' },
 ];
 
 export default function Login() {
@@ -26,7 +27,16 @@ export default function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const roleHome = (r) => (r === 'student' ? '/student' : r === 'mentor' ? '/mentor' : r === 'institute' ? '/institute' : '/login');
+  const roleHome = (r) =>
+    r === 'admin'
+      ? '/admin'
+      : r === 'student'
+      ? '/student'
+      : r === 'mentor'
+      ? '/mentor'
+      : r === 'institute'
+      ? '/institute'
+      : '/login';
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
@@ -41,8 +51,8 @@ export default function Login() {
     setError('');
     setIsSubmitting(true);
     try {
-      const user = await login(email, password);
-      navigate(roleHome(user.role.toLowerCase()));
+      const user = await login(email, password, role);
+      navigate(roleHome(user.role ? user.role.toLowerCase() : role));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
     } finally {

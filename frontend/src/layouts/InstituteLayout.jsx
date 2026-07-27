@@ -12,17 +12,12 @@ const NAV = [
 ];
 
 export default function InstituteLayout() {
-  const { displayName, logout, switchRole } = useAuth();
+  const { displayName, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
-  };
-
-  const handleSwitchRole = () => {
-    switchRole('student');
-    navigate('/student');
   };
 
   return (
@@ -36,12 +31,6 @@ export default function InstituteLayout() {
             <Button variant="secondary" icon="support_agent" className="w-full mb-2">
               Get Support
             </Button>
-            <button
-              onClick={handleSwitchRole}
-              className="flex items-center gap-3 px-4 py-2 text-xs font-semibold text-primary rounded-lg hover:bg-surface-container-high bg-transparent border-none cursor-pointer text-left"
-            >
-              <span className="material-symbols-outlined">swap_horiz</span>Switch Role
-            </button>
             <button
               onClick={handleLogout}
               className="flex items-center gap-3 px-4 py-2 text-sm text-error rounded-lg hover:bg-error-container bg-transparent border-none cursor-pointer text-left"
