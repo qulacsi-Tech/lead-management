@@ -174,7 +174,7 @@ export default function Login() {
 
           {/* Sign-in Form */}
           {tab === 'email' ? (
-            <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4">
+            <form onSubmit={handleEmailSubmit} autoComplete="off" className="flex flex-col gap-4">
               <div>
                 <label className="block text-xs text-on-surface-variant mb-1.5">Email Address</label>
                 <Input
@@ -182,6 +182,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
+                  autoComplete="off"
                 />
               </div>
               <div>
@@ -191,6 +192,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
+                  autoComplete="new-password"
                 />
               </div>
               {error && <p className="text-error text-xs m-0">{error}</p>}
@@ -211,7 +213,7 @@ export default function Login() {
               </Button>
             </form>
           ) : (
-            <form onSubmit={handleMobileSubmit} className="flex flex-col gap-4">
+            <form onSubmit={handleMobileSubmit} autoComplete="off" className="flex flex-col gap-4">
               <div>
                 <label className="block text-xs text-on-surface-variant mb-1.5">Mobile Number</label>
                 <Input
@@ -220,6 +222,7 @@ export default function Login() {
                   disabled={otpSent}
                   onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   placeholder="10-digit mobile number"
+                  autoComplete="off"
                 />
               </div>
               {otpSent && (
@@ -230,6 +233,7 @@ export default function Login() {
                     value={otp}
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="6-digit OTP"
+                    autoComplete="off"
                   />
                   <button
                     type="button"

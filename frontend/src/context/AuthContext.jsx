@@ -69,6 +69,18 @@ export function AuthProvider({ children }) {
     return login(email, password, signupRole);
   }, [login]);
 
+  /**
+   * Called by role-specific registration modals after a successful
+   * POST /register/{role} that returns a TokenResponse.
+   * Avoids a second login round-trip.
+   */
+  const loginFromToken = useCallback((tokenData) => {
+    setToken(tokenData.access_token);
+    setUser(tokenData.user);
+    setRole(roleToClient(tokenData.user.role));
+    return tokenData.user;
+  }, []);
+
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
@@ -84,6 +96,7 @@ export function AuthProvider({ children }) {
     initializing,
     login,
     register,
+    loginFromToken,
     logout,
     switchRole,
   };

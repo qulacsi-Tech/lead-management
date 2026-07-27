@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, ApiError } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { registerStudent } from '../../Api/Api';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { Input, Label } from '../ui/Field';
@@ -9,7 +10,7 @@ import { isValidEmail, required } from '../../utils/validate';
 
 export default function StudentRegisterModal({ isOpen, onClose }) {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { loginFromToken } = useAuth();
   const { autoRegisterUser } = useData();
 
   const [name, setName] = useState('');
@@ -22,6 +23,20 @@ export default function StudentRegisterModal({ isOpen, onClose }) {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Reset fields when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setName('');
+      setEmail('');
+      setPassword('');
+      setPhone('');
+      setCity('');
+      setCourse('Cybersecurity');
+      setSchool('');
+      setErrors({});
+    }
+  }, [isOpen]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const nextErrors = {};
@@ -33,17 +48,29 @@ export default function StudentRegisterModal({ isOpen, onClose }) {
 
     setIsSubmitting(true);
     try {
-      // Auto-approve student registration in DataContext
+      // Call the real backend registration endpoint
+      const tokenData = await registerStudent({
+        name: name.trim(),
+        email,
+        password,
+        phone: phone || undefined,
+        city: city || undefined,
+        target_course: course || undefined,
+        current_school: school || undefined,
+      });
+
+      // Mirror into local DataContext so Admin module shows the new entry
       autoRegisterUser({
         name: name.trim(),
         email,
         role: 'student',
-        city: city || 'Seattle',
-        course: course || 'Cybersecurity',
-        phone: phone || '+1 555-0101',
+        city: city || 'N/A',
+        course: course || 'N/A',
+        phone: phone || 'N/A',
       });
 
-      await register({ name: name.trim(), email, password, role: 'student' });
+      // Store token + set auth state — no second login call needed
+      loginFromToken(tokenData);
       onClose();
       navigate('/student');
     } catch (err) {
@@ -68,20 +95,20 @@ export default function StudentRegisterModal({ isOpen, onClose }) {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+        <form onSubmit={handleSubmit} autoComplete="off" className="flex flex-col gap-3.5">
           <div>
             <Label>Full Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Alex Wong" error={errors.name} required />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Alex Wong" error={errors.name} autoComplete="off" required />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label>Email Address</Label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="alex@example.com" error={errors.email} required />
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="alex@example.com" error={errors.email} autoComplete="off" required />
             </div>
             <div>
               <Label>Password</Label>
-              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" error={errors.password} required />
+              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" error={errors.password} autoComplete="new-password" required />
             </div>
           </div>
 

@@ -20,28 +20,40 @@ function FieldError({ error }) {
   return <p className="text-error text-xs mt-1 mb-0">{error}</p>;
 }
 
-export function Input({ className = '', error, ...rest }) {
+export function Input({ className = '', error, autoComplete = 'off', ...rest }) {
   return (
     <>
-      <input className={`${inputClass} ${error ? errorClass : ''} ${className}`} {...rest} />
+      <input
+        autoComplete={autoComplete}
+        className={`${inputClass} ${error ? errorClass : ''} ${className}`}
+        {...rest}
+      />
       <FieldError error={error} />
     </>
   );
 }
 
-export function Textarea({ className = '', error, ...rest }) {
+export function Textarea({ className = '', error, autoComplete = 'off', ...rest }) {
   return (
     <>
-      <textarea className={`${inputClass} resize-y ${error ? errorClass : ''} ${className}`} {...rest} />
+      <textarea
+        autoComplete={autoComplete}
+        className={`${inputClass} resize-y ${error ? errorClass : ''} ${className}`}
+        {...rest}
+      />
       <FieldError error={error} />
     </>
   );
 }
 
-export function Select({ className = '', children, error, ...rest }) {
+export function Select({ className = '', children, error, autoComplete = 'off', ...rest }) {
   return (
     <>
-      <select className={`${inputClass} cursor-pointer ${error ? errorClass : ''} ${className}`} {...rest}>
+      <select
+        autoComplete={autoComplete}
+        className={`${inputClass} cursor-pointer ${error ? errorClass : ''} ${className}`}
+        {...rest}
+      >
         {children}
       </select>
       <FieldError error={error} />

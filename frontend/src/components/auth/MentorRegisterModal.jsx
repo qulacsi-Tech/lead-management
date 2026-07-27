@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, ApiError } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { registerMentor } from '../../Api/Api';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { Input, Label } from '../ui/Field';
@@ -9,7 +10,7 @@ import { isValidEmail, required } from '../../utils/validate';
 
 export default function MentorRegisterModal({ isOpen, onClose }) {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { loginFromToken } = useAuth();
   const { autoRegisterUser } = useData();
 
   const [name, setName] = useState('');
@@ -22,6 +23,20 @@ export default function MentorRegisterModal({ isOpen, onClose }) {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Reset fields when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setName('');
+      setEmail('');
+      setPassword('');
+      setPhone('');
+      setDomain('Artificial Intelligence & ML');
+      setCompany('');
+      setExperience('5+ Years');
+      setErrors({});
+    }
+  }, [isOpen]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const nextErrors = {};
@@ -33,17 +48,28 @@ export default function MentorRegisterModal({ isOpen, onClose }) {
 
     setIsSubmitting(true);
     try {
-      // Auto-approve mentor registration in DataContext
+      // Call the real backend registration endpoint
+      const tokenData = await registerMentor({
+        name: name.trim(),
+        email,
+        password,
+        phone: phone || undefined,
+        domain: domain || undefined,
+        company: company || undefined,
+        experience_level: experience || undefined,
+      });
+
+      // Mirror into local DataContext so Admin module shows the new entry
       autoRegisterUser({
         name: name.trim(),
         email,
         role: 'mentor',
-        domain: domain || 'Artificial Intelligence & ML',
-        company: company || 'Independent Consultant',
-        phone: phone || '+1 555-0188',
+        domain: domain || 'N/A',
+        company: company || 'N/A',
+        phone: phone || 'N/A',
       });
 
-      await register({ name: name.trim(), email, password, role: 'mentor' });
+      loginFromToken(tokenData);
       onClose();
       navigate('/mentor');
     } catch (err) {
@@ -68,20 +94,20 @@ export default function MentorRegisterModal({ isOpen, onClose }) {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+        <form onSubmit={handleSubmit} autoComplete="off" className="flex flex-col gap-3.5">
           <div>
             <Label>Mentor Full Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Dr. Evelyn Carter" error={errors.name} required />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Dr. Evelyn Carter" error={errors.name} autoComplete="off" required />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label>Email Address</Label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="evelyn@mentors.com" error={errors.email} required />
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="evelyn@mentors.com" error={errors.email} autoComplete="off" required />
             </div>
             <div>
               <Label>Password</Label>
-              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" error={errors.password} required />
+              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" error={errors.password} autoComplete="new-password" required />
             </div>
           </div>
 
