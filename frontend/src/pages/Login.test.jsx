@@ -2,13 +2,16 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { AuthProvider } from '../context/AuthContext';
+import { DataProvider } from '../context/DataContext';
 import Login from './Login';
 
 function renderLogin() {
   return render(
     <MemoryRouter>
       <AuthProvider>
-        <Login />
+        <DataProvider>
+          <Login />
+        </DataProvider>
       </AuthProvider>
     </MemoryRouter>
   );
@@ -22,9 +25,11 @@ describe('Login page', () => {
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
   });
 
-  it('links to signup and forgot-password routes', () => {
+  it('shows forgot-password link and role-based register CTA', () => {
     renderLogin();
-    expect(screen.getByText(/sign up as a new student/i).closest('a')).toHaveAttribute('href', '/signup');
     expect(screen.getByText(/forgot password/i).closest('a')).toHaveAttribute('href', '/forgot-password');
+    // Student is the default role — register CTA should be present
+    expect(screen.getByText(/register as student/i)).toBeInTheDocument();
   });
 });
+

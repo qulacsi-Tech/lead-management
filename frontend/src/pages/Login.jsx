@@ -4,6 +4,9 @@ import { useAuth, ApiError } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import { Input } from '../components/ui/Field';
 import { isValidEmail, isValidMobile } from '../utils/validate';
+import StudentRegisterModal from '../components/auth/StudentRegisterModal';
+import MentorRegisterModal from '../components/auth/MentorRegisterModal';
+import InstituteRegisterModal from '../components/auth/InstituteRegisterModal';
 
 const ROLES = [
   { id: 'student', label: 'Student', icon: 'school' },
@@ -11,6 +14,33 @@ const ROLES = [
   { id: 'institute', label: 'Institute', icon: 'account_balance' },
   { id: 'admin', label: 'Admin', icon: 'admin_panel_settings' },
 ];
+
+const ROLE_REGISTER_META = {
+  student: {
+    label: 'New student? Create your free account',
+    cta: 'Register as Student',
+    color: 'text-emerald-700',
+    icon: 'school',
+  },
+  mentor: {
+    label: 'Share your expertise with students',
+    cta: 'Register as Mentor',
+    color: 'text-violet-700',
+    icon: 'person',
+  },
+  institute: {
+    label: 'Partner with us to discover top students',
+    cta: 'Register your Institute',
+    color: 'text-primary',
+    icon: 'account_balance',
+  },
+  admin: {
+    label: 'Admin accounts are provisioned by the system.',
+    cta: null,
+    color: 'text-on-surface-variant',
+    icon: 'admin_panel_settings',
+  },
+};
 
 export default function Login() {
   const navigate = useNavigate();
@@ -26,6 +56,11 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Registration modal open states
+  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [showMentorModal, setShowMentorModal] = useState(false);
+  const [showInstituteModal, setShowInstituteModal] = useState(false);
 
   const roleHome = (r) =>
     r === 'admin'
@@ -82,134 +117,176 @@ export default function Login() {
     setError('Mobile OTP sign-in is not available yet. Please use email sign-in.');
   };
 
-  return (
-    <div className="min-h-screen bg-surface flex items-center justify-center p-6 box-border">
-      <div className="w-full max-w-md bg-surface-container-lowest border border-outline-variant rounded-3xl p-10 shadow-lg box-border">
-        <div className="text-center mb-7">
-          <h1 className="font-display text-2xl font-bold text-primary m-0">Next Move</h1>
-          <p className="text-sm text-on-surface-variant mt-1.5 m-0">Sign in to continue your journey</p>
-        </div>
+  const handleOpenRegister = () => {
+    if (role === 'student') setShowStudentModal(true);
+    else if (role === 'mentor') setShowMentorModal(true);
+    else if (role === 'institute') setShowInstituteModal(true);
+  };
 
-        <div className="flex gap-2 mb-6">
-          {ROLES.map((r) => (
+  const meta = ROLE_REGISTER_META[role];
+
+  return (
+    <>
+      <div className="min-h-screen bg-surface flex items-center justify-center p-6 box-border">
+        <div className="w-full max-w-md bg-surface-container-lowest border border-outline-variant rounded-3xl p-10 shadow-lg box-border">
+          <div className="text-center mb-7">
+            <h1 className="font-display text-2xl font-bold text-primary m-0">Next Move</h1>
+            <p className="text-sm text-on-surface-variant mt-1.5 m-0">Sign in to continue your journey</p>
+          </div>
+
+          {/* Role Picker */}
+          <div className="flex gap-2 mb-6">
+            {ROLES.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => { setRole(r.id); setError(''); }}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                  role === r.id
+                    ? 'border-2 border-primary-container bg-primary-fixed text-primary'
+                    : 'border border-outline-variant bg-surface-container-lowest text-on-surface-variant font-semibold'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">{r.icon}</span>
+                {r.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Email / Mobile OTP Tabs */}
+          <div className="flex bg-surface-container-low rounded-lg p-1 mb-6">
             <button
-              key={r.id}
-              onClick={() => setRole(r.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                role === r.id
-                  ? 'border-2 border-primary-container bg-primary-fixed text-primary'
-                  : 'border border-outline-variant bg-surface-container-lowest text-on-surface-variant font-semibold'
+              onClick={() => { setTab('email'); setError(''); }}
+              className={`flex-1 py-2.5 rounded-md text-xs font-semibold cursor-pointer transition-all border-none ${
+                tab === 'email' ? 'bg-surface-container-lowest text-primary-container shadow-sm' : 'bg-transparent text-on-surface-variant'
               }`}
             >
-              <span className="material-symbols-outlined text-base">{r.icon}</span>
-              {r.label}
+              Email
             </button>
-          ))}
-        </div>
+            <button
+              onClick={() => { setTab('mobile'); setError(''); }}
+              className={`flex-1 py-2.5 rounded-md text-xs font-semibold cursor-pointer transition-all border-none ${
+                tab === 'mobile' ? 'bg-surface-container-lowest text-primary-container shadow-sm' : 'bg-transparent text-on-surface-variant'
+              }`}
+            >
+              Mobile OTP
+            </button>
+          </div>
 
-        <div className="flex bg-surface-container-low rounded-lg p-1 mb-6">
-          <button
-            onClick={() => { setTab('email'); setError(''); }}
-            className={`flex-1 py-2.5 rounded-md text-xs font-semibold cursor-pointer transition-all border-none ${
-              tab === 'email' ? 'bg-surface-container-lowest text-primary-container shadow-sm' : 'bg-transparent text-on-surface-variant'
-            }`}
-          >
-            Email
-          </button>
-          <button
-            onClick={() => { setTab('mobile'); setError(''); }}
-            className={`flex-1 py-2.5 rounded-md text-xs font-semibold cursor-pointer transition-all border-none ${
-              tab === 'mobile' ? 'bg-surface-container-lowest text-primary-container shadow-sm' : 'bg-transparent text-on-surface-variant'
-            }`}
-          >
-            Mobile OTP
-          </button>
-        </div>
-
-        {tab === 'email' ? (
-          <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4">
-            <div>
-              <label className="block text-xs text-on-surface-variant mb-1.5">Email Address</label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-on-surface-variant mb-1.5">Password</label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-              />
-            </div>
-            {error && <p className="text-error text-xs m-0">{error}</p>}
-            <div className="flex justify-between items-center">
-              <label className="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={() => setRememberMe((v) => !v)}
-                  className="accent-primary-container"
-                />
-                Remember me
-              </label>
-              <Link to="/forgot-password" className="text-xs text-primary-container no-underline">Forgot password?</Link>
-            </div>
-            <Button type="submit" disabled={isSubmitting} className="w-full">
-              {isSubmitting ? 'Signing in…' : 'Sign In'}
-            </Button>
-          </form>
-        ) : (
-          <form onSubmit={handleMobileSubmit} className="flex flex-col gap-4">
-            <div>
-              <label className="block text-xs text-on-surface-variant mb-1.5">Mobile Number</label>
-              <Input
-                type="tel"
-                value={mobile}
-                disabled={otpSent}
-                onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="10-digit mobile number"
-              />
-            </div>
-            {otpSent && (
+          {/* Sign-in Form */}
+          {tab === 'email' ? (
+            <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4">
               <div>
-                <label className="block text-xs text-on-surface-variant mb-1.5">Enter OTP</label>
+                <label className="block text-xs text-on-surface-variant mb-1.5">Email Address</label>
                 <Input
-                  type="text"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="6-digit OTP"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
                 />
+              </div>
+              <div>
+                <label className="block text-xs text-on-surface-variant mb-1.5">Password</label>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                />
+              </div>
+              {error && <p className="text-error text-xs m-0">{error}</p>}
+              <div className="flex justify-between items-center">
+                <label className="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={() => setRememberMe((v) => !v)}
+                    className="accent-primary-container"
+                  />
+                  Remember me
+                </label>
+                <Link to="/forgot-password" className="text-xs text-primary-container no-underline">Forgot password?</Link>
+              </div>
+              <Button type="submit" disabled={isSubmitting} className="w-full">
+                {isSubmitting ? 'Signing in…' : 'Sign In'}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleMobileSubmit} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-xs text-on-surface-variant mb-1.5">Mobile Number</label>
+                <Input
+                  type="tel"
+                  value={mobile}
+                  disabled={otpSent}
+                  onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="10-digit mobile number"
+                />
+              </div>
+              {otpSent && (
+                <div>
+                  <label className="block text-xs text-on-surface-variant mb-1.5">Enter OTP</label>
+                  <Input
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="6-digit OTP"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setOtp('')}
+                    className="text-xs text-primary-container mt-1.5 bg-transparent border-none cursor-pointer p-0"
+                  >
+                    Resend OTP
+                  </button>
+                </div>
+              )}
+              {error && <p className="text-error text-xs m-0">{error}</p>}
+              <Button type="submit" disabled={isSubmitting} className="w-full">
+                {isSubmitting
+                  ? otpSent ? 'Verifying…' : 'Sending OTP…'
+                  : otpSent ? 'Verify & Sign In' : 'Send OTP'}
+              </Button>
+            </form>
+          )}
+
+          {/* Dynamic Role-based Registration Prompt */}
+          <div className="mt-6 border-t border-outline-variant pt-5">
+            {meta.cta ? (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-xs text-on-surface-variant text-center m-0">{meta.label}</p>
                 <button
                   type="button"
-                  onClick={() => setOtp('')}
-                  className="text-xs text-primary-container mt-1.5 bg-transparent border-none cursor-pointer p-0"
+                  id={`register-${role}-btn`}
+                  onClick={handleOpenRegister}
+                  className={`flex items-center gap-2 text-sm font-bold ${meta.color} bg-transparent border-none cursor-pointer p-0 hover:opacity-75 transition-opacity`}
                 >
-                  Resend OTP
+                  <span className="material-symbols-outlined text-base">{meta.icon}</span>
+                  {meta.cta}
                 </button>
               </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 text-xs text-on-surface-variant">
+                <span className="material-symbols-outlined text-sm">lock</span>
+                {meta.label}
+              </div>
             )}
-            {error && <p className="text-error text-xs m-0">{error}</p>}
-            <Button type="submit" disabled={isSubmitting} className="w-full">
-              {isSubmitting
-                ? otpSent
-                  ? 'Verifying…'
-                  : 'Sending OTP…'
-                : otpSent
-                ? 'Verify & Sign In'
-                : 'Send OTP'}
-            </Button>
-          </form>
-        )}
-
-        <p className="text-center text-sm text-on-surface-variant mt-6 m-0">
-          New here? <Link to="/signup" className="font-semibold text-primary-container no-underline">Sign up as a new student</Link>
-        </p>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* Role-specific Registration Modals */}
+      <StudentRegisterModal
+        isOpen={showStudentModal}
+        onClose={() => setShowStudentModal(false)}
+      />
+      <MentorRegisterModal
+        isOpen={showMentorModal}
+        onClose={() => setShowMentorModal(false)}
+      />
+      <InstituteRegisterModal
+        isOpen={showInstituteModal}
+        onClose={() => setShowInstituteModal(false)}
+      />
+    </>
   );
 }

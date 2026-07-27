@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { apiFetch, getToken, setToken, ApiError } from '../utils/api';
+import { getMe, loginApi, registerApi, getToken, setToken, ApiError } from '../Api/Api';
 
 const AuthContext = createContext(null);
 
@@ -16,7 +16,7 @@ export function AuthProvider({ children }) {
       setInitializing(false);
       return;
     }
-    apiFetch('/auth/me')
+    getMe()
       .then((me) => {
         setUser(me);
         setRole(roleToClient(me.role));
@@ -37,8 +37,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password, requestedRole) => {
     try {
-      const form = new URLSearchParams({ username: email, password });
-      const data = await apiFetch('/auth/login', { method: 'POST', form, auth: false });
+      const data = await loginApi(email, password);
       setToken(data.access_token);
       setUser(data.user);
       setRole(roleToClient(data.user.role));
@@ -63,11 +62,7 @@ export function AuthProvider({ children }) {
   const register = useCallback(async ({ name, email, password, role: signupRole, ...extra }) => {
     const roleLabel = signupRole ? signupRole[0].toUpperCase() + signupRole.slice(1) : undefined;
     try {
-      await apiFetch('/auth/register', {
-        method: 'POST',
-        auth: false,
-        body: { name, email, password, role: roleLabel },
-      });
+      await registerApi({ name, email, password, role: roleLabel });
     } catch (err) {
       // Prototype fallback when offline
     }
