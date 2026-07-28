@@ -1,5 +1,13 @@
-import { createContext, useCallback, useContext, useMemo } from 'react';
+import { createContext, useCallback, useContext, useMemo, useEffect, useState } from 'react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import {
+  fetchAdminInstitutes,
+  fetchAdminStudents,
+  fetchAdminMentors,
+  registerInstitute,
+  registerStudent,
+  registerMentor,
+} from '../Api/Api';
 
 const DataContext = createContext(null);
 
@@ -48,6 +56,94 @@ export function DataProvider({ children }) {
       ...prev,
     ]);
   }, [setNotifications]);
+
+  const refreshAdminData = useCallback(async () => {
+    try {
+      const [instRes, studRes, mentRes] = await Promise.allSettled([
+        fetchAdminInstitutes(),
+        fetchAdminStudents(),
+        fetchAdminMentors(),
+      ]);
+
+      if (instRes.status === 'fulfilled' && Array.isArray(instRes.value) && instRes.value.length > 0) {
+        const backendInsts = instRes.value.map((i) => {
+          const locParts = [i.block, i.district, i.state].filter(Boolean);
+          const locationStr = locParts.length ? locParts.join(', ') : i.city || 'N/A';
+          return {
+            id: i.id || `inst-${i.email}`,
+            name: i.name,
+            email: i.email,
+            phone: i.phone || 'N/A',
+            city: locationStr,
+            state: i.state,
+            district: i.district,
+            block: i.block,
+            courses: i.programs ? i.programs.split(', ') : ['General'],
+            status: 'Active',
+            leadsPurchased: 0,
+            registeredAt: i.created_at ? new Date(i.created_at).getTime() : Date.now(),
+            autoApproved: true,
+          };
+        });
+        setInstitutes((prev) => {
+          const existingEmails = new Set(backendInsts.map((b) => b.email));
+          const localOnly = prev.filter((p) => !existingEmails.has(p.email));
+          return [...backendInsts, ...localOnly];
+        });
+      }
+
+      if (studRes.status === 'fulfilled' && Array.isArray(studRes.value) && studRes.value.length > 0) {
+        const backendStuds = studRes.value.map((s) => ({
+          id: s.id || `stud-${s.email}`,
+          name: s.name,
+          email: s.email,
+          phone: s.phone || 'N/A',
+          city: s.city || 'N/A',
+          course: s.target_course || 'Undecided',
+          status: 'Active',
+          leadsPosted: 0,
+          verifiedLeads: 0,
+          points: 0,
+          registeredAt: s.created_at ? new Date(s.created_at).getTime() : Date.now(),
+          autoApproved: true,
+        }));
+        setStudents((prev) => {
+          const existingEmails = new Set(backendStuds.map((b) => b.email));
+          const localOnly = prev.filter((p) => !existingEmails.has(p.email));
+          return [...backendStuds, ...localOnly];
+        });
+      }
+
+      if (mentRes.status === 'fulfilled' && Array.isArray(mentRes.value) && mentRes.value.length > 0) {
+        const backendMents = mentRes.value.map((m) => ({
+          id: m.id || `ment-${m.email}`,
+          name: m.name,
+          email: m.email,
+          phone: m.phone || 'N/A',
+          domain: m.domain || 'General Mentorship',
+          company: m.company || 'Independent Consultant',
+          rating: 5.0,
+          testsCreated: 0,
+          opportunitiesPosted: 0,
+          status: 'Active',
+          registeredAt: m.created_at ? new Date(m.created_at).getTime() : Date.now(),
+          autoApproved: true,
+        }));
+        setMentors((prev) => {
+          const existingEmails = new Set(backendMents.map((b) => b.email));
+          const localOnly = prev.filter((p) => !existingEmails.has(p.email));
+          return [...backendMents, ...localOnly];
+        });
+      }
+    } catch {
+      // Offline fallback
+    }
+  }, [setInstitutes, setStudents, setMentors]);
+
+  // Sync data on provider load
+  useEffect(() => {
+    refreshAdminData();
+  }, [refreshAdminData]);
 
   const autoRegisterUser = useCallback(({ name, email, role, city, course, domain, company, phone }) => {
     const normRole = (role || 'student').toLowerCase();
@@ -226,8 +322,9 @@ export function DataProvider({ children }) {
     notificationsFor,
     markRead,
     markAllRead,
+    refreshAdminData,
     unlockCost: UNLOCK_COST,
-  }), [leads, institutes, students, mentors, autoRegisterUser, updateEntityStatus, deleteEntity, addLead, verifyLead, unlockLead, updateLeadStatus, creditsFor, leadsFor, unlockedLeadsFor, discoverableLeads, notificationsFor, markRead, markAllRead]);
+  }), [leads, institutes, students, mentors, autoRegisterUser, updateEntityStatus, deleteEntity, addLead, verifyLead, unlockLead, updateLeadStatus, creditsFor, leadsFor, unlockedLeadsFor, discoverableLeads, notificationsFor, markRead, markAllRead, refreshAdminData]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }

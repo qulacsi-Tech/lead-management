@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -7,11 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
 import { required } from '../../utils/validate';
-
-const STATUS_ITEMS = [
-  { title: 'Data Science Lecturer', meta: 'Posted 2 days ago · 14 Applicants', status: 'Active', icon: 'check_circle', tone: 'success', opacity: 1 },
-  { title: 'Senior Physics Mentor', meta: 'Closed last week · Position Filled', status: 'Closed', icon: 'cancel', tone: 'neutral', opacity: 0.7 },
-];
+import { fetchMyOpportunities, createOpportunity, ApiError } from '../../Api/Api';
 
 const TONE_CLASSES = {
   success: 'bg-secondary-container text-on-secondary-container',
@@ -31,21 +27,53 @@ export default function PostOpportunity() {
   const [job, setJob] = useState({ subject: '', location: '', salary: '', availability: 'Immediate' });
   const [referral, setReferral] = useState({ name: '', course: '', city: '', collegeType: 'Public / State University', notes: '' });
   const [referralError, setReferralError] = useState('');
+  const [opportunities, setOpportunities] = useState([]);
+  const [loadingOpps, setLoadingOpps] = useState(true);
+  const [publishing, setPublishing] = useState(false);
+  const [oppError, setOppError] = useState('');
 
   const referrals = leadsFor(displayName);
+  const verified = referrals.filter((r) => r.status === 'verified' || r.status === 'converted').length;
+  const impactScore = Math.min(100, 60 + verified * 8);
+  const activeOpportunities = opportunities.filter((o) => o.status === 'Active').length;
+  const closedOpportunities = opportunities.length - activeOpportunities;
+
+  const loadOpportunities = async () => {
+    setLoadingOpps(true);
+    try {
+      const data = await fetchMyOpportunities();
+      setOpportunities(data);
+    } catch (err) {
+      setOppError(err instanceof ApiError ? err.message : 'Failed to load opportunities.');
+    } finally {
+      setLoadingOpps(false);
+    }
+  };
+
+  useEffect(() => { loadOpportunities(); }, []);
 
   const setJobField = (key, value) => setJob((prev) => ({ ...prev, [key]: value }));
   const setReferralField = (key, value) => setReferral((prev) => ({ ...prev, [key]: value }));
 
-  const handlePublishJob = (e) => {
+  const handlePublishJob = async (e) => {
     e.preventDefault();
     if (!required(job.subject) || !required(job.location)) {
       push({ type: 'error', message: 'Subject and location are required to publish a job.' });
       return;
     }
-    setJob({ subject: '', location: '', salary: '', availability: 'Immediate' });
-    push({ type: 'success', message: 'Job opportunity published.' });
+    setPublishing(true);
+    try {
+      await createOpportunity({ ...job, employment_type: employmentType });
+      setJob({ subject: '', location: '', salary: '', availability: 'Immediate' });
+      push({ type: 'success', message: 'Job opportunity published.' });
+      await loadOpportunities();
+    } catch (err) {
+      push({ type: 'error', message: err instanceof ApiError ? err.message : 'Failed to publish opportunity.' });
+    } finally {
+      setPublishing(false);
+    }
   };
+
   const handleSubmitReferral = (e) => {
     e.preventDefault();
     if (!required(referral.name) || !required(referral.course)) {
@@ -151,7 +179,9 @@ export default function PostOpportunity() {
                   </div>
                 </div>
                 <div className="md:col-span-2">
-                  <Button type="submit" size="lg" className="w-full">Publish Job Opportunity</Button>
+                  <Button type="submit" size="lg" className="w-full" disabled={publishing}>
+                    {publishing ? 'Publishing...' : 'Publish Job Opportunity'}
+                  </Button>
                 </div>
               </form>
             </Card>
@@ -215,22 +245,30 @@ export default function PostOpportunity() {
                   </span>
                 </div>
               ))}
-              {STATUS_ITEMS.map((item) => (
-                <div key={item.title} className="px-6 py-4 flex items-center justify-between border-t border-outline-variant" style={{ opacity: item.opacity }}>
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${TONE_CLASSES[item.tone]}`}>
-                      <span className="material-symbols-outlined">{item.icon}</span>
+              {loadingOpps ? (
+                <p className="px-6 py-4 text-sm text-on-surface-variant m-0">Loading opportunities...</p>
+              ) : oppError ? (
+                <p className="px-6 py-4 text-sm text-error m-0">{oppError}</p>
+              ) : opportunities.length === 0 && referrals.length === 0 ? (
+                <p className="px-6 py-4 text-sm text-on-surface-variant m-0">No opportunities posted yet.</p>
+              ) : (
+                opportunities.slice(0, 2).map((o) => (
+                  <div key={o.id} className="px-6 py-4 flex items-center justify-between border-t border-outline-variant">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${o.status === 'Active' ? TONE_CLASSES.success : TONE_CLASSES.neutral}`}>
+                        <span className="material-symbols-outlined">{o.status === 'Active' ? 'check_circle' : 'cancel'}</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold m-0">{o.subject}</p>
+                        <p className="text-xs text-on-surface-variant m-0">{o.location} · {o.employment_type}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold m-0">{item.title}</p>
-                      <p className="text-xs text-on-surface-variant m-0">{item.meta}</p>
-                    </div>
+                    <span className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-full ${o.status === 'Active' ? TONE_CLASSES.success : TONE_CLASSES.neutral}`}>
+                      {o.status}
+                    </span>
                   </div>
-                  <span className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-full ${TONE_CLASSES[item.tone]}`}>
-                    {item.status}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </Card>
         </div>
@@ -239,10 +277,12 @@ export default function PostOpportunity() {
           <Card className="p-6 bg-primary text-white border-none relative overflow-hidden">
             <h4 className="text-xs font-semibold opacity-80 mb-2">Mentor Impact Score</h4>
             <div className="flex items-baseline gap-1.5 mb-4">
-              <span className="text-4xl font-extrabold">92</span><span className="text-sm opacity-70">/ 100</span>
+              <span className="text-4xl font-extrabold">{impactScore}</span><span className="text-sm opacity-70">/ 100</span>
             </div>
             <p className="text-sm leading-relaxed mb-5 opacity-90">
-              Your opportunities have helped 12 students find their next academic home this quarter. Keep it up!
+              {verified > 0
+                ? `Your referrals have helped ${verified} student${verified === 1 ? '' : 's'} get verified or converted so far. Keep it up!`
+                : 'Submit and get referrals verified to raise your impact score.'}
             </p>
             <Button variant="soft" onClick={() => navigate('/mentor/analytics')} className="w-full !bg-white !text-primary">View Impact Analytics</Button>
           </Card>
@@ -261,17 +301,17 @@ export default function PostOpportunity() {
 
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-14 h-14 rounded-xl bg-surface-container-highest flex-shrink-0" />
+              <div className="w-14 h-14 rounded-xl bg-primary-fixed flex items-center justify-center text-primary flex-shrink-0">
+                <span className="material-symbols-outlined">work_history</span>
+              </div>
               <div>
-                <p className="text-sm font-semibold m-0">Premium Mentor Account</p>
-                <p className="text-xs text-on-surface-variant m-0">Unlimited Posts Enabled</p>
+                <p className="text-sm font-semibold m-0">Your Opportunities</p>
+                <p className="text-xs text-on-surface-variant m-0">{opportunities.length} total posted</p>
               </div>
             </div>
-            <div className="h-2 bg-surface-container-highest rounded-full overflow-hidden mb-2">
-              <div className="h-full w-[85%] bg-primary" />
-            </div>
             <div className="flex justify-between text-xs">
-              <span className="text-on-surface-variant">Profile Completion</span><span className="text-primary font-bold">85%</span>
+              <span className="text-on-surface-variant">{activeOpportunities} Active</span>
+              <span className="text-on-surface-variant">{closedOpportunities} Closed</span>
             </div>
           </Card>
         </aside>

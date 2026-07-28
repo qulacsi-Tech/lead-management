@@ -13,7 +13,7 @@ const NAV = [
 ];
 
 export default function MentorLayout() {
-  const { displayName, logout } = useAuth();
+  const { displayName, role, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -44,7 +44,7 @@ export default function MentorLayout() {
       <TopBar
         searchPlaceholder="Search analytics, papers, or profiles..."
         name={displayName || 'Mentor'}
-        roleLabel="Senior Mentor"
+        roleLabel={role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Mentor'}
         initials={(displayName || 'M').slice(0, 2).toUpperCase()}
         userKey={displayName}
       />

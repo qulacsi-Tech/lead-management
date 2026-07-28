@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import StatCard from '../../components/ui/StatCard';
@@ -6,7 +6,11 @@ import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 
 export default function AdminDashboard() {
-  const { institutes, students, mentors, leads } = useData();
+  const { institutes, students, mentors, leads, refreshAdminData } = useData();
+
+  useEffect(() => {
+    refreshAdminData();
+  }, [refreshAdminData]);
 
   // Combine all registered entities into a unified recent activity feed
   const recentRegistrations = [

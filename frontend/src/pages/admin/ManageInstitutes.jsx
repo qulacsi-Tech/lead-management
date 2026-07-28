@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
+import { registerInstitute } from '../../Api/Api';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -7,7 +8,7 @@ import Modal from '../../components/ui/Modal';
 import { Input, Label } from '../../components/ui/Field';
 
 export default function ManageInstitutes() {
-  const { institutes, updateEntityStatus, deleteEntity, autoRegisterUser } = useData();
+  const { institutes, updateEntityStatus, deleteEntity, autoRegisterUser, refreshAdminData } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   
@@ -22,18 +23,36 @@ export default function ManageInstitutes() {
   const [phone, setPhone] = useState('');
   const [course, setCourse] = useState('');
 
+  useEffect(() => {
+    refreshAdminData();
+  }, [refreshAdminData]);
+
   const filteredInstitutes = institutes.filter((inst) => {
     const matchesSearch =
       inst.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       inst.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inst.city.toLowerCase().includes(searchTerm.toLowerCase());
+      (inst.city || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'All' || inst.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const handleAddSubmit = (e) => {
+  const handleAddSubmit = async (e) => {
     e.preventDefault();
     if (!name || !email) return;
+
+    try {
+      await registerInstitute({
+        name,
+        email,
+        password: 'password123',
+        phone,
+        city,
+        programs: course,
+      });
+    } catch {
+      // Fallback
+    }
+
     autoRegisterUser({
       name,
       email,
@@ -42,12 +61,14 @@ export default function ManageInstitutes() {
       phone,
       course: course || 'Higher Education',
     });
+
     setName('');
     setEmail('');
     setCity('');
     setPhone('');
     setCourse('');
     setIsAddModalOpen(false);
+    refreshAdminData();
   };
 
   const handleToggleStatus = (inst) => {

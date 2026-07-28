@@ -1,7 +1,8 @@
 from sqlalchemy import Column, String, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Any
+from datetime import datetime
 from core.database import Base
 import uuid
 
@@ -50,7 +51,7 @@ class InstituteResponse(BaseModel):
     city: Optional[str] = None
     programs: Optional[str] = None
     website: Optional[str] = None
-    created_at: Optional[str] = None
+    created_at: Optional[Any] = None
 
     class Config:
         from_attributes = True

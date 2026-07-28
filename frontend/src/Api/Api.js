@@ -171,4 +171,62 @@ export const fetchAdminStudents = async () => apiFetch('/admin/students');
 export const fetchAdminMentors = async () => apiFetch('/admin/mentors');
 export const fetchAdminInstitutes = async () => apiFetch('/admin/institutes');
 
+// ----------------------------------------------------
+// Mentor Profile Endpoints
+// ----------------------------------------------------
+
+export const fetchMyMentorProfile = async () => apiFetch('/mentor/me');
+
+export const updateMyMentorProfile = async (data) =>
+  apiFetch('/mentor/me', { method: 'PUT', body: data });
+
+export const fetchMyMentorStats = async () => apiFetch('/mentor/me/stats');
+
+// ----------------------------------------------------
+// Opportunity (Job Posting) Endpoints
+// ----------------------------------------------------
+
+export const fetchMyOpportunities = async () => apiFetch('/opportunities/mine');
+
+export const createOpportunity = async (data) =>
+  apiFetch('/opportunities', { method: 'POST', body: data });
+
+export const updateOpportunity = async (id, data) =>
+  apiFetch(`/opportunities/${id}`, { method: 'PUT', body: data });
+
+export const deleteOpportunity = async (id) =>
+  apiFetch(`/opportunities/${id}`, { method: 'DELETE' });
+
+// ----------------------------------------------------
+// Sample Paper Endpoints
+// ----------------------------------------------------
+
+/** List published papers (students browsing). Optional filters: subject, target_class, search. */
+export const fetchPapers = async (filters = {}) => {
+  const params = new URLSearchParams(filters);
+  const qs = params.toString();
+  return apiFetch(`/papers${qs ? `?${qs}` : ''}`);
+};
+
+export const fetchPaperById = async (id) => apiFetch(`/papers/${id}`);
+
+/** Mentor's own papers (any status). */
+export const fetchMyPapers = async () => apiFetch('/papers/mentor/me');
+
+/**
+ * Create a paper with questions.
+ * @param {{ title, subject, target_class?, description?, status?, questions: {question_text, options, correct_answer}[] }} data
+ */
+export const createPaper = async (data) =>
+  apiFetch('/papers', { method: 'POST', body: data });
+
+export const updatePaper = async (id, data) =>
+  apiFetch(`/papers/${id}`, { method: 'PUT', body: data });
+
+export const deletePaper = async (id) =>
+  apiFetch(`/papers/${id}`, { method: 'DELETE' });
+
+/** Student submits answers for a paper: { answers: number[] } (option index per question, in order). */
+export const submitPaperAttempt = async (id, answers) =>
+  apiFetch(`/papers/${id}/attempt`, { method: 'POST', body: { answers } });
 

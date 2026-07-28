@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
+import { registerMentor } from '../../Api/Api';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -7,7 +8,7 @@ import Modal from '../../components/ui/Modal';
 import { Input, Label } from '../../components/ui/Field';
 
 export default function ManageMentors() {
-  const { mentors, updateEntityStatus, deleteEntity, autoRegisterUser } = useData();
+  const { mentors, updateEntityStatus, deleteEntity, autoRegisterUser, refreshAdminData } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
 
@@ -19,6 +20,10 @@ export default function ManageMentors() {
   const [domain, setDomain] = useState('');
   const [company, setCompany] = useState('');
 
+  useEffect(() => {
+    refreshAdminData();
+  }, [refreshAdminData]);
+
   const filteredMentors = mentors.filter((m) => {
     const matchesSearch =
       m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -29,9 +34,22 @@ export default function ManageMentors() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleAddSubmit = (e) => {
+  const handleAddSubmit = async (e) => {
     e.preventDefault();
     if (!name || !email) return;
+
+    try {
+      await registerMentor({
+        name,
+        email,
+        password: 'password123',
+        domain: domain || 'Software Engineering',
+        company: company || 'Independent Expert',
+      });
+    } catch {
+      // Fallback
+    }
+
     autoRegisterUser({
       name,
       email,
@@ -39,11 +57,13 @@ export default function ManageMentors() {
       domain: domain || 'Software Engineering',
       company: company || 'Independent Expert',
     });
+
     setName('');
     setEmail('');
     setDomain('');
     setCompany('');
     setIsAddModalOpen(false);
+    refreshAdminData();
   };
 
   const handleToggleStatus = (m) => {
