@@ -71,9 +71,12 @@ async def list_papers(
     _current_user: User = Depends(get_current_active_user),
     subject: Optional[str] = None,
     target_class: Optional[str] = None,
+    mentor_id: Optional[str] = None,
     search: Optional[str] = Query(None),
 ):
     query = select(Paper).options(selectinload(Paper.questions)).where(Paper.status == "published")
+    if mentor_id:
+        query = query.where(Paper.mentor_id == mentor_id)
     if subject:
         query = query.where(Paper.subject == subject)
     if target_class:
@@ -92,6 +95,20 @@ async def list_papers(
         mentor_names = {m.id: m.name for m in m_result.scalars().all()}
 
     return [_to_list_response(p, mentor_names.get(p.mentor_id)) for p in papers]
+
+
+@router.get("/attempts/me", response_model=list[AttemptResult])
+async def list_my_attempts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_student),
+):
+    student = await _get_student_profile(db, current_user)
+    result = await db.execute(
+        select(PaperAttempt)
+        .where(PaperAttempt.student_id == student.id)
+        .order_by(PaperAttempt.submitted_at.desc())
+    )
+    return result.scalars().all()
 
 
 @router.get("/mentor/me", response_model=list[PaperListResponse])

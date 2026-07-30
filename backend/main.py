@@ -13,13 +13,17 @@ from routers.geo import router as geo_router
 from routers.papers import router as papers_router
 from routers.mentor import router as mentor_router
 from routers.opportunities import router as opportunities_router
+from routers.mentors_public import router as mentors_public_router
+from routers.students import router as students_router
+from routers.institute import router as institute_router
+from routers.enquiries import router as enquiries_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Import all models so Base knows about them before create_all
     from models import user as _u, lead as _l, activity as _a, task as _t  # noqa
-    from models import student as _s, mentor as _m, institute as _i, paper as _p, opportunity as _o  # noqa
+    from models import student as _s, mentor as _m, institute as _i, paper as _p, opportunity as _o, follow as _f, enquiry as _e  # noqa
     from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -40,6 +44,7 @@ async def lifespan(app: FastAPI):
         await conn.execute(text("ALTER TABLE mentors ADD COLUMN IF NOT EXISTS subjects JSON;"))
         await conn.execute(text("ALTER TABLE mentors ADD COLUMN IF NOT EXISTS classes_taught JSON;"))
         await conn.execute(text("ALTER TABLE mentors ADD COLUMN IF NOT EXISTS highlights JSON;"))
+        await conn.execute(text("ALTER TABLE institutes ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 1240;"))
     yield
     await engine.dispose()
 
@@ -69,6 +74,10 @@ app.include_router(geo_router, prefix="/api")
 app.include_router(papers_router, prefix="/api")
 app.include_router(mentor_router, prefix="/api")
 app.include_router(opportunities_router, prefix="/api")
+app.include_router(mentors_public_router, prefix="/api")
+app.include_router(students_router, prefix="/api")
+app.include_router(institute_router, prefix="/api")
+app.include_router(enquiries_router, prefix="/api")
 
 
 @app.get("/api/ping")

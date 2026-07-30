@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -8,6 +8,7 @@ import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
 import { isValidMobile } from '../../utils/validate';
 import { downloadCsv } from '../../utils/csv';
+import { fetchStates, createEnquiry, fetchMyEnquiries, ApiError } from '../../Api/Api';
 
 const LEADERS = [
   { rank: '1st', tone: 'bg-secondary', initials: 'AM', name: 'Arjun Mehta', xp: '12,450 XP', pts: '520 pts', ptsColor: 'text-secondary' },
@@ -21,7 +22,9 @@ const LEAD_TYPES = [
   { id: 'friend', icon: 'group_add', label: 'Post Lead for a Friend' },
 ];
 
-export default function PostLead() {
+const ENQUIRY_TYPE_MAP = { coaching: 'Coaching', college: 'College' };
+
+export default function Enquiries() {
   const navigate = useNavigate();
   const { displayName } = useAuth();
   const { addLead, leadsFor } = useData();
@@ -36,7 +39,32 @@ export default function PostLead() {
   const otpRefs = useRef([]);
   const leads = leadsFor(displayName);
 
+  const [statesList, setStatesList] = useState([]);
+  const [enquiryForm, setEnquiryForm] = useState({ state: '', course: '' });
+  const [enquiryError, setEnquiryError] = useState('');
+  const [enquirySubmitting, setEnquirySubmitting] = useState(false);
+  const [myEnquiries, setMyEnquiries] = useState([]);
+  const [loadingEnquiries, setLoadingEnquiries] = useState(true);
+
+  useEffect(() => {
+    fetchStates().then(setStatesList).catch(() => setStatesList([]));
+    loadMyEnquiries();
+  }, []);
+
+  const loadMyEnquiries = async () => {
+    setLoadingEnquiries(true);
+    try {
+      const data = await fetchMyEnquiries();
+      setMyEnquiries(data);
+    } catch {
+      // non-fatal, list just stays empty
+    } finally {
+      setLoadingEnquiries(false);
+    }
+  };
+
   const setField = (key, value) => setF((prev) => ({ ...prev, [key]: value }));
+  const setEnquiryField = (key, value) => setEnquiryForm((prev) => ({ ...prev, [key]: value }));
 
   const setOtpDigit = (i, val) => {
     const clean = val.replace(/\D/g, '').slice(0, 1);
@@ -58,6 +86,36 @@ export default function PostLead() {
     if (active && filled) return 'bg-primary-container text-white border-2 border-primary shadow-md';
     if (active) return 'bg-surface-container-low border-2 border-primary text-on-surface';
     return 'bg-surface-container-lowest border border-outline-variant text-on-surface';
+  };
+
+  const isEnquiryType = leadType === 'coaching' || leadType === 'college';
+
+  const handleEnquirySubmit = async (e) => {
+    e.preventDefault();
+    if (!enquiryForm.state) {
+      setEnquiryError('Please select your state.');
+      return;
+    }
+    if (!enquiryForm.course.trim()) {
+      setEnquiryError('Please enter the course you are looking for.');
+      return;
+    }
+    setEnquiryError('');
+    setEnquirySubmitting(true);
+    try {
+      await createEnquiry({
+        enquiry_type: ENQUIRY_TYPE_MAP[leadType],
+        state: enquiryForm.state,
+        course: enquiryForm.course.trim(),
+      });
+      push({ type: 'success', message: 'Your enquiry has been submitted. Institutes in your area will be notified.' });
+      setEnquiryForm({ state: '', course: '' });
+      loadMyEnquiries();
+    } catch (err) {
+      setEnquiryError(err instanceof ApiError ? err.message : 'Failed to submit enquiry. Try again.');
+    } finally {
+      setEnquirySubmitting(false);
+    }
   };
 
   const handleSubmit = (e) => {
@@ -117,6 +175,91 @@ export default function PostLead() {
               </button>
             ))}
           </div>
+
+          {isEnquiryType ? (
+            <Card className="p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center text-white">
+                  <span className="material-symbols-outlined">{leadType === 'coaching' ? 'school' : 'account_balance'}</span>
+                </div>
+                <h3 className="font-display text-xl font-semibold text-primary m-0">
+                  {leadType === 'coaching' ? 'Looking for Coaching' : 'Looking for College'}
+                </h3>
+              </div>
+              <p className="text-sm text-on-surface-variant mb-6 -mt-3">
+                Tell us your state and the course you're interested in — matching institutes in your area will be notified.
+              </p>
+              <form onSubmit={handleEnquirySubmit} className="flex flex-col gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label>State</Label>
+                    <Select value={enquiryForm.state} onChange={(e) => setEnquiryField('state', e.target.value)}>
+                      <option value="">Select State</option>
+                      {statesList.map((st) => (
+                        <option key={st} value={st}>{st}</option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Course</Label>
+                    <Input
+                      value={enquiryForm.course}
+                      onChange={(e) => setEnquiryField('course', e.target.value)}
+                      placeholder="e.g. Computer Science Engineering"
+                    />
+                  </div>
+                </div>
+
+                {enquiryError && (
+                  <div className="flex items-center gap-1.5 text-error text-sm bg-error-container px-3 py-2.5 rounded-lg">
+                    <span className="material-symbols-outlined text-base">error</span>{enquiryError}
+                  </div>
+                )}
+
+                <Button type="submit" icon="send" disabled={enquirySubmitting} className="w-full" size="lg">
+                  {enquirySubmitting ? 'Submitting…' : 'Submit Enquiry'}
+                </Button>
+              </form>
+            </Card>
+          ) : null}
+
+          <Card className="overflow-hidden">
+            <div className="p-6 border-b border-outline-variant">
+              <h3 className="font-display text-xl font-semibold text-primary m-0">My Enquiries</h3>
+            </div>
+            {loadingEnquiries ? (
+              <div className="px-6 py-8 text-center text-on-surface-variant text-sm">Loading...</div>
+            ) : myEnquiries.length === 0 ? (
+              <div className="px-6 py-12 text-center text-on-surface-variant text-sm">
+                You haven't submitted any Coaching/College enquiries yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left">
+                  <thead className="bg-primary-fixed text-on-surface-variant text-xs">
+                    <tr>
+                      <th className="px-6 py-4">Type</th>
+                      <th className="px-6 py-4">State</th>
+                      <th className="px-6 py-4">Course</th>
+                      <th className="px-6 py-4 text-right">Submitted</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myEnquiries.map((eq) => (
+                      <tr key={eq.id} className="border-t border-surface-container">
+                        <td className="px-6 py-4 font-semibold text-sm">{eq.enquiry_type}</td>
+                        <td className="px-6 py-4 text-on-surface-variant text-sm">{eq.state}</td>
+                        <td className="px-6 py-4 text-on-surface-variant text-sm">{eq.course}</td>
+                        <td className="px-6 py-4 text-right text-xs text-on-surface-variant">
+                          {eq.created_at ? new Date(eq.created_at).toLocaleDateString() : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
 
           <div className="bg-gradient-to-br from-primary to-secondary rounded-2xl p-8 text-white relative overflow-hidden">
             <div className="relative flex justify-between items-center gap-6 flex-wrap">

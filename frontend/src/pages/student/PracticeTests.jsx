@@ -86,7 +86,14 @@ export default function PracticeTests() {
                 <div>
                   <h4 className="text-sm font-semibold m-0 mb-1">{p.title}</h4>
                   <p className="text-xs text-on-surface-variant m-0">
-                    By {p.mentor_name || 'Mentor'} · {p.downloads} attempt{p.downloads === 1 ? '' : 's'}
+                    By{' '}
+                    <button
+                      onClick={() => navigate(`/student/mentors/${p.mentor_id}`)}
+                      className="bg-transparent border-none p-0 text-on-surface-variant underline cursor-pointer text-xs"
+                    >
+                      {p.mentor_name || 'Mentor'}
+                    </button>
+                    {' '}· {p.downloads} attempt{p.downloads === 1 ? '' : 's'}
                   </p>
                 </div>
                 <p className="text-xs text-on-surface-variant m-0">{p.question_count} question{p.question_count === 1 ? '' : 's'}</p>

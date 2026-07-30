@@ -10,7 +10,9 @@ const NAV = [
   { to: '/student/profile', label: 'My Profile', icon: 'account_circle' },
   { to: '/student/roadmap', label: 'AI Career Roadmap', icon: 'alt_route' },
   { to: '/student/practice-tests', label: 'Practice Tests', icon: 'quiz' },
-  { to: '/student/post-lead', label: 'Post Lead', icon: 'campaign' },
+  { to: '/student/mentors', label: 'Browse Mentors', icon: 'groups' },
+  { to: '/student/my-mentors', label: 'My Mentors', icon: 'favorite' },
+  { to: '/student/enquiries', label: 'Enquiries', icon: 'campaign' },
 ];
 
 export default function StudentLayout() {

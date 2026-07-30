@@ -12,10 +12,13 @@ import StudentLayout from './layouts/StudentLayout';
 import StudentDashboard from './pages/student/Dashboard';
 import StudentCareerProfile from './pages/student/StudentCareerProfile';
 import AICareerRoadmap from './pages/student/AICareerRoadmap';
-import PostLead from './pages/student/PostLead';
+import Enquiries from './pages/student/Enquiries';
 import PracticeTests from './pages/student/PracticeTests';
 import TakeTest from './pages/student/TakeTest';
 import Leaderboard from './pages/student/Leaderboard';
+import BrowseMentors from './pages/student/BrowseMentors';
+import MentorDetail from './pages/student/MentorDetail';
+import MyMentors from './pages/student/MyMentors';
 
 import MentorLayout from './layouts/MentorLayout';
 import MentorDashboard from './pages/mentor/Dashboard';
@@ -35,6 +38,7 @@ import AdminDashboard from './pages/admin/Dashboard';
 import ManageInstitutes from './pages/admin/ManageInstitutes';
 import ManageStudents from './pages/admin/ManageStudents';
 import ManageMentors from './pages/admin/ManageMentors';
+import ManageEnquiries from './pages/admin/ManageEnquiries';
 import AdminSettings from './pages/admin/AdminSettings';
 
 function RequireRole({ role, children }) {
@@ -63,10 +67,13 @@ function AppRoutes() {
         <Route index element={<StudentDashboard />} />
         <Route path="profile" element={<StudentCareerProfile />} />
         <Route path="roadmap" element={<AICareerRoadmap />} />
-        <Route path="post-lead" element={<PostLead />} />
+        <Route path="enquiries" element={<Enquiries />} />
         <Route path="leaderboard" element={<Leaderboard />} />
         <Route path="practice-tests" element={<PracticeTests />} />
         <Route path="practice-tests/:id" element={<TakeTest />} />
+        <Route path="mentors" element={<BrowseMentors />} />
+        <Route path="mentors/:id" element={<MentorDetail />} />
+        <Route path="my-mentors" element={<MyMentors />} />
       </Route>
 
       <Route
@@ -110,6 +117,7 @@ function AppRoutes() {
         <Route path="institutes" element={<ManageInstitutes />} />
         <Route path="students" element={<ManageStudents />} />
         <Route path="mentors" element={<ManageMentors />} />
+        <Route path="enquiries" element={<ManageEnquiries />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 

@@ -9,6 +9,7 @@ const NAV = [
   { to: '/admin/institutes', label: 'Institutes', icon: 'account_balance' },
   { to: '/admin/students', label: 'Students', icon: 'school' },
   { to: '/admin/mentors', label: 'Mentors', icon: 'person' },
+  { to: '/admin/enquiries', label: 'Enquiries', icon: 'campaign' },
   { to: '/admin/settings', label: 'System Settings', icon: 'settings' },
 ];
 

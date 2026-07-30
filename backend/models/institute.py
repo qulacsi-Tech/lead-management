@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey
+from sqlalchemy import Column, String, DateTime, ForeignKey, Integer
 from sqlalchemy.sql import func
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Any
@@ -22,6 +22,7 @@ class Institute(Base):
     city = Column(String)
     programs = Column(String)
     website = Column(String)
+    credits = Column(Integer, default=1240)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -51,6 +52,7 @@ class InstituteResponse(BaseModel):
     city: Optional[str] = None
     programs: Optional[str] = None
     website: Optional[str] = None
+    credits: Optional[int] = None
     created_at: Optional[Any] = None
 
     class Config:

@@ -230,3 +230,58 @@ export const deletePaper = async (id) =>
 export const submitPaperAttempt = async (id, answers) =>
   apiFetch(`/papers/${id}/attempt`, { method: 'POST', body: { answers } });
 
+// ----------------------------------------------------
+// Mentor Discovery Endpoints (student-facing)
+// ----------------------------------------------------
+
+/** Browse all mentors. Optional filters: domain, search. */
+export const fetchMentors = async (filters = {}) => {
+  const params = new URLSearchParams(filters);
+  const qs = params.toString();
+  return apiFetch(`/mentors${qs ? `?${qs}` : ''}`);
+};
+
+export const fetchMentorById = async (id) => apiFetch(`/mentors/${id}`);
+
+export const followMentor = async (id) =>
+  apiFetch(`/mentors/${id}/follow`, { method: 'POST' });
+
+export const unfollowMentor = async (id) =>
+  apiFetch(`/mentors/${id}/follow`, { method: 'DELETE' });
+
+/** Mentors the current student follows. */
+export const fetchMyFollowing = async () => apiFetch('/students/me/following');
+
+/** The current student's own profile (name, target_course, etc). */
+export const fetchMyStudentProfile = async () => apiFetch('/students/me');
+
+/** The current student's own submitted practice-paper attempts. */
+export const fetchMyAttempts = async () => apiFetch('/papers/attempts/me');
+
+// ----------------------------------------------------
+// Enquiries Endpoints (student "Looking for Coaching/College")
+// ----------------------------------------------------
+
+/** Student submits a Coaching/College enquiry: { enquiry_type: 'Coaching'|'College', state, course }. */
+export const createEnquiry = async (data) =>
+  apiFetch('/enquiries', { method: 'POST', body: data });
+
+/** Student's own submitted enquiries. */
+export const fetchMyEnquiries = async () => apiFetch('/enquiries/me');
+
+/** Institute: browse enquiries not yet unlocked (is_hot flag when state matches institute's own). */
+export const fetchEnquiries = async () => apiFetch('/enquiries');
+
+/** Institute: unlock an enquiry's full contact details (deducts credits). */
+export const unlockEnquiry = async (id) =>
+  apiFetch(`/enquiries/${id}/unlock`, { method: 'POST' });
+
+/** Institute: enquiries already unlocked, with full contact detail. */
+export const fetchUnlockedEnquiries = async () => apiFetch('/enquiries/unlocked');
+
+/** Institute's own profile (state, credits balance, etc). */
+export const fetchMyInstituteProfile = async () => apiFetch('/institute/me');
+
+/** Admin: all student enquiries with matching-institutes count. */
+export const fetchAdminEnquiries = async () => apiFetch('/admin/enquiries');
+

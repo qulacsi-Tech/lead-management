@@ -1,5 +1,9 @@
 from enum import Enum
 
+class EnquiryType(str, Enum):
+    COACHING = "Coaching"
+    COLLEGE = "College"
+
 class UserRole(str, Enum):
     ADMIN = "Admin"
     MANAGER = "Manager"

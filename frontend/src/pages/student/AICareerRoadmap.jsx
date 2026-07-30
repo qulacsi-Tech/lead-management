@@ -1,25 +1,78 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import {
+  fetchMyStudentProfile, fetchMentors, fetchMyFollowing, fetchMyAttempts, fetchMyEnquiries,
+  followMentor, ApiError,
+} from '../../Api/Api';
 
-const STEPS = [
-  { icon: 'check_circle', label: 'Current', value: 'Class 12', tone: 'done' },
-  { icon: 'school', label: 'Active Goal', value: 'Engineering', tone: 'active' },
-  { icon: 'rocket_launch', label: 'Path', value: 'JEE Entrance', tone: 'upcoming' },
-  { icon: 'location_on', label: 'Target', value: 'Top Colleges', tone: 'upcoming' },
-];
-
-const COLLEGES = [
-  { name: 'Indian Institute of Technology (IIT) Delhi', meta: 'Global Rank #174 · Engineering Focus' },
-  { name: 'BITS Pilani', meta: 'Premier Private · Innovation Hub' },
-];
-
-const MILESTONES = [
-  { label: 'Class 12 Boards', status: 'Completed', pct: 100, tone: 'done' },
-  { label: 'JEE Main Phase 1', status: 'In Progress (45%)', pct: 45, tone: 'active' },
-  { label: 'University Admission', status: 'Upcoming', pct: 0, tone: 'upcoming' },
-];
+const GOALS = { papers: 10, mentors: 3, enquiries: 1 };
 
 export default function AICareerRoadmap() {
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState(null);
+  const [mentors, setMentors] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [attempts, setAttempts] = useState([]);
+  const [enquiries, setEnquiries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [followPendingId, setFollowPendingId] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [p, m, f, a, e] = await Promise.all([
+          fetchMyStudentProfile(),
+          fetchMentors(),
+          fetchMyFollowing(),
+          fetchMyAttempts(),
+          fetchMyEnquiries(),
+        ]);
+        setProfile(p);
+        setMentors(m);
+        setFollowing(f);
+        setAttempts(a);
+        setEnquiries(e);
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const followedIds = new Set(following.map((f) => f.id));
+  const suggestedMentors = mentors.filter((m) => !followedIds.has(m.id)).slice(0, 3);
+  const distinctSolved = new Set(attempts.map((a) => a.paper_id)).size;
+
+  const handleFollow = async (mentorId) => {
+    setFollowPendingId(mentorId);
+    try {
+      await followMentor(mentorId);
+      setFollowing((prev) => [...prev, { id: mentorId }]);
+    } catch {
+      // no-op, user can retry from Browse Mentors
+    } finally {
+      setFollowPendingId(null);
+    }
+  };
+
+  const targetCourse = profile?.target_course || 'Not set yet';
+
+  const steps = [
+    { icon: 'check_circle', label: 'Current', value: profile?.current_school || 'Your School', tone: 'done' },
+    { icon: 'school', label: 'Target Course', value: targetCourse, tone: 'active' },
+    { icon: 'menu_book', label: 'Papers Solved', value: String(distinctSolved), tone: distinctSolved > 0 ? 'active' : 'upcoming' },
+    { icon: 'groups', label: 'Mentors Followed', value: String(following.length), tone: following.length > 0 ? 'active' : 'upcoming' },
+  ];
+
+  const milestones = [
+    { label: 'Practice Papers Attempted', pct: Math.min(100, Math.round((distinctSolved / GOALS.papers) * 100)), status: `${distinctSolved}/${GOALS.papers}`, tone: distinctSolved >= GOALS.papers ? 'done' : 'active' },
+    { label: 'Mentors Followed', pct: Math.min(100, Math.round((following.length / GOALS.mentors) * 100)), status: `${following.length}/${GOALS.mentors}`, tone: following.length >= GOALS.mentors ? 'done' : 'active' },
+    { label: 'Enquiries Submitted', pct: Math.min(100, Math.round((enquiries.length / GOALS.enquiries) * 100)), status: `${enquiries.length}/${GOALS.enquiries}`, tone: enquiries.length >= GOALS.enquiries ? 'done' : 'active' },
+  ];
+
   return (
     <div className="max-w-7xl w-full mx-auto px-10 py-10 box-border">
       <section className="mb-12 flex justify-between items-end gap-6 flex-wrap">
@@ -28,28 +81,22 @@ export default function AICareerRoadmap() {
             Career Architecture
           </span>
           <h2 className="font-display text-4xl font-bold text-primary m-0">
-            Your Personalized AI Career Roadmap
+            Your Personalized Career Roadmap
           </h2>
           <p className="text-on-surface-variant text-lg max-w-2xl mt-4">
-            Strategically engineered milestones designed by Nexus Intellect AI based on your current
-            academic performance and engineering aspirations.
+            Tracked from your real activity — papers attempted, mentors followed, and enquiries submitted.
           </p>
-        </div>
-        <div className="flex gap-3">
-          <Button variant="soft">Download PDF</Button>
-          <Button>Share Roadmap</Button>
         </div>
       </section>
 
       <Card className="p-8 mb-6 backdrop-blur">
         <h3 className="font-display text-2xl font-semibold mb-12 flex items-center gap-2">
           <span className="material-symbols-outlined text-primary">auto_graph</span>
-          Academic Journey Pipeline
+          Your Journey So Far
         </h3>
         <div className="relative flex items-center justify-between px-8 py-8">
           <div className="absolute left-0 right-0 h-1 bg-surface-container-highest rounded-full -z-10" />
-          <div className="absolute left-0 w-1/2 h-1 bg-gradient-to-r from-secondary to-primary rounded-full -z-10" />
-          {STEPS.map((s) => (
+          {steps.map((s) => (
             <div key={s.label} className={`flex flex-col items-center gap-4 ${s.tone === 'upcoming' ? 'opacity-60' : ''}`}>
               <div
                 className={`w-14 h-14 flex items-center justify-center rounded-full text-white shadow-lg ${
@@ -64,7 +111,7 @@ export default function AICareerRoadmap() {
               </div>
               <div className="text-center">
                 <p className="text-[11px] font-semibold uppercase m-0 text-on-surface-variant">{s.label}</p>
-                <p className="text-lg font-semibold m-0 mt-0.5">{s.value}</p>
+                <p className="text-lg font-semibold m-0 mt-0.5">{loading ? '—' : s.value}</p>
               </div>
             </div>
           ))}
@@ -78,119 +125,84 @@ export default function AICareerRoadmap() {
               <span className="material-symbols-outlined text-4xl">domain</span>
             </div>
             <div className="flex-1">
-              <div className="flex justify-between items-start gap-3 flex-wrap">
-                <div>
-                  <h4 className="text-xl font-semibold m-0 mb-1">Premier Coaching Centers</h4>
-                  <p className="text-on-surface-variant m-0">Recommended based on your location and JEE target score.</p>
-                </div>
-                <span className="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-bold uppercase">
-                  AI Top Match
-                </span>
-              </div>
-              <div className="mt-4 flex gap-4 flex-wrap">
-                <div className="flex-1 min-w-[180px] border border-outline-variant rounded-lg p-3 cursor-pointer hover:border-primary">
-                  <p className="font-bold m-0">Elite Engineering Academy</p>
-                  <p className="text-xs text-on-surface-variant m-0">Success rate: 82% · 2km away</p>
-                </div>
-                <div className="flex-1 min-w-[180px] border border-outline-variant rounded-lg p-3 cursor-pointer hover:border-primary">
-                  <p className="font-bold m-0">Nexus Prep Institute</p>
-                  <p className="text-xs text-on-surface-variant m-0">Success rate: 79% · Online</p>
-                </div>
-              </div>
+              <h4 className="text-xl font-semibold m-0 mb-1">Looking for a Coaching Center?</h4>
+              <p className="text-on-surface-variant m-0 mb-4">Submit an enquiry and matching institutes in your state will reach out.</p>
+              <Button variant="secondary" onClick={() => navigate('/student/enquiries')}>Submit a Coaching Enquiry</Button>
             </div>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="p-6 flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-4">
-                  <span className="material-symbols-outlined">menu_book</span>
-                </div>
-                <h4 className="text-lg font-semibold mb-2">Subject Mastery</h4>
-                <p className="text-sm text-on-surface-variant mb-4">
-                  Your Physics score is 15% below target. Focus on Electromagnetism.
-                </p>
-              </div>
-              <Button variant="secondary" icon="play_circle" size="sm">Take a Physics Mock Test</Button>
-            </Card>
-            <Card className="p-6 flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-lg bg-tertiary-container/10 text-tertiary flex items-center justify-center mb-4">
-                  <span className="material-symbols-outlined">psychology</span>
-                </div>
-                <h4 className="text-lg font-semibold mb-2">Aptitude Profile</h4>
-                <p className="text-sm text-on-surface-variant mb-4">
-                  Strong logical reasoning. Suitable for Computer Science &amp; Robotics.
-                </p>
-              </div>
-              <Button variant="outline" size="sm">View Aptitude Report</Button>
-            </Card>
-          </div>
+          <Card className="p-6 flex gap-6 items-start">
+            <div className="w-24 h-24 rounded-xl bg-surface-container-high flex-shrink-0 flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined text-4xl">account_balance</span>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-xl font-semibold m-0 mb-1">Looking for a College?</h4>
+              <p className="text-on-surface-variant m-0 mb-4">Tell us your target course and state — colleges will find you.</p>
+              <Button variant="secondary" onClick={() => navigate('/student/enquiries')}>Submit a College Enquiry</Button>
+            </div>
+          </Card>
 
           <Card className="p-6">
-            <h4 className="text-lg font-semibold mb-6">Target Engineering Colleges</h4>
-            <div className="flex flex-col gap-4">
-              {COLLEGES.map((c) => (
-                <div key={c.name} className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg hover:bg-surface-container-high">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-surface-container-lowest rounded border border-outline-variant flex items-center justify-center text-primary">
-                      <span className="material-symbols-outlined">domain</span>
-                    </div>
-                    <div>
-                      <p className="font-bold m-0 text-sm">{c.name}</p>
-                      <p className="text-[11px] text-on-surface-variant uppercase font-medium m-0 mt-0.5">{c.meta}</p>
-                    </div>
-                  </div>
-                  <span className="material-symbols-outlined text-outline">chevron_right</span>
-                </div>
-              ))}
-            </div>
+            <h4 className="text-lg font-semibold mb-6">Practice Papers</h4>
+            <p className="text-sm text-on-surface-variant mb-4">
+              You've solved {distinctSolved} paper{distinctSolved === 1 ? '' : 's'} so far.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => navigate('/student/practice-tests')}>Browse Practice Papers</Button>
           </Card>
         </div>
 
         <aside className="lg:col-span-4 flex flex-col gap-6">
-          <div className="bg-primary p-6 rounded-2xl text-white relative overflow-hidden cursor-pointer">
-            <h4 className="text-lg font-semibold mb-2">Start JEE Preparation</h4>
-            <p className="text-sm opacity-80 mb-6">Access personalized curriculum and high-yield question banks instantly.</p>
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              Begin Now <span className="material-symbols-outlined text-base">arrow_forward</span>
-            </div>
-          </div>
-
-          <Card className="p-6 cursor-pointer">
+          <Card className="p-6">
             <div className="w-12 h-12 bg-surface-container rounded-lg flex items-center justify-center mb-6">
               <span className="material-symbols-outlined">groups</span>
             </div>
             <h4 className="text-lg font-semibold mb-2">Find Mentors</h4>
-            <p className="text-sm text-on-surface-variant mb-4">Connect with IIT alumni and professional career consultants.</p>
-            <div className="flex -space-x-2">
-              <div className="w-8 h-8 rounded-full border-2 border-white bg-surface-container-highest" />
-              <div className="w-8 h-8 rounded-full border-2 border-white bg-outline-variant" />
-              <div className="w-8 h-8 rounded-full border-2 border-white bg-primary text-[10px] flex items-center justify-center text-white">+12</div>
-            </div>
+            <p className="text-sm text-on-surface-variant mb-4">Connect with mentors matched to your interests.</p>
+            {loading ? (
+              <p className="text-xs text-on-surface-variant">Loading...</p>
+            ) : suggestedMentors.length === 0 ? (
+              <p className="text-xs text-on-surface-variant">You're following everyone available right now.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {suggestedMentors.map((m) => (
+                  <div key={m.id} className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold m-0 truncate">{m.name}</p>
+                      <p className="text-[11px] text-on-surface-variant m-0 truncate">{m.domain || 'Mentor'}</p>
+                    </div>
+                    <Button
+                      variant="soft"
+                      size="sm"
+                      disabled={followPendingId === m.id}
+                      onClick={() => handleFollow(m.id)}
+                    >
+                      Follow
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => navigate('/student/mentors')}
+              className="w-full mt-4 py-2 bg-transparent border-none text-primary font-semibold text-xs cursor-pointer rounded-lg hover:bg-surface-container-low"
+            >
+              Browse All Mentors
+            </button>
           </Card>
-
-          <div className="bg-secondary p-6 rounded-2xl text-white relative overflow-hidden cursor-pointer">
-            <h4 className="text-lg font-semibold mb-2">View Scholarships</h4>
-            <p className="text-sm opacity-80 mb-6">You are eligible for 4 merit-based scholarships worth up to $10,000.</p>
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              Check Eligibility <span className="material-symbols-outlined text-base">arrow_forward</span>
-            </div>
-          </div>
 
           <Card className="p-6">
             <h4 className="text-xs font-bold text-primary uppercase tracking-widest mb-4">Milestone Tracking</h4>
             <div className="flex flex-col gap-6">
-              {MILESTONES.map((m) => (
-                <div key={m.label} className={m.tone === 'upcoming' ? 'opacity-40' : ''}>
+              {milestones.map((m) => (
+                <div key={m.label}>
                   <div className="flex justify-between text-xs mb-2">
                     <span className="font-bold">{m.label}</span>
-                    <span className={m.tone === 'done' ? 'text-secondary' : 'text-primary'}>{m.status}</span>
+                    <span className={m.tone === 'done' ? 'text-secondary' : 'text-primary'}>{loading ? '—' : m.status}</span>
                   </div>
                   <div className="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
                     <div
                       className={`h-full ${m.tone === 'done' ? 'bg-secondary' : 'bg-primary'}`}
-                      style={{ width: `${m.pct}%` }}
+                      style={{ width: `${loading ? 0 : m.pct}%` }}
                     />
                   </div>
                 </div>

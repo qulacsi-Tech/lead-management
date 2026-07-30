@@ -88,6 +88,25 @@ class MentorProfileUpdate(BaseModel):
     highlights: Optional[List[CareerHighlight]] = None
 
 
+class MentorPublicResponse(BaseModel):
+    id: str
+    name: str
+    domain: Optional[str] = None
+    company: Optional[str] = None
+    title: Optional[str] = None
+    location: Optional[str] = None
+    about: Optional[str] = None
+    status: Optional[str] = None
+    subjects: Optional[List[str]] = None
+    highlights: Optional[List[CareerHighlight]] = None
+    followers_count: int = 0
+    is_following: bool = False
+    created_at: Optional[Any] = None
+
+    class Config:
+        from_attributes = True
+
+
 class MentorStats(BaseModel):
     total_papers: int
     published_papers: int
