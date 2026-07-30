@@ -22,6 +22,7 @@ class Institute(Base):
     city = Column(String)
     programs = Column(String)
     website = Column(String)
+    about = Column(String)
     credits = Column(Integer, default=1240)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -52,8 +53,18 @@ class InstituteResponse(BaseModel):
     city: Optional[str] = None
     programs: Optional[str] = None
     website: Optional[str] = None
+    about: Optional[str] = None
     credits: Optional[int] = None
     created_at: Optional[Any] = None
 
     class Config:
         from_attributes = True
+
+
+class InstituteProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    city: Optional[str] = None
+    programs: Optional[str] = None
+    website: Optional[str] = None
+    about: Optional[str] = None

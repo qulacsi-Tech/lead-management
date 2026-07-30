@@ -282,6 +282,9 @@ export const fetchUnlockedEnquiries = async () => apiFetch('/enquiries/unlocked'
 /** Institute's own profile (state, credits balance, etc). */
 export const fetchMyInstituteProfile = async () => apiFetch('/institute/me');
 
+export const updateMyInstituteProfile = async (data) =>
+  apiFetch('/institute/me', { method: 'PUT', body: data });
+
 /** Admin: all student enquiries with matching-institutes count. */
 export const fetchAdminEnquiries = async () => apiFetch('/admin/enquiries');
 
