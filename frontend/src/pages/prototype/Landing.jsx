@@ -1,20 +1,26 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import Badge from '../../components/ui/Badge';
 import { Input, FormGroup } from '../../components/ui/Field';
 import { useProtoAuth } from './useProtoAuth';
 
 export default function Landing() {
   const navigate = useNavigate();
   const { login } = useProtoAuth();
-  const [name, setName] = useState('');
-  const [role, setRole] = useState('professional');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
-  const enter = (e) => {
+  const submit = (e) => {
     e.preventDefault();
-    login(role, name || (role === 'professional' ? 'Rakesh Sharma' : 'Ananya Singh'));
-    navigate('/prototype/feed');
+    const account = login(email);
+    if (account) {
+      navigate('/prototype/feed');
+    } else {
+      setError('No account found with this email in this demo. Try a demo account below, or Join now.');
+    }
   };
 
   return (
@@ -55,47 +61,38 @@ export default function Landing() {
         </div>
 
         <Card className="p-8">
-          <h2 className="text-lg font-bold text-on-surface mb-1">Sign in / Join</h2>
+          <h2 className="text-lg font-bold text-on-surface mb-1">Sign in</h2>
           <p className="text-xs text-on-surface-variant mb-5">
-            Demo only — pick a role below to enter the common dashboard. (Real build: Sign Up / Sign
-            In, Google Login, OTP Verification.)
+            Your role (Professional / Student) is picked up automatically from your account — there's
+            nothing to choose here.
           </p>
 
-          <form onSubmit={enter} className="space-y-4">
-            <FormGroup label="Your name">
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rakesh Sharma" />
+          <form onSubmit={submit} className="space-y-4">
+            <FormGroup label="Email or phone">
+              <Input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError('');
+                }}
+                placeholder="name@example.com"
+              />
+            </FormGroup>
+            <FormGroup label="Password">
+              <Input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
             </FormGroup>
 
-            <FormGroup label="I am">
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setRole('professional')}
-                  className={`px-4 py-3 rounded-xl text-sm font-semibold border transition-all cursor-pointer text-left ${
-                    role === 'professional'
-                      ? 'bg-primary text-on-primary border-primary'
-                      : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
-                  }`}
-                >
-                  <span className="material-symbols-outlined block mb-1">badge</span>
-                  Professional
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('student')}
-                  className={`px-4 py-3 rounded-xl text-sm font-semibold border transition-all cursor-pointer text-left ${
-                    role === 'student'
-                      ? 'bg-primary text-on-primary border-primary'
-                      : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
-                  }`}
-                >
-                  <span className="material-symbols-outlined block mb-1">school</span>
-                  Student
-                </button>
-              </div>
-            </FormGroup>
+            {error && <p className="text-error text-xs mb-0">{error}</p>}
 
-            <Button type="submit" className="w-full" size="lg">Continue</Button>
+            <Button type="submit" className="w-full" size="lg">Sign In</Button>
 
             <div className="flex items-center gap-3 text-xs text-on-surface-variant">
               <div className="flex-1 h-px bg-outline-variant" />
@@ -106,6 +103,20 @@ export default function Landing() {
             <Button type="button" variant="outline" className="w-full" icon="mail">Continue with OTP</Button>
             <Button type="button" variant="outline" className="w-full" icon="account_circle">Continue with Google</Button>
           </form>
+
+          <div className="mt-5 pt-4 border-t border-outline-variant">
+            <p className="text-xs text-on-surface-variant mb-2">Demo accounts (any password works):</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <Badge tone="primary">rakesh@brightfuture.in — Professional</Badge>
+              <Badge tone="neutral">ananya@student.in — Student</Badge>
+            </div>
+            <p className="text-sm text-on-surface-variant mb-0">
+              New here?{' '}
+              <Link to="/prototype/signup" className="text-primary font-semibold hover:underline">
+                Join now
+              </Link>
+            </p>
+          </div>
         </Card>
       </main>
     </div>

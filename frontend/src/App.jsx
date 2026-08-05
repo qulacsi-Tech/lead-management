@@ -43,6 +43,7 @@ import AdminSettings from './pages/admin/AdminSettings';
 
 import PrototypeLayout from './layouts/PrototypeLayout';
 import PrototypeLanding from './pages/prototype/Landing';
+import PrototypeSignup from './pages/prototype/Signup';
 import PrototypeFeed from './pages/prototype/Feed';
 import CreateInstitutePage from './pages/prototype/CreateInstitutePage';
 import InstitutePage from './pages/prototype/InstitutePage';
@@ -134,6 +135,7 @@ function AppRoutes() {
       </Route>
 
       <Route path="/prototype" element={<PrototypeLanding />} />
+      <Route path="/prototype/signup" element={<PrototypeSignup />} />
       <Route path="/prototype" element={<PrototypeLayout />}>
         <Route path="feed" element={<PrototypeFeed />} />
         <Route path="create-page" element={<CreateInstitutePage />} />

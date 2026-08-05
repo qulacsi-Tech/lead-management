@@ -3,6 +3,24 @@
 
 export const INSTITUTE_TYPES = ['School', 'Coaching', 'College', 'University', 'Training Institute'];
 
+// Pre-seeded demo accounts so the Login screen has something to authenticate
+// against without a real backend. Signup adds new entries to this same list
+// (persisted in localStorage) so the role is picked up automatically at login
+// — no role selector on the Login screen itself.
+export const mockAccounts = [
+  {
+    email: 'rakesh@brightfuture.in',
+    name: 'Rakesh Sharma',
+    role: 'professional',
+    category: 'Coaching Faculty',
+  },
+  {
+    email: 'ananya@student.in',
+    name: 'Ananya Singh',
+    role: 'student',
+  },
+];
+
 export const PROFESSIONAL_CATEGORIES = [
   'School Teacher',
   'Coaching Faculty',
