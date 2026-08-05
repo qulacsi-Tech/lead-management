@@ -1,12 +1,110 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { useProtoAuth } from '../pages/prototype/useProtoAuth';
+import { mockNotifications, notificationPool } from '../pages/prototype/mockData';
 
 const NAV_ICONS = [
   { to: '/prototype/feed', icon: 'home', label: 'Home', end: true },
   { to: '/prototype/search', icon: 'travel_explore', label: 'Search' },
   { to: '/prototype/dashboard', icon: 'space_dashboard', label: 'Dashboard' },
 ];
+
+const NEW_NOTIFICATION_SECONDS = 4;
+let notifIdCounter = 100;
+
+function NotificationBell() {
+  const [notifications, setNotifications] = useState(
+    mockNotifications.map((n, i) => ({ ...n, id: i, read: false }))
+  );
+  const [open, setOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+  const poolIndex = useRef(0);
+  const toastTimer = useRef(null);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  useEffect(() => {
+    const tick = setInterval(() => {
+      const template = notificationPool[poolIndex.current % notificationPool.length];
+      poolIndex.current += 1;
+      notifIdCounter += 1;
+      const fresh = { ...template, id: notifIdCounter, time: 'Just now', read: false };
+
+      setNotifications((prev) => [fresh, ...prev].slice(0, 12));
+      setToast(fresh);
+
+      clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setToast(null), 5000);
+    }, NEW_NOTIFICATION_SECONDS * 1000);
+
+    return () => {
+      clearInterval(tick);
+      clearTimeout(toastTimer.current);
+    };
+  }, []);
+
+  const toggleOpen = () => {
+    setOpen((o) => {
+      const next = !o;
+      if (next) setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      return next;
+    });
+  };
+
+  return (
+    <div className="relative" onMouseLeave={() => setOpen(false)}>
+      <button
+        type="button"
+        onClick={toggleOpen}
+        className="relative flex flex-col items-center px-3 py-1.5 rounded-lg text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container-low cursor-pointer"
+      >
+        <span className="relative">
+          <span className="material-symbols-outlined text-[22px]">notifications</span>
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-error text-white text-[9px] font-bold flex items-center justify-center leading-none">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </span>
+        <span className="hidden sm:inline">Alerts</span>
+      </button>
+
+      {/* Transient live-notification toast — auto-collapses after 2s */}
+      {toast && !open && (
+        <div className="absolute right-0 mt-2 w-72 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-3 flex items-start gap-2.5 animate-pulse">
+          <span className="w-8 h-8 rounded-full bg-error-container text-error flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-[18px]">{toast.icon}</span>
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-on-surface mb-0">{toast.title}</p>
+            <p className="text-[11px] text-on-surface-variant mb-0">Just now</p>
+          </div>
+        </div>
+      )}
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-80 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-outline-variant">
+            <p className="text-sm font-bold text-on-surface mb-0">Notifications</p>
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {notifications.map((n) => (
+              <div key={n.id} className="flex items-start gap-2.5 px-4 py-3 border-b border-outline-variant last:border-0 hover:bg-surface-container-low">
+                <span className="w-8 h-8 rounded-full bg-surface-container-high text-primary flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[18px]">{n.icon}</span>
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-on-surface mb-0">{n.title}</p>
+                  <p className="text-[11px] text-on-surface-variant mb-0">{n.time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PrototypeLayout() {
   const { auth, role, name, logout } = useProtoAuth();
@@ -50,6 +148,8 @@ export default function PrototypeLayout() {
                 <span className="hidden sm:inline">{item.label}</span>
               </NavLink>
             ))}
+
+            <NotificationBell />
 
             <div className="relative ml-2">
               <button

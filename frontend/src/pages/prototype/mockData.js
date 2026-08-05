@@ -272,6 +272,87 @@ export const mockFeedPosts = [
   },
 ];
 
+// Extra pool of posts used to simulate infinite scroll (older posts loading
+// further down) and a "live" feed (new posts appearing automatically every
+// so often). Cycled/re-tagged with fresh ids so the demo never runs dry.
+export const feedPostPool = [
+  {
+    postType: 'job',
+    author: { name: 'Zenith Training Institute', sub: 'Training Institute', avatar: 'ZT', kind: 'page' },
+    title: 'Hiring: Spoken English Trainer',
+    body: 'Part-time / full-time Spoken English trainer needed for corporate batches. Weekend batches also available.',
+    likes: 22, comments: 3, ctaLabel: 'View Vacancy', ctaTo: '/prototype/page',
+  },
+  {
+    postType: 'admission',
+    author: { name: 'Horizon Public School', sub: 'School', avatar: 'HS', kind: 'page' },
+    title: 'Admission Open: Nursery to Class 5',
+    body: 'Limited seats left for the 2026-27 session. Sibling and staff-ward discounts available.',
+    likes: 29, comments: 5, ctaLabel: 'View Notice', ctaTo: '/prototype/page',
+  },
+  {
+    postType: 'expert',
+    author: { name: 'Ankit Verma', sub: 'Chemistry Faculty · 10 yrs experience', avatar: 'AV', kind: 'professional' },
+    title: 'Uploaded: NEET 2026 - Organic Chemistry Guess Paper',
+    body: 'Covers the most repeated organic chemistry reaction mechanisms from the last 6 years of NEET papers.',
+    likes: 132, comments: 19, ctaLabel: 'Download Paper', ctaTo: '/prototype/dashboard',
+  },
+  {
+    postType: 'lookingForJob',
+    author: { name: 'Neha Kulkarni', sub: 'Biology Faculty · 6 yrs experience', avatar: 'NK', kind: 'professional' },
+    title: 'Open to work: Biology Faculty (NEET)',
+    body: 'Looking for a full-time role in Pune or Nagpur. Available to join within 30 days.',
+    likes: 16, comments: 1, ctaLabel: 'Unlock Profile · 220 credits', ctaTo: '/prototype/search',
+  },
+  {
+    postType: 'lookingForAdmission',
+    author: { name: 'Rohit Das', sub: 'Class 12 PCM student', avatar: 'RD', kind: 'student' },
+    title: 'Looking for Admission: JEE Coaching (Crash Course)',
+    body: 'Preferred location: Kota or Indore. Hostel required. Open to 60-90 day crash course programs.',
+    likes: 9, comments: 0, ctaLabel: 'Unlock Profile · 150 credits', ctaTo: '/prototype/search',
+  },
+  {
+    postType: 'job',
+    author: { name: 'Bright Future Coaching Institute', sub: 'Coaching Institute', avatar: 'BF', kind: 'page' },
+    title: 'Hiring: Front Desk / Admission Counsellor',
+    body: 'Looking for a proactive admission counsellor to handle walk-ins and enquiry follow-ups. Indore campus.',
+    likes: 12, comments: 2, ctaLabel: 'View Vacancy', ctaTo: '/prototype/page',
+  },
+];
+
+export const RECENTLY_VIEWED = [
+  { name: 'Horizon Public School', sub: 'Viewed 2h ago', avatar: 'HS' },
+  { name: 'Priya Mehta', sub: 'Chemistry Faculty · viewed yesterday', avatar: 'PM' },
+];
+
+export const TRENDING_TOPICS = [
+  { tag: '#JEE2026', posts: '3.2k posts' },
+  { tag: '#NEETPrep', posts: '2.1k posts' },
+  { tag: '#TeacherHiring', posts: '980 posts' },
+  { tag: '#AdmissionsOpen', posts: '640 posts' },
+];
+
+export const CLOSING_SOON = [
+  { course: 'JEE Advanced Crash Course', institute: 'Bright Future Coaching', closesIn: '3 days' },
+  { course: 'Class 11 Science Admission', institute: 'Horizon Public School', closesIn: '6 days' },
+];
+
+// Static seed notifications shown in the bell dropdown, plus a pool used to
+// simulate new ones arriving live (see PrototypeLayout).
+export const mockNotifications = [
+  { icon: 'person_add', title: 'Priya Mehta started following you', time: '1h ago' },
+  { icon: 'campaign', title: 'Bright Future Coaching Institute posted a new Job Vacancy', time: '3h ago' },
+  { icon: 'download', title: 'Your Guess Paper crossed 300 downloads', time: '1d ago' },
+];
+
+export const notificationPool = [
+  { icon: 'thumb_up', title: 'Ankit Verma liked your Guess Paper' },
+  { icon: 'lock_open', title: 'An institute unlocked your profile' },
+  { icon: 'school', title: 'New Admission Notice posted by Horizon Public School' },
+  { icon: 'work', title: 'New Job Vacancy matches your desired location' },
+  { icon: 'verified', title: 'You received a new Recommendation' },
+];
+
 export const mockPurchasedHistory = [
   {
     id: 'ph1',
