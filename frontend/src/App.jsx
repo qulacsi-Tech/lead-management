@@ -41,6 +41,18 @@ import ManageMentors from './pages/admin/ManageMentors';
 import ManageEnquiries from './pages/admin/ManageEnquiries';
 import AdminSettings from './pages/admin/AdminSettings';
 
+import PrototypeLayout from './layouts/PrototypeLayout';
+import PrototypeLanding from './pages/prototype/Landing';
+import PrototypeFeed from './pages/prototype/Feed';
+import CreateInstitutePage from './pages/prototype/CreateInstitutePage';
+import InstitutePage from './pages/prototype/InstitutePage';
+import PostAdmissionNotice from './pages/prototype/PostAdmissionNotice';
+import PostJobVacancy from './pages/prototype/PostJobVacancy';
+import ProfessionalProfile from './pages/prototype/ProfessionalProfile';
+import ProfessionalDashboard from './pages/prototype/ProfessionalDashboard';
+import SearchConnections from './pages/prototype/SearchConnections';
+import PurchasedHistory from './pages/prototype/PurchasedHistory';
+
 function RequireRole({ role, children }) {
   const { role: currentRole, initializing } = useAuth();
   if (initializing) return null;
@@ -119,6 +131,19 @@ function AppRoutes() {
         <Route path="mentors" element={<ManageMentors />} />
         <Route path="enquiries" element={<ManageEnquiries />} />
         <Route path="settings" element={<AdminSettings />} />
+      </Route>
+
+      <Route path="/prototype" element={<PrototypeLanding />} />
+      <Route path="/prototype" element={<PrototypeLayout />}>
+        <Route path="feed" element={<PrototypeFeed />} />
+        <Route path="create-page" element={<CreateInstitutePage />} />
+        <Route path="page" element={<InstitutePage />} />
+        <Route path="page/post-admission" element={<PostAdmissionNotice />} />
+        <Route path="page/post-job" element={<PostJobVacancy />} />
+        <Route path="profile" element={<ProfessionalProfile />} />
+        <Route path="dashboard" element={<ProfessionalDashboard />} />
+        <Route path="search" element={<SearchConnections />} />
+        <Route path="purchased" element={<PurchasedHistory />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />
