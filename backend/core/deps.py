@@ -6,6 +6,7 @@ import jwt
 from core.config import settings
 from core.database import get_db
 from models.user import User
+from models.revoked_token import RevokedToken
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
@@ -18,10 +19,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
+        jti: str = payload.get("jti")
         if email is None:
             raise credentials_exception
     except jwt.PyJWTError:
         raise credentials_exception
+
+    if jti:
+        revoked = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti))
+        if revoked.scalars().first():
+            raise credentials_exception
 
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalars().first()

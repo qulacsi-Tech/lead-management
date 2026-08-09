@@ -5,6 +5,7 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import { Input, FormGroup } from '../components/ui/Field';
 import { useSession } from '../context/useSession';
+import { ApiError } from '../Api/Api';
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -12,16 +13,24 @@ export default function Signup() {
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    if (!form.email) return;
-    // Account type (Professional/Student), category and Institute Page are
-    // all set up afterwards, from the Profile screen — not asked here.
-    signup({ email: form.email, name: form.name, role: null });
-    navigate('/profile');
+    setError('');
+    setIsSubmitting(true);
+    try {
+      // Account type (Professional/Student), category and Institute Page are
+      // all set up afterwards, from the Profile screen — not asked here.
+      await signup({ name: form.name, email: form.email, password: form.password });
+      navigate('/profile');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Unable to create your account. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -79,7 +88,9 @@ export default function Signup() {
 
             {error && <p className="text-error text-xs mb-0">{error}</p>}
 
-            <Button type="submit" className="w-full" size="lg">Create Account</Button>
+            <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+              {isSubmitting ? 'Creating account...' : 'Create Account'}
+            </Button>
 
             <div className="flex items-center gap-3 text-xs text-on-surface-variant">
               <div className="flex-1 h-px bg-outline-variant" />

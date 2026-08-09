@@ -2,24 +2,29 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import Badge from '../components/ui/Badge';
 import { Input, FormGroup } from '../components/ui/Field';
 import { useSession } from '../context/useSession';
+import { ApiError } from '../Api/Api';
 
-export default function Landing() {
+export default function Login() {
   const navigate = useNavigate();
   const { login } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    const account = login(email);
-    if (account) {
-      navigate('/feed');
-    } else {
-      setError('No account found with this email in this demo. Try a demo account below, or Join now.');
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const user = await login(email, password);
+      navigate(user.role === 'admin' ? '/admin' : '/feed');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -31,7 +36,6 @@ export default function Landing() {
             <div className="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">E</div>
             <span className="text-lg font-bold text-on-surface">EduNet</span>
           </div>
-          <span className="text-xs text-on-surface-variant">UI Prototype — static demo, no real login</span>
         </div>
       </header>
 
@@ -63,12 +67,11 @@ export default function Landing() {
         <Card className="p-8">
           <h2 className="text-lg font-bold text-on-surface mb-1">Sign in</h2>
           <p className="text-xs text-on-surface-variant mb-5">
-            Your role (Professional / Student) is picked up automatically from your account — there's
-            nothing to choose here.
+            One login for everyone — your role is resolved from your account, admin included.
           </p>
 
           <form onSubmit={submit} className="space-y-4">
-            <FormGroup label="Email or phone">
+            <FormGroup label="Email">
               <Input
                 type="email"
                 required
@@ -92,7 +95,9 @@ export default function Landing() {
 
             {error && <p className="text-error text-xs mb-0">{error}</p>}
 
-            <Button type="submit" className="w-full" size="lg">Sign In</Button>
+            <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+              {isSubmitting ? 'Signing in...' : 'Sign In'}
+            </Button>
 
             <div className="flex items-center gap-3 text-xs text-on-surface-variant">
               <div className="flex-1 h-px bg-outline-variant" />
@@ -105,11 +110,6 @@ export default function Landing() {
           </form>
 
           <div className="mt-5 pt-4 border-t border-outline-variant">
-            <p className="text-xs text-on-surface-variant mb-2">Demo accounts (any password works):</p>
-            <div className="flex flex-wrap gap-2 mb-4">
-              <Badge tone="primary">rakesh@brightfuture.in — Professional</Badge>
-              <Badge tone="neutral">ananya@student.in — Student</Badge>
-            </div>
             <p className="text-sm text-on-surface-variant mb-0">
               New here?{' '}
               <Link to="/signup" className="text-primary font-semibold hover:underline">

@@ -1,12 +1,14 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi.security import OAuth2PasswordRequestForm
 from core.database import get_db
-from core.security import verify_password, get_password_hash, create_access_token
-from core.deps import get_current_active_user
+from core.security import verify_password, get_password_hash, create_access_token, decode_token
+from core.deps import get_current_active_user, oauth2_scheme
 from models.user import User, UserCreate, UserResponse, TokenResponse, ChangePasswordRequest
 from models.enums import UserRole
+from models.revoked_token import RevokedToken
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -46,6 +48,23 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
 @router.get("/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
     return current_user
+
+@router.post("/logout")
+async def logout(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Revoke the current access token (by jti) so it can't be reused even
+    though it hasn't naturally expired yet — see models/revoked_token.py."""
+    payload = decode_token(token)
+    jti = payload.get("jti")
+    exp = payload.get("exp")
+    if jti:
+        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc) if exp else datetime.now(timezone.utc)
+        db.add(RevokedToken(jti=jti, expires_at=expires_at))
+        await db.commit()
+    return {"message": "Logged out"}
 
 @router.post("/change-password")
 async def change_password(

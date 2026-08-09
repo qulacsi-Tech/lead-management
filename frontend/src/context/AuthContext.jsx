@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { getMe, loginApi, registerApi, getToken, setToken, ApiError } from '../Api/Api';
+import { getMe, loginApi, registerApi, logoutApi, getToken, setToken, ApiError } from '../Api/Api';
 
 const AuthContext = createContext(null);
 
@@ -40,10 +40,19 @@ export function AuthProvider({ children }) {
       const data = await loginApi(email, password);
       setToken(data.access_token);
       setUser(data.user);
-      setRole(roleToClient(data.user.role));
-      return data.user;
+      const clientRole = roleToClient(data.user.role);
+      setRole(clientRole);
+      // Callers (e.g. Login.jsx redirecting on role) compare against the
+      // same lowercased role the context itself uses internally — the raw
+      // backend value ("Admin") would never match a lowercase check.
+      return { ...data.user, role: clientRole };
     } catch (err) {
-      // Prototype mock fallback when backend is unavailable
+      // The backend rejected the credentials (wrong password, unknown
+      // email, inactive account) — a real answer, not an outage. Surface it
+      // instead of silently logging the user into a fake session.
+      if (err instanceof ApiError) throw err;
+
+      // Backend unreachable (network/connection error): offline demo fallback.
       const determinedRole = requestedRole || (email.includes('admin') ? 'admin' : 'student');
       const mockUser = {
         id: `usr-${Date.now()}`,
@@ -77,17 +86,33 @@ export function AuthProvider({ children }) {
   const loginFromToken = useCallback((tokenData) => {
     setToken(tokenData.access_token);
     setUser(tokenData.user);
-    setRole(roleToClient(tokenData.user.role));
-    return tokenData.user;
+    const clientRole = roleToClient(tokenData.user.role);
+    setRole(clientRole);
+    return { ...tokenData.user, role: clientRole };
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await logoutApi();
+    } catch {
+      // Best-effort: even if the revoke call fails (offline, mock token,
+      // already-expired token) still clear the local session below.
+    }
     setToken(null);
     setUser(null);
     setRole(null);
   }, []);
 
   const switchRole = useCallback((nextRole) => setRole(nextRole), []);
+
+  // Merge a partial user update (e.g. after PATCH /profile/me) into the
+  // shared session without a full re-fetch. Keeps the separate `role` state
+  // in sync too, since a profile update can change role (e.g. Account Setup
+  // switching Student -> Professional).
+  const patchUser = useCallback((patch) => {
+    setUser((prev) => (prev ? { ...prev, ...patch } : prev));
+    if (patch.role) setRole(roleToClient(patch.role));
+  }, []);
 
   const value = {
     user,
@@ -99,6 +124,7 @@ export function AuthProvider({ children }) {
     loginFromToken,
     logout,
     switchRole,
+    patchUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

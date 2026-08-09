@@ -1,5 +1,15 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+// Uploaded files (photos, resumes) are served from the backend's root, not
+// under /api — strip the /api suffix to build absolute asset URLs.
+const ASSET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 const TOKEN_KEY = 'lm.token';
+
+/** Turn a relative "/uploads/..." path from the backend into an absolute URL. */
+export function resolveAssetUrl(path) {
+  if (!path) return null;
+  if (/^https?:\/\//.test(path)) return path;
+  return `${ASSET_BASE_URL}${path}`;
+}
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
@@ -48,6 +58,18 @@ export async function apiFetch(path, { method = 'GET', body, form, auth = true }
   return res.json();
 }
 
+/** Multipart upload — deliberately doesn't set Content-Type so the browser
+ * fills in the multipart boundary itself. */
+export async function apiUpload(path, formData) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: 'POST', headers, body: formData });
+  if (!res.ok) throw new ApiError(await parseError(res), res.status);
+  return res.json();
+}
+
 // ----------------------------------------------------
 // Authentication Endpoints (Admin login)
 // ----------------------------------------------------
@@ -69,11 +91,33 @@ export const getMe = async () => {
   return apiFetch('/auth/me');
 };
 
+export const logoutApi = async () => {
+  return apiFetch('/auth/logout', { method: 'POST' });
+};
+
 export const changePassword = async ({ current_password, new_password }) => {
   return apiFetch('/auth/change-password', {
     method: 'POST',
     body: { current_password, new_password },
   });
+};
+
+// ----------------------------------------------------
+// Profile Endpoints
+// ----------------------------------------------------
+
+export const fetchMyProfile = async () => apiFetch('/profile/me');
+
+/** Partial update — pass only the fields that changed. */
+export const updateMyProfile = async (patch) =>
+  apiFetch('/profile/me', { method: 'PATCH', body: patch });
+
+/** kind: 'photo' | 'cover' | 'resume' */
+export const uploadProfileFile = async (kind, file) => {
+  const formData = new FormData();
+  formData.append('kind', kind);
+  formData.append('file', file);
+  return apiUpload('/profile/me/upload', formData);
 };
 
 // ----------------------------------------------------

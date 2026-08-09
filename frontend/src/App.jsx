@@ -18,7 +18,6 @@ import ProfessionalDashboard from './pages/ProfessionalDashboard';
 import SearchConnections from './pages/SearchConnections';
 import PurchasedHistory from './pages/PurchasedHistory';
 
-import AdminLogin from './pages/AdminLogin';
 import AdminLayout from './layouts/AdminLayout';
 import AdminDashboard from './pages/admin/Dashboard';
 import ManageInstitutes from './pages/admin/ManageInstitutes';
@@ -30,8 +29,8 @@ import AdminSettings from './pages/admin/AdminSettings';
 function RequireAdmin({ children }) {
   const { role, initializing } = useAuth();
   if (initializing) return null;
-  if (!role) return <Navigate to="/admin/login" replace />;
-  if (role !== 'admin') return <Navigate to="/" replace />;
+  if (!role) return <Navigate to="/" replace />;
+  if (role !== 'admin') return <Navigate to="/feed" replace />;
   return children;
 }
 
@@ -55,8 +54,7 @@ function AppRoutes() {
         <Route path="purchased" element={<PurchasedHistory />} />
       </Route>
 
-      {/* Admin keeps its own, separate, real backend-authenticated login. */}
-      <Route path="/admin/login" element={<AdminLogin />} />
+      {/* Admin uses the same unified login above — no separate admin login page. */}
       <Route
         path="/admin"
         element={

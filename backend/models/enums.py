@@ -6,9 +6,13 @@ class EnquiryType(str, Enum):
 
 class UserRole(str, Enum):
     ADMIN = "Admin"
+    PROFESSIONAL = "Professional"
+    STUDENT = "Student"
+    # Legacy roles, still referenced by Admin-provisioned accounts
+    # (register.py's /register/mentor, /register/institute) — not part of
+    # the current 2-role (Professional/Student) signup model.
     MANAGER = "Manager"
     AGENT = "Agent"
-    STUDENT = "Student"
     MENTOR = "Mentor"
     INSTITUTE = "Institute"
 

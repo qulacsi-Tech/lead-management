@@ -1,6 +1,6 @@
 # Education Professional Network — Roadmap & Requirements
 
-Status: **Approved and promoted to the app root.** The prototype UI (Section 5) is no longer a side route — it *is* the app now for Professional/Student users. The old Student/Mentor/Institute self-service dashboards, and the corresponding backend routers/models, have been deleted (frontend and backend). Admin is untouched, on its own real backend-authenticated login. See [Section 4](#4-phased-roadmap) for what changed and [Section 6](#6-where-things-live-in-the-repo) for the current file map.
+Status: **Approved, promoted to the app root, and running on a single real, dynamic backend login.** The prototype UI (Section 5) is no longer a side route — it *is* the app now for Professional/Student users. The old Student/Mentor/Institute self-service dashboards, and the corresponding backend routers/models, have been deleted (frontend and backend). There is now **one login page for everyone, Admin included** — no separate admin login, no role picker; the backend resolves role from the account and the frontend redirects accordingly. See [Section 4](#4-phased-roadmap) for what changed and [Section 6](#6-where-things-live-in-the-repo) for the current file map.
 
 ---
 
@@ -117,24 +117,37 @@ The existing `lead-management-complete` app is a **lead-gen marketplace** (Stude
 ### Phase 1.5 — Promotion & Old-Dashboard Removal ✅ done
 Once approved, the prototype was promoted to be the real app for Professional/Student users, and the dashboards it replaces were deleted outright rather than left running side-by-side:
 - **Frontend deleted**: `pages/student/*`, `pages/mentor/*`, `pages/institute/*`, their layouts (`StudentLayout`, `MentorLayout`, `InstituteLayout`), the three role-specific registration modals, and the old combined Login/Signup/ForgotPassword pages
-- **Frontend promoted**: `pages/prototype/*` moved to `pages/*` (e.g. `Feed.jsx`, `ProfessionalProfile.jsx`), `PrototypeLayout.jsx` → `layouts/AppLayout.jsx`, `useProtoAuth` → `useSession` (kept distinct from `AuthContext`'s real `useAuth`, which Admin still uses)
-- **Routing**: `/` is now Login, `/signup` Signup, `/feed` `/profile` `/dashboard` `/search` `/purchased` `/page*` `/create-page` all live under the promoted shell. `/admin/*` is untouched, now with its own `/admin/login` (still hitting the real backend `/auth/login`, unlike the mock session everyone else uses)
+- **Frontend promoted**: `pages/prototype/*` moved to `pages/*` (e.g. `Feed.jsx`, `ProfessionalProfile.jsx`), `PrototypeLayout.jsx` → `layouts/AppLayout.jsx`
+- **Routing**: `/` is now Login, `/signup` Signup, `/feed` `/profile` `/dashboard` `/search` `/purchased` `/page*` `/create-page` all live under the promoted shell. `/admin/*` is untouched.
 - **Backend deleted**: self-service-only routers (`mentor.py`, `opportunities.py`, `mentors_public.py`, `students.py`, `institute.py`, `papers.py`, `enquiries.py`) and unused legacy CRM scaffolding (`leads.py`, `users.py`, `dashboard.py`, `activities.py`, `tasks.py`) plus their now-orphaned models (`lead`, `task`, `activity`, `opportunity`, `paper`, `follow`)
 - **Backend kept**: `auth.py`, `register.py`, `admin_data.py`, `geo.py`, and the `student`/`mentor`/`institute`/`enquiry`/`user` models — Admin still lists and provisions these entities via `/admin/*` and `/register/*`
 - **`DataContext.jsx` refactored**, not deleted: dropped the referral-lead marketplace (`addLead`/`unlockLead`/`verifyLead`/credit wallet — nothing produces those anymore with the self-service UI gone) but kept institutes/students/mentors listing + notifications, since Admin's Manage* pages and `TopBar` depend on it
-- Both the "everyone gets a real backend account with mock data hitting real endpoints" state (Admin) and "everyone's session is a local mock" state (Professional/Student, pending Phase 2) now coexist deliberately — this is expected until Phase 2 gives Professional/Student a real backend too
+
+### Phase 1.6 — Unified, Dynamic Auth ✅ done
+Initially Admin kept its own separate login page hitting the real backend, while Professional/Student ran on a `useProtoAuth` localStorage mock (a pre-seeded fake accounts list, no real password check). That split was closed:
+- **One login page for everyone** (`/`, `pages/Login.jsx`) — no role selector, no separate `/admin/login`. It authenticates against the real backend for any account, admin included, and redirects based on the role the backend returns (`role === 'admin' → /admin`, else `/feed`).
+- **`useSession` rewritten** (`context/useSession.js`) from a localStorage mock into a thin adapter over `AuthContext`'s real `useAuth()` — same small external shape (`role`, `name`, `email`, `signup`, `login`, `logout`, …) so none of the Feed/Profile/Dashboard/etc. pages needed to change, but `login`/`signup` now hit the real backend.
+- **Registration is dynamic, not per-role**: Signup posts to the existing generic `POST /auth/register` with `role: "student"` (backend already accepted any `UserRole` string — this was true before this change too, it just wasn't being used that way from Signup). Added `PROFESSIONAL` to `UserRole` (`backend/models/enums.py`) so the enum matches the 2-role signup model.
+- **Fixed a real bug while unifying**: `AuthContext.login()` used to silently fall back to a fake mock session on *any* login failure, including a plain wrong password — so bad credentials never actually errored, they just logged you into a fabricated account. Now it only falls back when the backend is genuinely unreachable (a network error, not an `ApiError` response); a rejected login (wrong password, unknown email) correctly throws and the Login/Signup screens show it.
+- **Verified end-to-end against the real Postgres DB**: registered a new student via `/auth/register`, confirmed a wrong password on `/auth/login` returns 400 (previously would have silently "succeeded"), confirmed the right password logs in, and confirmed `admin@parentlead.com` (seeded by `backend/seed.py`, already present in the dev DB) logs in with `role: "Admin"` through the same endpoint.
+### Phase 1.7 — Real, Editable Profile + Proper Logout ✅ done
+The Profile screen's "Account Setup" was previously flagged as a known local-only limitation (role/category changes didn't persist). That, plus the rest of the profile, is now fully real:
+- **`users` table extended** (`backend/models/user.py`): `headline`, `about`, `category`, `qualification`, `experience`, `subjects` (JSON), `skills` (JSON), `current_institute`, `previous_institutes` (JSON), `profile_photo_url`, `cover_photo_url`, `resume_url` — all nullable, added via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` in `main.py`'s lifespan, same pattern as the existing Student/Mentor/Institute columns.
+- **New `routers/profile.py`**: `GET /profile/me`, `PATCH /profile/me` (partial update — send only what changed), `POST /profile/me/upload` (multipart, `kind` = `photo` | `cover` | `resume`, 5MB cap, image-type-checked for photo/cover and PDF-checked for resume). Files are saved under `backend/uploads/{user_id}/` and served back at `/uploads/...` (mounted as static files in `main.py`).
+- **`pages/ProfessionalProfile.jsx` rewritten** as a single route with an internal 4-tab layout (Overview, Experience & Skills, Resume & Contact, Account Setup) instead of spreading profile concerns across cards/pages — every field is a live input bound to the real profile, with a Save Changes button per tab and inline tag editors for Subjects/Skills/Previous Institutes. Cover and profile photo are click-to-upload tiles right on the header card; Account Setup's role/category buttons save immediately (no separate Save step) since flipping account type is a single atomic action, not a form.
+- **Proper logout, not just a client-side token drop**: JWTs now carry a `jti` claim (`core/security.py`); a new `revoked_tokens` table (`backend/models/revoked_token.py`) records logged-out `jti`s until their natural expiry; `core/deps.py`'s auth dependency rejects any request bearing a revoked `jti`; `POST /auth/logout` is what actually revokes it. `AuthContext.logout()` is now async and calls it before clearing local state. Verified end-to-end: login → logout → reusing the same (still unexpired) token now correctly gets 401 instead of continuing to work.
+- Account type (Professional/Student) and category selection, chosen in the Account Setup tab, now call `PATCH /profile/me` directly and take effect immediately — the earlier "local-only, doesn't persist" limitation no longer applies.
 
 ### Phase 2 — Data Model & Backend (next)
-- Design new/updated tables: `Page` (institute page), `PageAdmin`, `Opportunity` (type: admission/job, shared or split tables), `ProfessionalProfile` extensions (skills, resume, current/previous institute, reputation fields), `Follow`, `Like`, `Recommendation`, `SearchUnlock`/credit ledger, `Referral`
-- Give Professional/Student a real backend-authenticated session (replacing `useSession`'s localStorage mock), the same way Admin already has one
+- Design new/updated tables: `Page` (institute page), `PageAdmin`, `Opportunity` (type: admission/job, shared or split tables), `Follow`, `Like`, `Recommendation`, `SearchUnlock`/credit ledger, `Referral`
 - Migrate/relabel `Mentor` → `Professional` where applicable; migrate `Institute` model into `Page` + `PageAdmin`
 - OTP + Google login integration
 
 ### Phase 3 — Integration
-- Wire prototype UI to real APIs, replace mock data
+- Wire remaining prototype UI (Institute Page, Search Connections, Purchased History, feed posts) to real APIs, replace mock data
 - Credit purchase / payment flow
-- Real file upload (resume, logo, cover), Excel export, CRM webhook/push
-- Ranking/"push to top" logic, reputation score calculation
+- Excel export, CRM webhook/push
+- Ranking/"push to top" logic, reputation score calculation, follower/like/recommendation counts (currently mocked on Feed/Profile's stat cards)
 
 ### Phase 4 — Migration & Cutover
 - Decide how existing Institute/Mentor/Student accounts map into the new model
@@ -147,9 +160,8 @@ Once approved, the prototype was promoted to be the real app for Professional/St
 The client spec (Section 2) describes *screens and fields*; it doesn't prescribe a page-to-page navigation model. The first prototype pass built one page per feature with a flat sidebar menu — functionally complete, but it read like a spec checklist, not a network. Based on review feedback, it was reworked to actually feel like LinkedIn:
 
 **Auth split into Login vs. Signup, matching how real credentials work**
-- **Login** (`/`) has no role selector — email/password only (+ OTP/Google buttons, non-functional placeholders). Role is resolved automatically by looking the email up against a stored accounts list, the way a real login would resolve role server-side from the account record.
-- **Signup** (`/signup`) intentionally asks almost nothing — just name/phone/email/password. Account type (**I am Professional / I am Student**), professional category, and Institute Page creation all moved *out* of signup and into the Profile screen's "Account Setup" card, reached right after signup — mirrors how LinkedIn treats those as profile-completion steps, not signup fields.
-- A demo account pair (one Professional, one Student — see `mockAccounts` in `mockData.js`) lets a reviewer log in immediately without signing up first.
+- **Login** (`/`) has no role selector — email/password only (+ OTP/Google buttons, non-functional placeholders), and is now the single login for every role including Admin (see Phase 1.6). Role is resolved server-side from the real account record and the frontend redirects accordingly.
+- **Signup** (`/signup`) intentionally asks almost nothing — just name/phone/email/password. Account type (**I am Professional / I am Student**), professional category, and Institute Page creation all moved *out* of signup and into the Profile screen's "Account Setup" card, reached right after signup — mirrors how LinkedIn treats those as profile-completion steps, not signup fields. Every signup registers as `Student` on the backend today; upgrading to Professional in Account Setup is local-only until Phase 2 (see Phase 1.6's known limitation).
 
 **One combined Feed as the common landing point after login**
 - Every post type from the spec — Admission Open Notice, Job Vacancy, Expert Opinion (guess paper), "Looking for Job", "Looking for Admission" — normalizes into one shared post-card shape (`mockFeedPosts` / `feedPostPool`) and renders in a single reverse-chronological feed, the way LinkedIn mixes job posts, articles, and updates in one stream instead of separate inboxes per type.
@@ -167,21 +179,26 @@ The client spec (Section 2) describes *screens and fields*; it doesn't prescribe
 ## 6. Where things live in the repo
 
 **Frontend (`frontend/src/`)**
-- `App.jsx` — `/` (Login) and `/signup` are public; `/feed`, `/profile`, `/dashboard`, `/search`, `/purchased`, `/create-page`, `/page*` live under `layouts/AppLayout.jsx` (session-gated, redirects to `/` if not signed in); `/admin/*` is separate, under `layouts/AdminLayout.jsx` (real backend-authenticated, redirects to `/admin/login`)
+- `App.jsx` — `/` (unified Login, all roles) and `/signup` are public; `/feed`, `/profile`, `/dashboard`, `/search`, `/purchased`, `/create-page`, `/page*` live under `layouts/AppLayout.jsx` (session-gated, redirects to `/` if not signed in); `/admin/*` lives under `layouts/AdminLayout.jsx` (redirects to `/` if not signed in, to `/feed` if signed in but not admin) — no separate admin login page
 - `layouts/AppLayout.jsx` — top nav (search bar, Home/Search/Dashboard, notification bell, "Me" menu) for every Professional/Student screen
-- `context/useSession.js` — the mock, localStorage-backed session (`accounts`, `signup`, `login`, `updateAccount`, `logout`) used by everything under `AppLayout`. Deliberately named differently from `context/AuthContext.jsx`'s `useAuth()`, which is the real backend-authenticated session Admin uses
-- `pages/Login.jsx`, `pages/Signup.jsx`, `pages/AdminLogin.jsx` — three separate auth entry points (Login/Signup share the mock session; AdminLogin hits the real `/auth/login`)
+- `context/AuthContext.jsx` — the one real, backend-authenticated session (`login`, `register`, `logout`, `switchRole`), used by both Admin and everyone else now
+- `context/useSession.js` — thin adapter over `AuthContext`'s `useAuth()`, giving Feed/Profile/Dashboard/etc. the same small surface (`role`, `name`, `email`, `profile`, `profilePhotoUrl`, `coverPhotoUrl`, `resumeUrl`, `signup`, `login`, `updateProfile`, `uploadFile`, `logout`) — `profile` is the real user record (all the fields below), `updateProfile`/`uploadFile` PATCH/upload to the real backend
+- `pages/Login.jsx`, `pages/Signup.jsx` — the two auth entry points, both against the real backend
 - `pages/Feed.jsx` — the common post-login dashboard
-- `pages/CreateInstitutePage.jsx`, `InstitutePage.jsx`, `PostAdmissionNotice.jsx`, `PostJobVacancy.jsx`, `ProfessionalProfile.jsx`, `ProfessionalDashboard.jsx`, `SearchConnections.jsx`, `PurchasedHistory.jsx` — feature screens
-- `pages/mockData.js` — accounts, institute/page data, feed post pool, notification pool, search results, purchased history
-- `pages/admin/*`, `layouts/AdminLayout.jsx` — untouched by this refactor
+- `pages/ProfessionalProfile.jsx` — single route, 4 internal tabs (Overview / Experience & Skills / Resume & Contact / Account Setup), fully editable, click-to-upload cover/profile photo and resume
+- `pages/CreateInstitutePage.jsx`, `InstitutePage.jsx`, `PostAdmissionNotice.jsx`, `PostJobVacancy.jsx`, `ProfessionalDashboard.jsx`, `SearchConnections.jsx`, `PurchasedHistory.jsx` — feature screens (still mock data — see Phase 3)
+- `pages/mockData.js` — institute/page data, feed post pool, notification pool, search results, purchased history (no longer holds auth/profile data — that's real now, see `useSession`)
+- `pages/admin/*`, `layouts/AdminLayout.jsx` — untouched by the earlier deletion pass; now also share the same login page as everyone else
 - `context/DataContext.jsx` — refactored to Admin-only concerns (institutes/students/mentors listing, notifications); the referral-lead marketplace it used to drive was removed
-- `Api/Api.js` — trimmed to only what's still called: auth, geo, `/register/*`, `/admin/*`
+- `Api/Api.js` — auth (incl. `logoutApi`), geo, `/register/*`, `/admin/*`, `/profile/*` (`fetchMyProfile`, `updateMyProfile`, `uploadProfileFile`), plus `resolveAssetUrl()` for turning `/uploads/...` paths into absolute URLs and a dedicated `apiUpload()` for multipart requests
 
 **Backend (`backend/`)**
-- `routers/`: `auth.py`, `register.py`, `admin_data.py`, `geo.py` only
-- `models/`: `user.py`, `enums.py`, `student.py`, `mentor.py`, `institute.py`, `enquiry.py` only
-- `main.py` — router wiring trimmed to match; `seed.py` still bootstraps the admin account
+- `routers/`: `auth.py` (incl. `/logout`), `register.py`, `admin_data.py`, `geo.py`, `profile.py`
+- `models/`: `user.py` (now carries all Professional Profile fields), `enums.py`, `student.py`, `mentor.py`, `institute.py`, `enquiry.py`, `revoked_token.py`
+- `models/enums.py` — `UserRole` now includes `PROFESSIONAL`, alongside `ADMIN`/`STUDENT` (current model) and legacy `MANAGER`/`AGENT`/`MENTOR`/`INSTITUTE` (still used by Admin-provisioned accounts via `/register/mentor`, `/register/institute`)
+- `core/security.py` — `create_access_token` now embeds a `jti`; `core/deps.py` rejects revoked ones
+- `uploads/` (gitignored, created at startup) — uploaded photos/resumes, served at `/uploads/{user_id}/...`
+- `main.py` — router wiring trimmed to match, mounts `/uploads`; `seed.py` still bootstraps the admin account (`admin@parentlead.com`, confirmed present in the dev DB)
 
 **Docs**
 - `docs/EDUCATION_NETWORK_ROADMAP.md` (this file)

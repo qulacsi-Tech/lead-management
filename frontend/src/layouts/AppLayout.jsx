@@ -107,14 +107,19 @@ function NotificationBell() {
 }
 
 export default function AppLayout() {
-  const { auth, role, name, logout } = useSession();
+  const { auth, initializing, role, name, logout } = useSession();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Wait for the session-restore check (getMe() against the stored token)
+  // to finish before deciding there's no session — otherwise every hard
+  // refresh briefly sees auth=null and bounces straight to login before the
+  // async check even resolves.
+  if (initializing) return null;
   if (!auth) return <Navigate to="/" replace />;
 
-  const doLogout = () => {
-    logout();
+  const doLogout = async () => {
+    await logout();
     navigate('/');
   };
 

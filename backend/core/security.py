@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import uuid
 import jwt
 import bcrypt
 from core.config import settings
@@ -21,6 +22,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode.update({"exp": expire})
+    # jti gives each token a stable identity to revoke on logout — see
+    # models/revoked_token.py.
+    to_encode.update({"exp": expire, "jti": str(uuid.uuid4())})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+def decode_token(token: str) -> dict:
+    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
