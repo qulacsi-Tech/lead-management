@@ -1,24 +1,12 @@
-import { createContext, useCallback, useContext, useMemo, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useEffect } from 'react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import {
   fetchAdminInstitutes,
   fetchAdminStudents,
   fetchAdminMentors,
-  registerInstitute,
-  registerStudent,
-  registerMentor,
 } from '../Api/Api';
 
 const DataContext = createContext(null);
-
-const DEFAULT_CREDITS = 1240;
-const UNLOCK_COST = 10;
-
-const SEED_LEADS = [
-  { id: 'seed-1', name: 'Alex Wong', mobile: '9800000001', city: 'Seattle', course: 'Cybersecurity', notes: '', source: 'seed', referrerKey: null, status: 'pending', points: 0, views: 0, unlockedBy: null, createdAt: Date.now() - 6 * 86400000 },
-  { id: 'seed-2', name: 'Sarah Miller', mobile: '9800000002', city: 'Chicago', course: 'Clinical Psychology', notes: '', source: 'seed', referrerKey: null, status: 'pending', points: 0, views: 0, unlockedBy: null, createdAt: Date.now() - 4 * 86400000 },
-  { id: 'seed-3', name: 'Ryan Kapoor', mobile: '9800000003', city: 'Miami', course: 'Architectural Design', notes: '', source: 'seed', referrerKey: null, status: 'pending', points: 0, views: 0, unlockedBy: null, createdAt: Date.now() - 2 * 86400000 },
-];
 
 const SEED_INSTITUTES = [
   { id: 'inst-1', name: 'Apex Institute of Technology', email: 'contact@apextech.edu', city: 'Seattle', phone: '+1 206-555-0142', courses: ['Cybersecurity', 'Data Science', 'Cloud Computing'], status: 'Active', leadsPurchased: 42, registeredAt: Date.now() - 15 * 86400000 },
@@ -39,23 +27,16 @@ const SEED_MENTORS = [
   { id: 'ment-3', name: 'Sophia Chen', email: 'sophia.chen@mentors.com', domain: 'Product Design & UX', company: 'DesignHub', rating: 5.0, testsCreated: 6, opportunitiesPosted: 10, status: 'Active', registeredAt: Date.now() - 3 * 86400000 },
 ];
 
-const STATUS_CYCLE = ['hot', 'interested', 'converted'];
-
+// Admin-facing data only. Student/Mentor/Institute self-service dashboards
+// (and the referral-lead marketplace they drove) were retired in favor of
+// the unified feed/profile experience — see
+// docs/EDUCATION_NETWORK_ROADMAP.md. What remains here backs the Admin
+// "manage institutes/students/mentors" screens and their notification bell.
 export function DataProvider({ children }) {
-  const [leads, setLeads] = useLocalStorageState('lm.leads', SEED_LEADS);
   const [institutes, setInstitutes] = useLocalStorageState('lm.institutes', SEED_INSTITUTES);
   const [students, setStudents] = useLocalStorageState('lm.students', SEED_STUDENTS);
   const [mentors, setMentors] = useLocalStorageState('lm.mentors', SEED_MENTORS);
-  const [wallet, setWallet] = useLocalStorageState('lm.wallet', {});
   const [notifications, setNotifications] = useLocalStorageState('lm.notifications', []);
-
-  const notify = useCallback((userKey, message) => {
-    if (!userKey) return;
-    setNotifications((prev) => [
-      { id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, userKey, message, read: false, createdAt: Date.now() },
-      ...prev,
-    ]);
-  }, [setNotifications]);
 
   const refreshAdminData = useCallback(async () => {
     try {
@@ -224,62 +205,6 @@ export function DataProvider({ children }) {
     }
   }, [setInstitutes, setStudents, setMentors]);
 
-  const addLead = useCallback((fields) => {
-    const lead = {
-      id: `lead-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      name: fields.name || '',
-      mobile: fields.mobile || '',
-      city: fields.city || '',
-      course: fields.course || '',
-      notes: fields.notes || '',
-      source: fields.source,
-      referrerKey: fields.referrerKey,
-      status: 'pending',
-      points: 0,
-      views: 0,
-      unlockedBy: null,
-      createdAt: Date.now(),
-    };
-    setLeads((prev) => [lead, ...prev]);
-    return lead;
-  }, [setLeads]);
-
-  const creditsFor = useCallback((instituteKey) => {
-    if (!instituteKey) return DEFAULT_CREDITS;
-    return wallet[instituteKey] ?? DEFAULT_CREDITS;
-  }, [wallet]);
-
-  const unlockLead = useCallback((id, instituteKey) => {
-    const balance = creditsFor(instituteKey);
-    if (balance < UNLOCK_COST) {
-      return { ok: false, reason: 'insufficient-credits' };
-    }
-    const target = leads.find((l) => l.id === id && !l.unlockedBy);
-    if (!target) return { ok: false, reason: 'not-found' };
-    setLeads(leads.map((l) => (l.id === id ? { ...l, unlockedBy: instituteKey, views: l.views + 1 } : l)));
-    setWallet((prev) => ({ ...prev, [instituteKey]: balance - UNLOCK_COST }));
-    notify(target.referrerKey, `${instituteKey || 'An institute'} unlocked your referral for ${target.name}.`);
-    return { ok: true };
-  }, [leads, creditsFor, setLeads, setWallet, notify]);
-
-  const verifyLead = useCallback((id) => {
-    const target = leads.find((l) => l.id === id && l.status !== 'verified');
-    if (!target) return { ok: false, reason: 'already-verified' };
-    setLeads(leads.map((l) => (l.id === id ? { ...l, status: 'verified', points: 100 } : l)));
-    notify(target.referrerKey, `Your referral for ${target.name} was verified — +100 points!`);
-    return { ok: true };
-  }, [leads, setLeads, notify]);
-
-  const updateLeadStatus = useCallback((id) => {
-    const target = leads.find((l) => l.id === id);
-    if (!target) return null;
-    const idx = STATUS_CYCLE.indexOf(target.status);
-    const nextStatus = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length] ?? STATUS_CYCLE[0];
-    setLeads(leads.map((l) => (l.id === id ? { ...l, status: nextStatus } : l)));
-    notify(target.referrerKey, `Status for ${target.name} updated to ${nextStatus}.`);
-    return nextStatus;
-  }, [leads, setLeads, notify]);
-
   const markRead = useCallback((id) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   }, [setNotifications]);
@@ -288,43 +213,20 @@ export function DataProvider({ children }) {
     setNotifications((prev) => prev.map((n) => (n.userKey === userKey ? { ...n, read: true } : n)));
   }, [setNotifications]);
 
-  const leadsFor = useCallback((userKey) => leads.filter((l) => l.referrerKey === userKey), [leads]);
-
-  const unlockedLeadsFor = useCallback((instituteKey) => leads.filter((l) => l.unlockedBy === instituteKey), [leads]);
-
-  const discoverableLeads = useCallback((filters = {}) => {
-    return leads.filter((l) => {
-      if (l.unlockedBy) return false;
-      if (filters.city && !l.city.toLowerCase().includes(filters.city.toLowerCase())) return false;
-      if (filters.course && filters.course !== 'All Courses' && !l.course.toLowerCase().includes(filters.course.toLowerCase())) return false;
-      return true;
-    });
-  }, [leads]);
-
   const notificationsFor = useCallback((userKey) => notifications.filter((n) => n.userKey === userKey), [notifications]);
 
   const value = useMemo(() => ({
-    leads,
     institutes,
     students,
     mentors,
     autoRegisterUser,
     updateEntityStatus,
     deleteEntity,
-    addLead,
-    verifyLead,
-    unlockLead,
-    updateLeadStatus,
-    creditsFor,
-    leadsFor,
-    unlockedLeadsFor,
-    discoverableLeads,
     notificationsFor,
     markRead,
     markAllRead,
     refreshAdminData,
-    unlockCost: UNLOCK_COST,
-  }), [leads, institutes, students, mentors, autoRegisterUser, updateEntityStatus, deleteEntity, addLead, verifyLead, unlockLead, updateLeadStatus, creditsFor, leadsFor, unlockedLeadsFor, discoverableLeads, notificationsFor, markRead, markAllRead, refreshAdminData]);
+  }), [institutes, students, mentors, autoRegisterUser, updateEntityStatus, deleteEntity, notificationsFor, markRead, markAllRead, refreshAdminData]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
@@ -334,4 +236,3 @@ export function useData() {
   if (!ctx) throw new Error('useData must be used within DataProvider');
   return ctx;
 }
-

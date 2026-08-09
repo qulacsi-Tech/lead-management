@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
-import { Input, Textarea, FormGroup } from '../../components/ui/Field';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import { Input, Textarea, FormGroup } from '../components/ui/Field';
 import PageHeader from './PageHeader';
 
 export default function PostJobVacancy() {
@@ -26,7 +26,7 @@ export default function PostJobVacancy() {
         <Card className="p-6 text-center">
           <span className="material-symbols-outlined text-secondary text-[48px]">check_circle</span>
           <h3 className="text-lg font-bold text-on-surface mt-2">"{form.position}" vacancy is live on your page</h3>
-          <Button className="mt-4" onClick={() => navigate('/prototype/page')}>Back to Institute Page</Button>
+          <Button className="mt-4" onClick={() => navigate('/page')}>Back to Institute Page</Button>
         </Card>
       </div>
     );

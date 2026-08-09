@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
-import Badge from '../../components/ui/Badge';
-import { Input, Textarea, FormGroup } from '../../components/ui/Field';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import { Input, Textarea, FormGroup } from '../components/ui/Field';
 import { INSTITUTE_TYPES } from './mockData';
 import PageHeader from './PageHeader';
 
@@ -26,7 +26,7 @@ export default function CreateInstitutePage() {
             You are now the Admin of this page. You can add more admins and start posting Admission
             Notices or Job Vacancies.
           </p>
-          <Button onClick={() => navigate('/prototype/page')}>Go to Institute Page</Button>
+          <Button onClick={() => navigate('/page')}>Go to Institute Page</Button>
         </Card>
       </div>
     );

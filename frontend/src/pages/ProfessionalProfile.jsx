@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
-import Card from '../../components/ui/Card';
-import Badge from '../../components/ui/Badge';
-import Button from '../../components/ui/Button';
-import StatCard from '../../components/ui/StatCard';
-import { FormGroup } from '../../components/ui/Field';
+import Card from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
+import StatCard from '../components/ui/StatCard';
+import { FormGroup } from '../components/ui/Field';
 import { mockProfessional, PROFESSIONAL_CATEGORIES } from './mockData';
-import { useProtoAuth } from './useProtoAuth';
+import { useSession } from '../context/useSession';
 import PageHeader from './PageHeader';
 
 function ChipGroup({ options, value, onChange }) {
@@ -30,7 +30,7 @@ function ChipGroup({ options, value, onChange }) {
 }
 
 function AccountSetupCard() {
-  const { role, category, updateAccount } = useProtoAuth();
+  const { role, category, updateAccount } = useSession();
 
   return (
     <Card className="p-5 mb-5">
@@ -87,7 +87,7 @@ function AccountSetupCard() {
       {role === 'professional' && (
         <div className="mt-4 pt-4 border-t border-outline-variant flex items-center justify-between flex-wrap gap-2">
           <p className="text-xs text-on-surface-variant mb-0">Want to create an Institute Page too?</p>
-          <Link to="/prototype/create-page">
+          <Link to="/create-page">
             <Button size="sm" variant="soft" icon="add_business">Create Institute Page</Button>
           </Link>
         </div>

@@ -15,7 +15,7 @@ ADMIN_PASSWORD = "Admin@123"
 
 
 async def seed():
-    from models import lead, activity, task  # noqa: ensure models are registered
+    from models import student, mentor, institute, enquiry  # noqa: ensure models are registered
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

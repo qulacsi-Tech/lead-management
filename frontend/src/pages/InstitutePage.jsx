@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
-import Badge from '../../components/ui/Badge';
-import Modal from '../../components/ui/Modal';
-import { Input, FormGroup } from '../../components/ui/Field';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import Modal from '../components/ui/Modal';
+import { Input, FormGroup } from '../components/ui/Field';
 import { mockPage, mockOpportunities } from './mockData';
 import PageHeader from './PageHeader';
 
@@ -102,10 +102,10 @@ export default function InstitutePage() {
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-bold text-on-surface">Opportunities</h4>
               <div className="flex gap-2">
-                <Link to="/prototype/page/post-admission">
+                <Link to="/page/post-admission">
                   <Button size="sm" variant="soft" icon="campaign">Post Admission Notice</Button>
                 </Link>
-                <Link to="/prototype/page/post-job">
+                <Link to="/page/post-job">
                   <Button size="sm" variant="soft" icon="work">Post Job Vacancy</Button>
                 </Link>
               </div>

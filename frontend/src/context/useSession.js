@@ -1,14 +1,14 @@
-import { useLocalStorageState } from '../../hooks/useLocalStorageState';
-import { mockAccounts } from './mockData';
+import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import { mockAccounts } from '../pages/mockData';
 
-const AUTH_KEY = 'proto.auth';
-const ACCOUNTS_KEY = 'proto.accounts';
+const AUTH_KEY = 'auth';
+const ACCOUNTS_KEY = 'accounts';
 
-// Static prototype "auth". No backend — accounts created at Signup are kept
-// in localStorage alongside two pre-seeded demo accounts, and Login looks a
-// typed email up against that list so the role is picked up automatically
-// (there is no role selector on the Login screen itself).
-export function useProtoAuth() {
+// Client-side "auth" — no backend session yet. Accounts created at Signup are
+// kept in localStorage alongside two pre-seeded demo accounts, and Login
+// looks a typed email up against that list so the role is picked up
+// automatically (there is no role selector on the Login screen itself).
+export function useSession() {
   const [auth, setAuth] = useLocalStorageState(AUTH_KEY, null);
   const [accounts, setAccounts] = useLocalStorageState(ACCOUNTS_KEY, mockAccounts);
 

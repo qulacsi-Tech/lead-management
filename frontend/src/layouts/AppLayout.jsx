@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
-import { useProtoAuth } from '../pages/prototype/useProtoAuth';
-import { mockNotifications, notificationPool } from '../pages/prototype/mockData';
+import { useSession } from '../context/useSession';
+import { mockNotifications, notificationPool } from '../pages/mockData';
 
 const NAV_ICONS = [
-  { to: '/prototype/feed', icon: 'home', label: 'Home', end: true },
-  { to: '/prototype/search', icon: 'travel_explore', label: 'Search' },
-  { to: '/prototype/dashboard', icon: 'space_dashboard', label: 'Dashboard' },
+  { to: '/feed', icon: 'home', label: 'Home', end: true },
+  { to: '/search', icon: 'travel_explore', label: 'Search' },
+  { to: '/dashboard', icon: 'space_dashboard', label: 'Dashboard' },
 ];
 
 const NEW_NOTIFICATION_SECONDS = 4;
@@ -106,23 +106,23 @@ function NotificationBell() {
   );
 }
 
-export default function PrototypeLayout() {
-  const { auth, role, name, logout } = useProtoAuth();
+export default function AppLayout() {
+  const { auth, role, name, logout } = useSession();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  if (!auth) return <Navigate to="/prototype" replace />;
+  if (!auth) return <Navigate to="/" replace />;
 
   const doLogout = () => {
     logout();
-    navigate('/prototype');
+    navigate('/');
   };
 
   return (
     <div className="min-h-screen bg-surface">
       <header className="sticky top-0 z-40 border-b border-outline-variant bg-surface-container-lowest">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center gap-4">
-          <NavLink to="/prototype/feed" className="flex items-center gap-2 shrink-0">
+          <NavLink to="/feed" className="flex items-center gap-2 shrink-0">
             <div className="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">E</div>
             <span className="text-lg font-bold text-on-surface hidden sm:inline">EduNet</span>
           </NavLink>
@@ -171,7 +171,7 @@ export default function PrototypeLayout() {
                     Signed in as <strong className="text-on-surface">{name}</strong> · {role}
                   </p>
                   <NavLink
-                    to="/prototype/profile"
+                    to="/profile"
                     onClick={() => setMenuOpen(false)}
                     className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
                   >
@@ -180,14 +180,14 @@ export default function PrototypeLayout() {
                   {role === 'professional' && (
                     <>
                       <NavLink
-                        to="/prototype/page"
+                        to="/page"
                         onClick={() => setMenuOpen(false)}
                         className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
                       >
                         My Institute Page
                       </NavLink>
                       <NavLink
-                        to="/prototype/create-page"
+                        to="/create-page"
                         onClick={() => setMenuOpen(false)}
                         className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
                       >
@@ -196,7 +196,7 @@ export default function PrototypeLayout() {
                     </>
                   )}
                   <NavLink
-                    to="/prototype/purchased"
+                    to="/purchased"
                     onClick={() => setMenuOpen(false)}
                     className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
                   >

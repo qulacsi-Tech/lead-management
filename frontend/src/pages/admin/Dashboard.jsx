@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import StatCard from '../../components/ui/StatCard';
@@ -6,7 +6,7 @@ import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 
 export default function AdminDashboard() {
-  const { institutes, students, mentors, leads, refreshAdminData } = useData();
+  const { institutes, students, mentors, refreshAdminData } = useData();
 
   useEffect(() => {
     refreshAdminData();
@@ -18,9 +18,6 @@ export default function AdminDashboard() {
     ...students.map((s) => ({ ...s, entityType: 'Student', icon: 'school', badgeVariant: 'secondary' })),
     ...mentors.map((m) => ({ ...m, entityType: 'Mentor', icon: 'person', badgeVariant: 'success' })),
   ].sort((a, b) => (b.registeredAt || 0) - (a.registeredAt || 0));
-
-  const totalLeadsCount = leads.length;
-  const verifiedLeadsCount = leads.filter((l) => l.status === 'verified').length;
 
   return (
     <div className="p-8 max-w-7xl mx-auto flex-1 w-full box-border">
@@ -48,7 +45,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* KPI Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
         <StatCard
           icon="account_balance"
           title="Registered Institutes"
@@ -66,12 +63,6 @@ export default function AdminDashboard() {
           title="Active Mentors"
           value={mentors.length}
           trend="+100% Auto-Approved"
-        />
-        <StatCard
-          icon="leaderboard"
-          title="Total Leads Posted"
-          value={totalLeadsCount}
-          trend={`${verifiedLeadsCount} Verified`}
         />
       </div>
 

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
-import Badge from '../../components/ui/Badge';
-import Modal from '../../components/ui/Modal';
-import { Select, FormGroup } from '../../components/ui/Field';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import Modal from '../components/ui/Modal';
+import { Select, FormGroup } from '../components/ui/Field';
 import { mockSearchResults } from './mockData';
 import PageHeader from './PageHeader';
 

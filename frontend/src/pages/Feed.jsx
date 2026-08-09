@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
-import Badge from '../../components/ui/Badge';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
 import {
   mockFeedPosts,
   feedPostPool,
@@ -12,7 +12,7 @@ import {
   TRENDING_TOPICS,
   CLOSING_SOON,
 } from './mockData';
-import { useProtoAuth } from './useProtoAuth';
+import { useSession } from '../context/useSession';
 
 const POST_TYPE_BADGE = {
   admission: { label: 'Admission Open', tone: 'success' },
@@ -52,20 +52,20 @@ function ProfileRail({ role, name }) {
             ) : role === 'student' ? (
               <div className="flex justify-between"><span>Enquiries sent</span><span className="font-semibold text-primary">2</span></div>
             ) : (
-              <Link to="/prototype/profile" className="text-primary font-semibold">Finish setting up your account →</Link>
+              <Link to="/profile" className="text-primary font-semibold">Finish setting up your account →</Link>
             )}
           </div>
         </div>
         <div className="border-t border-outline-variant p-2">
-          <Link to="/prototype/profile">
+          <Link to="/profile">
             <Button variant="ghost" size="sm" className="w-full justify-start" icon="person">My Profile</Button>
           </Link>
           {isProfessional && (
-            <Link to="/prototype/page">
+            <Link to="/page">
               <Button variant="ghost" size="sm" className="w-full justify-start" icon="storefront">My Institute Page</Button>
             </Link>
           )}
-          <Link to="/prototype/purchased">
+          <Link to="/purchased">
             <Button variant="ghost" size="sm" className="w-full justify-start" icon="bookmark">Saved / Purchased</Button>
           </Link>
         </div>
@@ -109,13 +109,13 @@ function Composer({ role }) {
 
   const actions = isProfessional
     ? [
-        { to: '/prototype/page/post-admission', icon: 'campaign', label: 'Admission Notice' },
-        { to: '/prototype/page/post-job', icon: 'work', label: 'Job Vacancy' },
-        { to: '/prototype/dashboard', icon: 'psychology', label: 'Expert Opinion' },
-        { to: '/prototype/dashboard', icon: 'business_center', label: 'Looking for Job' },
-        { to: '/prototype/dashboard', icon: 'school', label: 'Looking for Admission' },
+        { to: '/page/post-admission', icon: 'campaign', label: 'Admission Notice' },
+        { to: '/page/post-job', icon: 'work', label: 'Job Vacancy' },
+        { to: '/dashboard', icon: 'psychology', label: 'Expert Opinion' },
+        { to: '/dashboard', icon: 'business_center', label: 'Looking for Job' },
+        { to: '/dashboard', icon: 'school', label: 'Looking for Admission' },
       ]
-    : [{ to: '/prototype/dashboard', icon: 'school', label: 'Looking for Admission' }];
+    : [{ to: '/dashboard', icon: 'school', label: 'Looking for Admission' }];
 
   return (
     <Card className="p-4">
@@ -148,7 +148,7 @@ function SetupPrompt() {
           Finish setting up your account to start posting and connecting.
         </p>
       </div>
-      <Link to="/prototype/profile">
+      <Link to="/profile">
         <Button size="sm">Complete Setup</Button>
       </Link>
     </Card>
@@ -265,7 +265,7 @@ function SuggestionsRail() {
         <p className="text-xs text-on-surface-variant mb-3">
           3 institutes are actively hiring faculty this week.
         </p>
-        <Link to="/prototype/search">
+        <Link to="/search">
           <Button size="sm" variant="soft" className="w-full">Browse Job Vacancies</Button>
         </Link>
       </Card>
@@ -284,7 +284,7 @@ function SuggestionsRail() {
 let idCounter = 1000;
 
 export default function Feed() {
-  const { role, name } = useProtoAuth();
+  const { role, name } = useSession();
   const [posts, setPosts] = useState(mockFeedPosts.map((p) => ({ ...p })));
   const [loadingMore, setLoadingMore] = useState(false);
   const [reachedEnd, setReachedEnd] = useState(false);

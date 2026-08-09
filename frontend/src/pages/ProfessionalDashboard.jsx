@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
-import Badge from '../../components/ui/Badge';
-import { Input, FormGroup } from '../../components/ui/Field';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import { Input, FormGroup } from '../components/ui/Field';
 import {
   mockDesiredJob,
   mockGuessPapers,
   mockAdmissionLeads,
 } from './mockData';
 import PageHeader from './PageHeader';
-import { useProtoAuth } from './useProtoAuth';
+import { useSession } from '../context/useSession';
 
 const ALL_TABS = [
   { key: 'account', label: 'My Account', icon: 'person' },
@@ -190,7 +190,7 @@ function AdmissionTab() {
 }
 
 export default function ProfessionalDashboard() {
-  const { role } = useProtoAuth();
+  const { role } = useSession();
   const isStudent = role === 'student';
   const TABS = ALL_TABS.filter((t) => !(t.professionalOnly && isStudent));
   const [tab, setTab] = useState('account');

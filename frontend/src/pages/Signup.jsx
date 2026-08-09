@@ -1,109 +1,107 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth, ApiError } from '../context/AuthContext';
-import { useData } from '../context/DataContext';
+import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import { Input, Label } from '../components/ui/Field';
-import { isValidEmail, required } from '../utils/validate';
-
-const ROLES = [
-  { id: 'student', label: 'Student', icon: 'school' },
-  { id: 'mentor', label: 'Mentor', icon: 'person' },
-  { id: 'institute', label: 'Institute', icon: 'account_balance' },
-];
+import Badge from '../components/ui/Badge';
+import { Input, FormGroup } from '../components/ui/Field';
+import { useSession } from '../context/useSession';
 
 export default function Signup() {
   const navigate = useNavigate();
-  const { register } = useAuth();
-  const { autoRegisterUser } = useData();
+  const { signup } = useSession();
 
-  const [role, setRole] = useState('student');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
+  const [error, setError] = useState('');
 
-  const roleHome = (r) =>
-    r === 'admin'
-      ? '/admin'
-      : r === 'student'
-      ? '/student'
-      : r === 'mentor'
-      ? '/mentor'
-      : '/institute';
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const handleSubmit = async (e) => {
+  const submit = (e) => {
     e.preventDefault();
-    const nextErrors = {};
-    if (!required(name)) nextErrors.name = 'Enter your full name.';
-    if (!isValidEmail(email)) nextErrors.email = 'Enter a valid email address.';
-    if (password.length < 6) nextErrors.password = 'Password must be at least 6 characters.';
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length) return;
-
-    setIsSubmitting(true);
-    try {
-      // Auto-add to DataContext admin management lists instantly upon registration
-      autoRegisterUser({ name: name.trim(), email, role });
-      await register({ name: name.trim(), email, password, role });
-      navigate(roleHome(role));
-    } catch (err) {
-      setErrors({ form: err instanceof ApiError ? err.message : 'Unable to create account. Please try again.' });
-    } finally {
-      setIsSubmitting(false);
-    }
+    if (!form.email) return;
+    // Account type (Professional/Student), category and Institute Page are
+    // all set up afterwards, from the Profile screen — not asked here.
+    signup({ email: form.email, name: form.name, role: null });
+    navigate('/profile');
   };
 
   return (
-    <div className="min-h-screen bg-surface flex items-center justify-center p-6 box-border">
-      <div className="w-full max-w-md bg-surface-container-lowest border border-outline-variant rounded-3xl p-10 shadow-lg box-border">
-        <div className="text-center mb-7">
-          <h1 className="font-display text-2xl font-bold text-primary m-0">Create your account</h1>
-          <p className="text-sm text-on-surface-variant mt-1.5 m-0">Join Next Move to get started</p>
+    <div className="min-h-screen bg-surface flex flex-col">
+      <header className="border-b border-outline-variant bg-surface-container-lowest">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">E</div>
+            <span className="text-lg font-bold text-on-surface">EduNet</span>
+          </div>
+          <span className="text-xs text-on-surface-variant">UI Prototype — static demo, no real account is created</span>
         </div>
+      </header>
 
-        <div className="flex gap-2 mb-6">
-          {ROLES.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setRole(r.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                role === r.id
-                  ? 'border-2 border-primary-container bg-primary-fixed text-primary'
-                  : 'border border-outline-variant bg-surface-container-lowest text-on-surface-variant font-semibold'
-              }`}
-            >
-              <span className="material-symbols-outlined text-base">{r.icon}</span>
-              {r.label}
-            </button>
-          ))}
+      <main className="flex-1 max-w-xl mx-auto w-full px-6 py-12">
+        <Card className="p-8">
+          <h2 className="text-lg font-bold text-on-surface mb-1">Create your account</h2>
+          <p className="text-xs text-on-surface-variant mb-5">
+            Just the basics for now — you'll set your account type (Professional / Student),
+            category, and Institute Page from your profile after signing in.
+          </p>
+
+          <form onSubmit={submit} className="space-y-5">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <FormGroup label="Full name">
+                <Input required value={form.name} onChange={set('name')} placeholder="Your name" />
+              </FormGroup>
+              <FormGroup label="Phone">
+                <Input value={form.phone} onChange={set('phone')} placeholder="+91-XXXXXXXXXX" />
+              </FormGroup>
+            </div>
+
+            <FormGroup label="Email">
+              <Input
+                type="email"
+                required
+                value={form.email}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, email: e.target.value }));
+                  setError('');
+                }}
+                placeholder="name@example.com"
+              />
+            </FormGroup>
+
+            <FormGroup label="Password">
+              <Input
+                type="password"
+                required
+                value={form.password}
+                onChange={set('password')}
+                placeholder="••••••••"
+              />
+            </FormGroup>
+
+            {error && <p className="text-error text-xs mb-0">{error}</p>}
+
+            <Button type="submit" className="w-full" size="lg">Create Account</Button>
+
+            <div className="flex items-center gap-3 text-xs text-on-surface-variant">
+              <div className="flex-1 h-px bg-outline-variant" />
+              or
+              <div className="flex-1 h-px bg-outline-variant" />
+            </div>
+            <Button type="button" variant="outline" className="w-full" icon="mail">Sign up with OTP</Button>
+            <Button type="button" variant="outline" className="w-full" icon="account_circle">Sign up with Google</Button>
+          </form>
+
+          <p className="text-sm text-on-surface-variant mt-5 pt-4 border-t border-outline-variant mb-0">
+            Already have an account?{' '}
+            <Link to="/" className="text-primary font-semibold hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </Card>
+
+        <div className="mt-4 flex justify-center">
+          <Badge tone="neutral">User types per client requirement doc — profile details are filled in after signup</Badge>
         </div>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <Label>Full Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" error={errors.name} />
-          </div>
-          <div>
-            <Label>Email Address</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" error={errors.email} />
-          </div>
-          <div>
-            <Label>Password</Label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password" error={errors.password} />
-          </div>
-          {errors.form && <p className="text-error text-xs m-0">{errors.form}</p>}
-          <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? 'Creating account…' : 'Create Account'}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-on-surface-variant mt-6 m-0">
-          Already have an account? <Link to="/login" className="font-semibold text-primary-container no-underline">Sign in</Link>
-        </p>
-      </div>
+      </main>
     </div>
   );
 }

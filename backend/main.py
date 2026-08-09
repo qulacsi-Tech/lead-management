@@ -4,26 +4,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
 from core.database import engine, Base
-from routers import auth, users, leads, dashboard
-from routers.activities import router as activities_router
-from routers.tasks import lead_tasks_router, tasks_router
+from routers import auth
 from routers.register import router as register_router
 from routers.admin_data import router as admin_data_router
 from routers.geo import router as geo_router
-from routers.papers import router as papers_router
-from routers.mentor import router as mentor_router
-from routers.opportunities import router as opportunities_router
-from routers.mentors_public import router as mentors_public_router
-from routers.students import router as students_router
-from routers.institute import router as institute_router
-from routers.enquiries import router as enquiries_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Import all models so Base knows about them before create_all
-    from models import user as _u, lead as _l, activity as _a, task as _t  # noqa
-    from models import student as _s, mentor as _m, institute as _i, paper as _p, opportunity as _o, follow as _f, enquiry as _e  # noqa
+    from models import user as _u  # noqa
+    from models import student as _s, mentor as _m, institute as _i, enquiry as _e  # noqa
     from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -62,23 +53,15 @@ app.add_middleware(
 )
 
 # Include Routers
+# Only auth + admin-facing endpoints remain — Student/Mentor/Institute
+# self-service dashboards and the legacy generic CRM routers were retired
+# in favor of the unified feed/profile experience (see
+# docs/EDUCATION_NETWORK_ROADMAP.md). Admin still provisions and lists
+# Student/Mentor/Institute accounts via register.py / admin_data.py.
 app.include_router(auth.router, prefix="/api")
-app.include_router(users.router, prefix="/api")
-app.include_router(leads.router, prefix="/api")
-app.include_router(activities_router, prefix="/api")
-app.include_router(lead_tasks_router, prefix="/api")
-app.include_router(tasks_router, prefix="/api")
-app.include_router(dashboard.router, prefix="/api")
 app.include_router(register_router, prefix="/api")
 app.include_router(admin_data_router, prefix="/api")
 app.include_router(geo_router, prefix="/api")
-app.include_router(papers_router, prefix="/api")
-app.include_router(mentor_router, prefix="/api")
-app.include_router(opportunities_router, prefix="/api")
-app.include_router(mentors_public_router, prefix="/api")
-app.include_router(students_router, prefix="/api")
-app.include_router(institute_router, prefix="/api")
-app.include_router(enquiries_router, prefix="/api")
 
 
 @app.get("/api/ping")

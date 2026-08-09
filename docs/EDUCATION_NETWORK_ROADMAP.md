@@ -1,6 +1,6 @@
 # Education Professional Network — Roadmap & Requirements
 
-Status: **UI prototype built and reviewable** (static, no backend, mock data only). Existing product (lead-management-complete) is untouched and continues to run as-is. Live at `/prototype` in the frontend — see [Section 5](#5-prototype-design-decisions) and [Section 6](#6-where-things-live-in-the-repo).
+Status: **Approved and promoted to the app root.** The prototype UI (Section 5) is no longer a side route — it *is* the app now for Professional/Student users. The old Student/Mentor/Institute self-service dashboards, and the corresponding backend routers/models, have been deleted (frontend and backend). Admin is untouched, on its own real backend-authenticated login. See [Section 4](#4-phased-roadmap) for what changed and [Section 6](#6-where-things-live-in-the-repo) for the current file map.
 
 ---
 
@@ -109,17 +109,24 @@ The existing `lead-management-complete` app is a **lead-gen marketplace** (Stude
 
 ## 4. Phased Roadmap
 
-### Phase 1 — UI Prototype ✅ built, pending client sign-off
+### Phase 1 — UI Prototype ✅ built and approved
 - A **static, backend-free** prototype of every screen in Section 2, using mock/local data only (`localStorage`, no API calls)
-- Lives in a separate route (`/prototype`) inside the existing frontend, isolated from existing role-based routes/layouts (`/student`, `/mentor`, `/institute`, `/admin`) — zero risk to the live product
+- Built first in an isolated `/prototype` route, then reworked mid-build (on feedback) from a flat "menu of 9 screens" into an actual **LinkedIn-style experience** — see Section 5 for what changed and why
 - Screens built: Login, Signup, common Feed dashboard, Create Institute Page, Institute Page (public + admin), Post Admission Notice, Post Job Vacancy, Professional Profile, Professional Dashboard (My Account / Looking for Job / Expert Opinion / Looking for Admission), Search Connections, Purchased History
-- Reworked mid-build, on feedback, from a flat "menu of 9 screens" into an actual **LinkedIn-style experience** — see Section 5 for what changed and why
-- Goal: get client sign-off on flows, fields, and layout before any backend investment
-- Out of scope for this phase: real auth, real data persistence, payments/credit purchase, actual file upload/export, CRM integrations, real-time infra (notifications/feed updates are simulated client-side with timers, not sockets)
 
-### Phase 2 — Data Model & Backend (after client approval)
+### Phase 1.5 — Promotion & Old-Dashboard Removal ✅ done
+Once approved, the prototype was promoted to be the real app for Professional/Student users, and the dashboards it replaces were deleted outright rather than left running side-by-side:
+- **Frontend deleted**: `pages/student/*`, `pages/mentor/*`, `pages/institute/*`, their layouts (`StudentLayout`, `MentorLayout`, `InstituteLayout`), the three role-specific registration modals, and the old combined Login/Signup/ForgotPassword pages
+- **Frontend promoted**: `pages/prototype/*` moved to `pages/*` (e.g. `Feed.jsx`, `ProfessionalProfile.jsx`), `PrototypeLayout.jsx` → `layouts/AppLayout.jsx`, `useProtoAuth` → `useSession` (kept distinct from `AuthContext`'s real `useAuth`, which Admin still uses)
+- **Routing**: `/` is now Login, `/signup` Signup, `/feed` `/profile` `/dashboard` `/search` `/purchased` `/page*` `/create-page` all live under the promoted shell. `/admin/*` is untouched, now with its own `/admin/login` (still hitting the real backend `/auth/login`, unlike the mock session everyone else uses)
+- **Backend deleted**: self-service-only routers (`mentor.py`, `opportunities.py`, `mentors_public.py`, `students.py`, `institute.py`, `papers.py`, `enquiries.py`) and unused legacy CRM scaffolding (`leads.py`, `users.py`, `dashboard.py`, `activities.py`, `tasks.py`) plus their now-orphaned models (`lead`, `task`, `activity`, `opportunity`, `paper`, `follow`)
+- **Backend kept**: `auth.py`, `register.py`, `admin_data.py`, `geo.py`, and the `student`/`mentor`/`institute`/`enquiry`/`user` models — Admin still lists and provisions these entities via `/admin/*` and `/register/*`
+- **`DataContext.jsx` refactored**, not deleted: dropped the referral-lead marketplace (`addLead`/`unlockLead`/`verifyLead`/credit wallet — nothing produces those anymore with the self-service UI gone) but kept institutes/students/mentors listing + notifications, since Admin's Manage* pages and `TopBar` depend on it
+- Both the "everyone gets a real backend account with mock data hitting real endpoints" state (Admin) and "everyone's session is a local mock" state (Professional/Student, pending Phase 2) now coexist deliberately — this is expected until Phase 2 gives Professional/Student a real backend too
+
+### Phase 2 — Data Model & Backend (next)
 - Design new/updated tables: `Page` (institute page), `PageAdmin`, `Opportunity` (type: admission/job, shared or split tables), `ProfessionalProfile` extensions (skills, resume, current/previous institute, reputation fields), `Follow`, `Like`, `Recommendation`, `SearchUnlock`/credit ledger, `Referral`
-- Decide fate of existing CRM Lead subsystem
+- Give Professional/Student a real backend-authenticated session (replacing `useSession`'s localStorage mock), the same way Admin already has one
 - Migrate/relabel `Mentor` → `Professional` where applicable; migrate `Institute` model into `Page` + `PageAdmin`
 - OTP + Google login integration
 
@@ -140,8 +147,8 @@ The existing `lead-management-complete` app is a **lead-gen marketplace** (Stude
 The client spec (Section 2) describes *screens and fields*; it doesn't prescribe a page-to-page navigation model. The first prototype pass built one page per feature with a flat sidebar menu — functionally complete, but it read like a spec checklist, not a network. Based on review feedback, it was reworked to actually feel like LinkedIn:
 
 **Auth split into Login vs. Signup, matching how real credentials work**
-- **Login** (`/prototype`) has no role selector — email/password only (+ OTP/Google buttons, non-functional placeholders). Role is resolved automatically by looking the email up against a stored accounts list, the way a real login would resolve role server-side from the account record.
-- **Signup** (`/prototype/signup`) is where the client's spec choices actually live: **I am Professional / I am Student** first, then (if Professional) the 7 category chips, then an optional "also create an Institute Page" step exposing the 5 institute-type chips inline.
+- **Login** (`/`) has no role selector — email/password only (+ OTP/Google buttons, non-functional placeholders). Role is resolved automatically by looking the email up against a stored accounts list, the way a real login would resolve role server-side from the account record.
+- **Signup** (`/signup`) intentionally asks almost nothing — just name/phone/email/password. Account type (**I am Professional / I am Student**), professional category, and Institute Page creation all moved *out* of signup and into the Profile screen's "Account Setup" card, reached right after signup — mirrors how LinkedIn treats those as profile-completion steps, not signup fields.
 - A demo account pair (one Professional, one Student — see `mockAccounts` in `mockData.js`) lets a reviewer log in immediately without signing up first.
 
 **One combined Feed as the common landing point after login**
@@ -153,17 +160,28 @@ The client spec (Section 2) describes *screens and fields*; it doesn't prescribe
 - Infinite scroll: an `IntersectionObserver` on a sentinel at the bottom of the post list loads more posts (from `feedPostPool`) with a spinner, capped at 24 posts with a "You're all caught up" end state.
 - Auto-refresh: a countdown banner above the composer ("Live feed · next update in Ns") ticks down and prepends a new post automatically when it hits zero, briefly highlighting it as "New."
 - Notification bell in the top nav (visible on every prototype screen, not just the feed): red unread-count badge, a dropdown of notifications, and the same live-simulation pattern — a new notification arrives on a timer, briefly appears as an auto-dismissing toast near the bell, and increments the badge.
-- All of the above is timer/`IntersectionObserver`-driven client state for demo purposes only — Phase 3 replaces it with real data (actual new posts/notifications from the backend), at which point the "live" feel comes from real activity instead of a mock pool cycling on an interval.
+- All of the above is timer/`IntersectionObserver`-driven client state for demo purposes only — Phase 2/3 replaces it with real data (actual new posts/notifications from the backend), at which point the "live" feel comes from real activity instead of a mock pool cycling on an interval.
 
 ---
 
 ## 6. Where things live in the repo
 
-- Roadmap: `docs/EDUCATION_NETWORK_ROADMAP.md` (this file)
-- Shared shell: `frontend/src/layouts/PrototypeLayout.jsx` — top nav (search bar, Home/Search/Dashboard, notification bell, "Me" menu), auth-gated (redirects to `/prototype` if no session)
-- Auth: `frontend/src/pages/prototype/Landing.jsx` (Login, route `/prototype`), `Signup.jsx` (route `/prototype/signup`), `useProtoAuth.js` (localStorage-backed session + accounts list)
-- Common dashboard: `frontend/src/pages/prototype/Feed.jsx` (route `/prototype/feed`)
-- Feature screens: `CreateInstitutePage.jsx`, `InstitutePage.jsx`, `PostAdmissionNotice.jsx`, `PostJobVacancy.jsx`, `ProfessionalProfile.jsx`, `ProfessionalDashboard.jsx`, `SearchConnections.jsx`, `PurchasedHistory.jsx` (all under `frontend/src/pages/prototype/`)
-- Mock data: `frontend/src/pages/prototype/mockData.js` — accounts, institute/page data, feed post pool, notification pool, search results, purchased history
-- Routes: all under `/prototype` in `frontend/src/App.jsx`; `/prototype` and `/prototype/signup` are public, everything else requires a prototype session — for internal + client review only, no relation to the real app's `/login` or role-based routes
-- Existing product: untouched
+**Frontend (`frontend/src/`)**
+- `App.jsx` — `/` (Login) and `/signup` are public; `/feed`, `/profile`, `/dashboard`, `/search`, `/purchased`, `/create-page`, `/page*` live under `layouts/AppLayout.jsx` (session-gated, redirects to `/` if not signed in); `/admin/*` is separate, under `layouts/AdminLayout.jsx` (real backend-authenticated, redirects to `/admin/login`)
+- `layouts/AppLayout.jsx` — top nav (search bar, Home/Search/Dashboard, notification bell, "Me" menu) for every Professional/Student screen
+- `context/useSession.js` — the mock, localStorage-backed session (`accounts`, `signup`, `login`, `updateAccount`, `logout`) used by everything under `AppLayout`. Deliberately named differently from `context/AuthContext.jsx`'s `useAuth()`, which is the real backend-authenticated session Admin uses
+- `pages/Login.jsx`, `pages/Signup.jsx`, `pages/AdminLogin.jsx` — three separate auth entry points (Login/Signup share the mock session; AdminLogin hits the real `/auth/login`)
+- `pages/Feed.jsx` — the common post-login dashboard
+- `pages/CreateInstitutePage.jsx`, `InstitutePage.jsx`, `PostAdmissionNotice.jsx`, `PostJobVacancy.jsx`, `ProfessionalProfile.jsx`, `ProfessionalDashboard.jsx`, `SearchConnections.jsx`, `PurchasedHistory.jsx` — feature screens
+- `pages/mockData.js` — accounts, institute/page data, feed post pool, notification pool, search results, purchased history
+- `pages/admin/*`, `layouts/AdminLayout.jsx` — untouched by this refactor
+- `context/DataContext.jsx` — refactored to Admin-only concerns (institutes/students/mentors listing, notifications); the referral-lead marketplace it used to drive was removed
+- `Api/Api.js` — trimmed to only what's still called: auth, geo, `/register/*`, `/admin/*`
+
+**Backend (`backend/`)**
+- `routers/`: `auth.py`, `register.py`, `admin_data.py`, `geo.py` only
+- `models/`: `user.py`, `enums.py`, `student.py`, `mentor.py`, `institute.py`, `enquiry.py` only
+- `main.py` — router wiring trimmed to match; `seed.py` still bootstraps the admin account
+
+**Docs**
+- `docs/EDUCATION_NETWORK_ROADMAP.md` (this file)

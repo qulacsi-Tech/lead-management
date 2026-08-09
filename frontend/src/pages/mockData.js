@@ -208,7 +208,7 @@ export const mockFeedPosts = [
     likes: 86,
     comments: 12,
     ctaLabel: 'View Notice',
-    ctaTo: '/prototype/page',
+    ctaTo: '/page',
   },
   {
     id: 'f2',
@@ -220,7 +220,7 @@ export const mockFeedPosts = [
     likes: 54,
     comments: 6,
     ctaLabel: 'View Vacancy',
-    ctaTo: '/prototype/page',
+    ctaTo: '/page',
   },
   {
     id: 'f3',
@@ -232,7 +232,7 @@ export const mockFeedPosts = [
     likes: 210,
     comments: 34,
     ctaLabel: 'Download Paper',
-    ctaTo: '/prototype/dashboard',
+    ctaTo: '/dashboard',
   },
   {
     id: 'f4',
@@ -244,7 +244,7 @@ export const mockFeedPosts = [
     likes: 32,
     comments: 4,
     ctaLabel: 'Unlock Profile · 180 credits',
-    ctaTo: '/prototype/search',
+    ctaTo: '/search',
   },
   {
     id: 'f5',
@@ -256,7 +256,7 @@ export const mockFeedPosts = [
     likes: 41,
     comments: 9,
     ctaLabel: 'View Notice',
-    ctaTo: '/prototype/page',
+    ctaTo: '/page',
   },
   {
     id: 'f6',
@@ -268,7 +268,7 @@ export const mockFeedPosts = [
     likes: 18,
     comments: 2,
     ctaLabel: 'Unlock Profile · 350 credits',
-    ctaTo: '/prototype/search',
+    ctaTo: '/search',
   },
 ];
 
@@ -281,42 +281,42 @@ export const feedPostPool = [
     author: { name: 'Zenith Training Institute', sub: 'Training Institute', avatar: 'ZT', kind: 'page' },
     title: 'Hiring: Spoken English Trainer',
     body: 'Part-time / full-time Spoken English trainer needed for corporate batches. Weekend batches also available.',
-    likes: 22, comments: 3, ctaLabel: 'View Vacancy', ctaTo: '/prototype/page',
+    likes: 22, comments: 3, ctaLabel: 'View Vacancy', ctaTo: '/page',
   },
   {
     postType: 'admission',
     author: { name: 'Horizon Public School', sub: 'School', avatar: 'HS', kind: 'page' },
     title: 'Admission Open: Nursery to Class 5',
     body: 'Limited seats left for the 2026-27 session. Sibling and staff-ward discounts available.',
-    likes: 29, comments: 5, ctaLabel: 'View Notice', ctaTo: '/prototype/page',
+    likes: 29, comments: 5, ctaLabel: 'View Notice', ctaTo: '/page',
   },
   {
     postType: 'expert',
     author: { name: 'Ankit Verma', sub: 'Chemistry Faculty · 10 yrs experience', avatar: 'AV', kind: 'professional' },
     title: 'Uploaded: NEET 2026 - Organic Chemistry Guess Paper',
     body: 'Covers the most repeated organic chemistry reaction mechanisms from the last 6 years of NEET papers.',
-    likes: 132, comments: 19, ctaLabel: 'Download Paper', ctaTo: '/prototype/dashboard',
+    likes: 132, comments: 19, ctaLabel: 'Download Paper', ctaTo: '/dashboard',
   },
   {
     postType: 'lookingForJob',
     author: { name: 'Neha Kulkarni', sub: 'Biology Faculty · 6 yrs experience', avatar: 'NK', kind: 'professional' },
     title: 'Open to work: Biology Faculty (NEET)',
     body: 'Looking for a full-time role in Pune or Nagpur. Available to join within 30 days.',
-    likes: 16, comments: 1, ctaLabel: 'Unlock Profile · 220 credits', ctaTo: '/prototype/search',
+    likes: 16, comments: 1, ctaLabel: 'Unlock Profile · 220 credits', ctaTo: '/search',
   },
   {
     postType: 'lookingForAdmission',
     author: { name: 'Rohit Das', sub: 'Class 12 PCM student', avatar: 'RD', kind: 'student' },
     title: 'Looking for Admission: JEE Coaching (Crash Course)',
     body: 'Preferred location: Kota or Indore. Hostel required. Open to 60-90 day crash course programs.',
-    likes: 9, comments: 0, ctaLabel: 'Unlock Profile · 150 credits', ctaTo: '/prototype/search',
+    likes: 9, comments: 0, ctaLabel: 'Unlock Profile · 150 credits', ctaTo: '/search',
   },
   {
     postType: 'job',
     author: { name: 'Bright Future Coaching Institute', sub: 'Coaching Institute', avatar: 'BF', kind: 'page' },
     title: 'Hiring: Front Desk / Admission Counsellor',
     body: 'Looking for a proactive admission counsellor to handle walk-ins and enquiry follow-ups. Indore campus.',
-    likes: 12, comments: 2, ctaLabel: 'View Vacancy', ctaTo: '/prototype/page',
+    likes: 12, comments: 2, ctaLabel: 'View Vacancy', ctaTo: '/page',
   },
 ];
 
@@ -338,7 +338,7 @@ export const CLOSING_SOON = [
 ];
 
 // Static seed notifications shown in the bell dropdown, plus a pool used to
-// simulate new ones arriving live (see PrototypeLayout).
+// simulate new ones arriving live (see AppLayout).
 export const mockNotifications = [
   { icon: 'person_add', title: 'Priya Mehta started following you', time: '1h ago' },
   { icon: 'campaign', title: 'Bright Future Coaching Institute posted a new Job Vacancy', time: '3h ago' },
