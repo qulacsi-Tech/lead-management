@@ -1,9 +1,106 @@
+import { Link } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import StatCard from '../../components/ui/StatCard';
-import { mockProfessional } from './mockData';
+import { FormGroup } from '../../components/ui/Field';
+import { mockProfessional, PROFESSIONAL_CATEGORIES } from './mockData';
+import { useProtoAuth } from './useProtoAuth';
 import PageHeader from './PageHeader';
+
+function ChipGroup({ options, value, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((opt) => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => onChange(opt)}
+          className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+            value === opt
+              ? 'bg-primary text-on-primary border-primary'
+              : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+          }`}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AccountSetupCard() {
+  const { role, category, updateAccount } = useProtoAuth();
+
+  return (
+    <Card className="p-5 mb-5">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="material-symbols-outlined text-primary">settings_account_box</span>
+        <h4 className="text-sm font-bold text-on-surface mb-0">Account Setup</h4>
+        {!role && <Badge tone="error">Action needed</Badge>}
+      </div>
+      <p className="text-xs text-on-surface-variant mb-4">
+        Your account type, category and Institute Page all live here — not on the signup form.
+      </p>
+
+      <FormGroup label="I am">
+        <div className="grid grid-cols-2 gap-3 max-w-sm">
+          <button
+            type="button"
+            onClick={() => updateAccount({ role: 'professional', category: category || PROFESSIONAL_CATEGORIES[0] })}
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all cursor-pointer text-left ${
+              role === 'professional'
+                ? 'bg-primary text-on-primary border-primary'
+                : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+            }`}
+          >
+            <span className="material-symbols-outlined block mb-1">badge</span>
+            Professional
+          </button>
+          <button
+            type="button"
+            onClick={() => updateAccount({ role: 'student', category: undefined })}
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all cursor-pointer text-left ${
+              role === 'student'
+                ? 'bg-primary text-on-primary border-primary'
+                : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+            }`}
+          >
+            <span className="material-symbols-outlined block mb-1">school</span>
+            Student
+          </button>
+        </div>
+      </FormGroup>
+
+      {role === 'professional' && (
+        <div className="mt-4">
+          <FormGroup label="Professional category">
+            <ChipGroup
+              options={PROFESSIONAL_CATEGORIES}
+              value={category}
+              onChange={(c) => updateAccount({ category: c })}
+            />
+          </FormGroup>
+        </div>
+      )}
+
+      {role === 'professional' && (
+        <div className="mt-4 pt-4 border-t border-outline-variant flex items-center justify-between flex-wrap gap-2">
+          <p className="text-xs text-on-surface-variant mb-0">Want to create an Institute Page too?</p>
+          <Link to="/prototype/create-page">
+            <Button size="sm" variant="soft" icon="add_business">Create Institute Page</Button>
+          </Link>
+        </div>
+      )}
+
+      {role === 'student' && (
+        <p className="text-xs text-on-surface-variant mt-3 mb-0">
+          As a Student you won't see "Looking for a Job" or "Expert Opinion", and can't create a Page.
+        </p>
+      )}
+    </Card>
+  );
+}
 
 export default function ProfessionalProfile() {
   const p = mockProfessional;
@@ -14,6 +111,8 @@ export default function ProfessionalProfile() {
         title="Professional Profile"
         subtitle="LinkedIn-style profile — Followers / Likes / Downloads / Reputation Score / Recommendations."
       />
+
+      <AccountSetupCard />
 
       <Card className="overflow-hidden mb-5">
         <div className="h-24 md:h-32 bg-gradient-to-r from-tertiary to-primary" />

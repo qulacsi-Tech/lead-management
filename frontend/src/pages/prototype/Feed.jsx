@@ -37,7 +37,11 @@ function ProfileRail({ role, name }) {
           </div>
           <p className="text-sm font-bold text-on-surface mt-2 mb-0">{name}</p>
           <p className="text-xs text-on-surface-variant mb-3">
-            {isProfessional ? mockProfessional.headline : 'Student · Looking for Admission'}
+            {role === 'professional'
+              ? mockProfessional.headline
+              : role === 'student'
+                ? 'Student · Looking for Admission'
+                : 'Account setup pending'}
           </p>
           <div className="text-xs text-on-surface-variant space-y-1 border-t border-outline-variant pt-3">
             {isProfessional ? (
@@ -45,8 +49,10 @@ function ProfileRail({ role, name }) {
                 <div className="flex justify-between"><span>Profile views</span><span className="font-semibold text-primary">36</span></div>
                 <div className="flex justify-between"><span>Followers</span><span className="font-semibold text-primary">{mockProfessional.stats.followers}</span></div>
               </>
-            ) : (
+            ) : role === 'student' ? (
               <div className="flex justify-between"><span>Enquiries sent</span><span className="font-semibold text-primary">2</span></div>
+            ) : (
+              <Link to="/prototype/profile" className="text-primary font-semibold">Finish setting up your account →</Link>
             )}
           </div>
         </div>
@@ -129,6 +135,22 @@ function Composer({ role }) {
           ))}
         </div>
       )}
+    </Card>
+  );
+}
+
+function SetupPrompt() {
+  return (
+    <Card className="p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex items-center gap-2">
+        <span className="material-symbols-outlined text-primary">settings_account_box</span>
+        <p className="text-sm text-on-surface mb-0">
+          Finish setting up your account to start posting and connecting.
+        </p>
+      </div>
+      <Link to="/prototype/profile">
+        <Button size="sm">Complete Setup</Button>
+      </Link>
     </Card>
   );
 }
@@ -333,7 +355,7 @@ export default function Feed() {
 
       <div className="space-y-4">
         <LiveBanner countdown={countdown} />
-        <Composer role={role} />
+        {role ? <Composer role={role} /> : <SetupPrompt />}
         {posts.map((post) => (
           <PostCard key={post.id} post={post} highlighted={post.id === highlightId} />
         ))}

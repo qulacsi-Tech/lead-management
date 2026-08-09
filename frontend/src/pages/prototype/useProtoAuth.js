@@ -27,6 +27,17 @@ export function useProtoAuth() {
     return found || null;
   };
 
+  // Used by the Profile screen to set/change account type, category, etc. —
+  // those choices happen post-signup, inside the profile, not at Signup.
+  const updateAccount = (patch) => {
+    setAuth((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...patch };
+      setAccounts((list) => list.map((a) => (a.email.toLowerCase() === prev.email.toLowerCase() ? updated : a)));
+      return updated;
+    });
+  };
+
   const logout = () => setAuth(null);
 
   return {
@@ -34,9 +45,11 @@ export function useProtoAuth() {
     role: auth?.role,
     name: auth?.name,
     email: auth?.email,
+    category: auth?.category,
     accounts,
     signup,
     login,
+    updateAccount,
     logout,
   };
 }

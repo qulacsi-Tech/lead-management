@@ -4,38 +4,12 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { Input, FormGroup } from '../../components/ui/Field';
-import { INSTITUTE_TYPES, PROFESSIONAL_CATEGORIES } from './mockData';
 import { useProtoAuth } from './useProtoAuth';
-
-function ChipGroup({ options, value, onChange }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt}
-          type="button"
-          onClick={() => onChange(opt)}
-          className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-            value === opt
-              ? 'bg-primary text-on-primary border-primary'
-              : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
-          }`}
-        >
-          {opt}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export default function Signup() {
   const navigate = useNavigate();
   const { signup } = useProtoAuth();
 
-  const [userType, setUserType] = useState('professional'); // 'professional' | 'student'
-  const [category, setCategory] = useState(PROFESSIONAL_CATEGORIES[0]);
-  const [wantsPage, setWantsPage] = useState(false);
-  const [instituteType, setInstituteType] = useState(null);
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
   const [error, setError] = useState('');
 
@@ -44,19 +18,10 @@ export default function Signup() {
   const submit = (e) => {
     e.preventDefault();
     if (!form.email) return;
-    const account = {
-      email: form.email,
-      name: form.name,
-      role: userType,
-      ...(userType === 'professional' ? { category } : {}),
-      ...(userType === 'professional' && wantsPage && instituteType ? { instituteTypeIntent: instituteType } : {}),
-    };
-    signup(account);
-    if (userType === 'professional' && wantsPage && instituteType) {
-      navigate('/prototype/create-page');
-    } else {
-      navigate('/prototype/feed');
-    }
+    // Account type (Professional/Student), category and Institute Page are
+    // all set up afterwards, from the Profile screen — not asked here.
+    signup({ email: form.email, name: form.name, role: null });
+    navigate('/prototype/profile');
   };
 
   return (
@@ -75,51 +40,11 @@ export default function Signup() {
         <Card className="p-8">
           <h2 className="text-lg font-bold text-on-surface mb-1">Create your account</h2>
           <p className="text-xs text-on-surface-variant mb-5">
-            प्रोफाइल क्रिएट करते समय पहला ऑप्शन सेलेक्ट करेंगे — choose your account type first.
+            Just the basics for now — you'll set your account type (Professional / Student),
+            category, and Institute Page from your profile after signing in.
           </p>
 
           <form onSubmit={submit} className="space-y-5">
-            <FormGroup label="I am">
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setUserType('professional')}
-                  className={`px-4 py-3 rounded-xl text-sm font-semibold border transition-all cursor-pointer text-left ${
-                    userType === 'professional'
-                      ? 'bg-primary text-on-primary border-primary'
-                      : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
-                  }`}
-                >
-                  <span className="material-symbols-outlined block mb-1">badge</span>
-                  Professional
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setUserType('student')}
-                  className={`px-4 py-3 rounded-xl text-sm font-semibold border transition-all cursor-pointer text-left ${
-                    userType === 'student'
-                      ? 'bg-primary text-on-primary border-primary'
-                      : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
-                  }`}
-                >
-                  <span className="material-symbols-outlined block mb-1">school</span>
-                  Student
-                </button>
-              </div>
-              {userType === 'student' && (
-                <p className="text-xs text-on-surface-variant mt-2 mb-0">
-                  As a Student you won't be able to create a Page, and "Looking for a Job" / "Expert
-                  Opinion" won't be shown on your dashboard.
-                </p>
-              )}
-            </FormGroup>
-
-            {userType === 'professional' && (
-              <FormGroup label="Professional category">
-                <ChipGroup options={PROFESSIONAL_CATEGORIES} value={category} onChange={setCategory} />
-              </FormGroup>
-            )}
-
             <div className="grid sm:grid-cols-2 gap-4">
               <FormGroup label="Full name">
                 <Input required value={form.name} onChange={set('name')} placeholder="Your name" />
@@ -152,30 +77,6 @@ export default function Signup() {
               />
             </FormGroup>
 
-            {userType === 'professional' && (
-              <FormGroup label="Institute Page (optional)">
-                <label className="flex items-center gap-2 text-sm text-on-surface-variant mb-2">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4"
-                    checked={wantsPage}
-                    onChange={(e) => setWantsPage(e.target.checked)}
-                  />
-                  I also want to create an Institute Page (School / Coaching / College / University /
-                  Training Institute)
-                </label>
-                {wantsPage && (
-                  <>
-                    <ChipGroup options={INSTITUTE_TYPES} value={instituteType} onChange={setInstituteType} />
-                    <p className="text-xs text-on-surface-variant mt-2 mb-0">
-                      You'll become this Page's first Admin, and can add more Admins later — like a
-                      Facebook Page. You can also do this anytime later from your dashboard.
-                    </p>
-                  </>
-                )}
-              </FormGroup>
-            )}
-
             {error && <p className="text-error text-xs mb-0">{error}</p>}
 
             <Button type="submit" className="w-full" size="lg">Create Account</Button>
@@ -198,7 +99,7 @@ export default function Signup() {
         </Card>
 
         <div className="mt-4 flex justify-center">
-          <Badge tone="neutral">User types &amp; fields per client requirement doc — see docs/EDUCATION_NETWORK_ROADMAP.md</Badge>
+          <Badge tone="neutral">User types per client requirement doc — profile details are filled in after signup</Badge>
         </div>
       </main>
     </div>
