@@ -107,7 +107,7 @@ function NotificationBell() {
 }
 
 export default function AppLayout() {
-  const { auth, initializing, role, name, logout } = useSession();
+  const { auth, initializing, name, logout } = useSession();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -173,7 +173,7 @@ export default function AppLayout() {
                   onMouseLeave={() => setMenuOpen(false)}
                 >
                   <p className="px-3 py-2 text-xs text-on-surface-variant">
-                    Signed in as <strong className="text-on-surface">{name}</strong> · {role}
+                    Signed in as <strong className="text-on-surface">{name}</strong>
                   </p>
                   <NavLink
                     to="/profile"
@@ -182,24 +182,20 @@ export default function AppLayout() {
                   >
                     View Profile
                   </NavLink>
-                  {role === 'professional' && (
-                    <>
-                      <NavLink
-                        to="/page"
-                        onClick={() => setMenuOpen(false)}
-                        className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
-                      >
-                        My Institute Page
-                      </NavLink>
-                      <NavLink
-                        to="/create-page"
-                        onClick={() => setMenuOpen(false)}
-                        className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
-                      >
-                        Create Institute Page
-                      </NavLink>
-                    </>
-                  )}
+                  <NavLink
+                    to="/page"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
+                  >
+                    My Institute Page
+                  </NavLink>
+                  <NavLink
+                    to="/create-page"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
+                  >
+                    Create Institute Page
+                  </NavLink>
                   <NavLink
                     to="/purchased"
                     onClick={() => setMenuOpen(false)}

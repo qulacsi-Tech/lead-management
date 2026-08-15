@@ -9,12 +9,14 @@ import {
   mockAdmissionLeads,
 } from './mockData';
 import PageHeader from './PageHeader';
-import { useSession } from '../context/useSession';
 
-const ALL_TABS = [
+// Role-based branching is paused per client feedback 12 Aug 2026 — see
+// docs/CLIENT_FEEDBACK_2026-08-12.md, Section 1. Every signed-in user sees
+// all four tabs now, regardless of stored role.
+const TABS = [
   { key: 'account', label: 'My Account', icon: 'person' },
-  { key: 'job', label: 'Looking for Job?', icon: 'work', professionalOnly: true },
-  { key: 'expert', label: 'Expert Opinion', icon: 'psychology', professionalOnly: true },
+  { key: 'job', label: 'Looking for Job?', icon: 'work' },
+  { key: 'expert', label: 'Expert Opinion', icon: 'psychology' },
   { key: 'admission', label: 'Looking for Admission?', icon: 'school' },
 ];
 
@@ -190,20 +192,13 @@ function AdmissionTab() {
 }
 
 export default function ProfessionalDashboard() {
-  const { role } = useSession();
-  const isStudent = role === 'student';
-  const TABS = ALL_TABS.filter((t) => !(t.professionalOnly && isStudent));
   const [tab, setTab] = useState('account');
 
   return (
     <div>
       <PageHeader
-        title={isStudent ? 'Student Dashboard' : 'Professional Dashboard'}
-        subtitle={
-          isStudent
-            ? 'My Account · Looking for Admission — Job posting and Expert Opinion are Professional-only features.'
-            : 'My Account · Looking for Job · Expert Opinion · Looking for Admission'
-        }
+        title="Dashboard"
+        subtitle="My Account · Looking for Job · Expert Opinion · Looking for Admission"
       />
 
       <div className="flex gap-2 mb-5 flex-wrap">

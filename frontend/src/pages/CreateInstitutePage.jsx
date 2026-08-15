@@ -7,13 +7,24 @@ import { Input, Textarea, FormGroup } from '../components/ui/Field';
 import { INSTITUTE_TYPES } from './mockData';
 import PageHeader from './PageHeader';
 
+const BOARD_OPTIONS = ['CBSE', 'ICSE', 'State Board', 'IB', 'Other'];
+
+// Affiliation is conditional on institute type, per client feedback
+// 12 Aug 2026 — see docs/CLIENT_FEEDBACK_2026-08-12.md, Section 6.3.
+function affiliationConfig(type) {
+  if (type === 'School') return { mode: 'board', label: 'Board' };
+  if (type === 'College') return { mode: 'university', label: 'Affiliating University' };
+  return { mode: 'na', label: 'Affiliation' };
+}
+
 export default function CreateInstitutePage() {
   const navigate = useNavigate();
   const [type, setType] = useState(null);
-  const [form, setForm] = useState({ name: '', about: '', address: '', website: '', contact: '' });
+  const [form, setForm] = useState({ name: '', about: '', address: '', website: '', contact: '', affiliation: '' });
   const [created, setCreated] = useState(false);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const affiliation = type ? affiliationConfig(type) : null;
 
   if (created) {
     return (
@@ -46,7 +57,7 @@ export default function CreateInstitutePage() {
             <button
               key={t}
               type="button"
-              onClick={() => setType(t)}
+              onClick={() => { setType(t); setForm((f) => ({ ...f, affiliation: '' })); }}
               className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all cursor-pointer ${
                 type === t
                   ? 'bg-primary text-on-primary border-primary'
@@ -89,6 +100,34 @@ export default function CreateInstitutePage() {
             <FormGroup label="Contact Number">
               <Input value={form.contact} onChange={set('contact')} placeholder="+91-XXXXXXXXXX" />
             </FormGroup>
+
+            <FormGroup label={affiliation.label}>
+              {affiliation.mode === 'board' && (
+                <select
+                  required
+                  value={form.affiliation}
+                  onChange={set('affiliation')}
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3.5 py-2.5 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer"
+                >
+                  <option value="" disabled>Select a board</option>
+                  {BOARD_OPTIONS.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              )}
+              {affiliation.mode === 'university' && (
+                <Input
+                  required
+                  value={form.affiliation}
+                  onChange={set('affiliation')}
+                  placeholder="e.g. Devi Ahilya Vishwavidyalaya"
+                />
+              )}
+              {affiliation.mode === 'na' && (
+                <p className="text-xs text-on-surface-variant mb-0">
+                  Not applicable for {type} pages.
+                </p>
+              )}
+            </FormGroup>
+
             <Button type="submit" icon="add_business">Create Page</Button>
           </form>
         </Card>

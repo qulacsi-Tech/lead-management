@@ -25,8 +25,13 @@ const POST_TYPE_BADGE = {
 const MAX_POSTS = 24;
 const REFRESH_SECONDS = 30;
 
-function ProfileRail({ role, name }) {
-  const isProfessional = role === 'professional';
+// Role-based branching (Professional vs. Student seeing different things)
+// is paused per client feedback 12 Aug 2026 — see
+// docs/CLIENT_FEEDBACK_2026-08-12.md, Section 1. Every signed-in user now
+// sees the same profile rail, composer options and dashboard tabs. The
+// `role`/`category` fields are kept on the backend (unused here) so this is
+// reversible without a data migration if the client asks for it back.
+function ProfileRail({ name }) {
   return (
     <div className="space-y-4">
       <Card className="overflow-hidden">
@@ -36,35 +41,19 @@ function ProfileRail({ role, name }) {
             {(name || 'U').split(' ').map((n) => n[0]).join('').slice(0, 2)}
           </div>
           <p className="text-sm font-bold text-on-surface mt-2 mb-0">{name}</p>
-          <p className="text-xs text-on-surface-variant mb-3">
-            {role === 'professional'
-              ? mockProfessional.headline
-              : role === 'student'
-                ? 'Student · Looking for Admission'
-                : 'Account setup pending'}
-          </p>
+          <p className="text-xs text-on-surface-variant mb-3">{mockProfessional.headline}</p>
           <div className="text-xs text-on-surface-variant space-y-1 border-t border-outline-variant pt-3">
-            {isProfessional ? (
-              <>
-                <div className="flex justify-between"><span>Profile views</span><span className="font-semibold text-primary">36</span></div>
-                <div className="flex justify-between"><span>Followers</span><span className="font-semibold text-primary">{mockProfessional.stats.followers}</span></div>
-              </>
-            ) : role === 'student' ? (
-              <div className="flex justify-between"><span>Enquiries sent</span><span className="font-semibold text-primary">2</span></div>
-            ) : (
-              <Link to="/profile" className="text-primary font-semibold">Finish setting up your account →</Link>
-            )}
+            <div className="flex justify-between"><span>Profile views</span><span className="font-semibold text-primary">36</span></div>
+            <div className="flex justify-between"><span>Followers</span><span className="font-semibold text-primary">{mockProfessional.stats.followers}</span></div>
           </div>
         </div>
         <div className="border-t border-outline-variant p-2">
           <Link to="/profile">
             <Button variant="ghost" size="sm" className="w-full justify-start" icon="person">My Profile</Button>
           </Link>
-          {isProfessional && (
-            <Link to="/page">
-              <Button variant="ghost" size="sm" className="w-full justify-start" icon="storefront">My Institute Page</Button>
-            </Link>
-          )}
+          <Link to="/page">
+            <Button variant="ghost" size="sm" className="w-full justify-start" icon="storefront">My Institute Page</Button>
+          </Link>
           <Link to="/purchased">
             <Button variant="ghost" size="sm" className="w-full justify-start" icon="bookmark">Saved / Purchased</Button>
           </Link>
@@ -103,19 +92,16 @@ function ProfileRail({ role, name }) {
   );
 }
 
-function Composer({ role }) {
+function Composer() {
   const [open, setOpen] = useState(false);
-  const isProfessional = role === 'professional';
 
-  const actions = isProfessional
-    ? [
-        { to: '/page/post-admission', icon: 'campaign', label: 'Admission Notice' },
-        { to: '/page/post-job', icon: 'work', label: 'Job Vacancy' },
-        { to: '/dashboard', icon: 'psychology', label: 'Expert Opinion' },
-        { to: '/dashboard', icon: 'business_center', label: 'Looking for Job' },
-        { to: '/dashboard', icon: 'school', label: 'Looking for Admission' },
-      ]
-    : [{ to: '/dashboard', icon: 'school', label: 'Looking for Admission' }];
+  const actions = [
+    { to: '/page/post-admission', icon: 'campaign', label: 'Admission Notice' },
+    { to: '/page/post-job', icon: 'work', label: 'Job Vacancy' },
+    { to: '/dashboard', icon: 'psychology', label: 'Expert Opinion' },
+    { to: '/dashboard', icon: 'business_center', label: 'Looking for Job' },
+    { to: '/dashboard', icon: 'school', label: 'Looking for Admission' },
+  ];
 
   return (
     <Card className="p-4">
@@ -135,22 +121,6 @@ function Composer({ role }) {
           ))}
         </div>
       )}
-    </Card>
-  );
-}
-
-function SetupPrompt() {
-  return (
-    <Card className="p-4 flex items-center justify-between gap-3 flex-wrap">
-      <div className="flex items-center gap-2">
-        <span className="material-symbols-outlined text-primary">settings_account_box</span>
-        <p className="text-sm text-on-surface mb-0">
-          Finish setting up your account to start posting and connecting.
-        </p>
-      </div>
-      <Link to="/profile">
-        <Button size="sm">Complete Setup</Button>
-      </Link>
     </Card>
   );
 }
@@ -284,7 +254,7 @@ function SuggestionsRail() {
 let idCounter = 1000;
 
 export default function Feed() {
-  const { role, name } = useSession();
+  const { name } = useSession();
   const [posts, setPosts] = useState(mockFeedPosts.map((p) => ({ ...p })));
   const [loadingMore, setLoadingMore] = useState(false);
   const [reachedEnd, setReachedEnd] = useState(false);
@@ -350,12 +320,12 @@ export default function Feed() {
   return (
     <div className="grid lg:grid-cols-[260px_1fr_280px] gap-5 items-start">
       <div className="hidden lg:block sticky top-20">
-        <ProfileRail role={role} name={name} />
+        <ProfileRail name={name} />
       </div>
 
       <div className="space-y-4">
         <LiveBanner countdown={countdown} />
-        {role ? <Composer role={role} /> : <SetupPrompt />}
+        <Composer />
         {posts.map((post) => (
           <PostCard key={post.id} post={post} highlighted={post.id === highlightId} />
         ))}

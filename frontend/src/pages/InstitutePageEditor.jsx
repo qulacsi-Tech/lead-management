@@ -1,0 +1,306 @@
+import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Card from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
+import { Input, FormGroup } from '../components/ui/Field';
+import { mockPage, mockPageContent } from './mockData';
+import {
+  WHY_CHOOSE_US_OPTIONS,
+  KEY_HIGHLIGHTS_OPTIONS,
+  FACILITIES_OPTIONS,
+  CAMPUS_LIFE_OPTIONS,
+  ABOUT_US_STAT_FIELDS,
+  buildAboutParagraph,
+} from './pageBuilderContent';
+import PageHeader from './PageHeader';
+
+const TABS = [
+  { key: 'main', label: 'Main', icon: 'storefront' },
+  { key: 'about', label: 'About Us', icon: 'info' },
+  { key: 'why', label: 'Why Choose Us', icon: 'stars' },
+  { key: 'highlights', label: 'Key Highlights', icon: 'insights' },
+  { key: 'facilities', label: 'Facilities', icon: 'apartment' },
+  { key: 'campus', label: 'Campus Life', icon: 'diversity_3' },
+  { key: 'achievements', label: 'Achievements', icon: 'military_tech' },
+];
+
+// A simple pick-any-N chip list — used by Why Choose Us and Campus Life,
+// which (unlike Key Highlights/Facilities) don't carry a per-item number.
+function ChipMultiSelect({ options, selected, onChange, suggestedMax }) {
+  const toggle = (opt) => {
+    onChange(selected.includes(opt) ? selected.filter((o) => o !== opt) : [...selected, opt]);
+  };
+  return (
+    <div>
+      {suggestedMax && (
+        <p className="text-xs text-on-surface-variant mb-2">
+          {selected.length} selected {suggestedMax ? `(suggested: ${suggestedMax})` : ''}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => toggle(opt)}
+            className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer text-left ${
+              selected.includes(opt)
+                ? 'bg-primary text-on-primary border-primary'
+                : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+            }`}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Pick-and-fill-a-number — used by Key Highlights and Facilities: each
+// option, once selected, reveals its own numeric/detail field.
+function NumberedPicker({ options, selected, onChange, checkboxLabel = 'Available' }) {
+  const isSelected = (key) => selected.some((s) => s.key === key);
+  const valueFor = (key) => selected.find((s) => s.key === key)?.value || '';
+
+  const toggle = (key) => {
+    if (isSelected(key)) onChange(selected.filter((s) => s.key !== key));
+    else onChange([...selected, { key, value: '' }]);
+  };
+  const setValue = (key, value) => onChange(selected.map((s) => (s.key === key ? { ...s, value } : s)));
+
+  return (
+    <div className="space-y-2">
+      {options.map((opt) => {
+        const active = isSelected(opt.key);
+        return (
+          <div
+            key={opt.key}
+            className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+              active ? 'border-primary bg-primary-container/20' : 'border-outline-variant'
+            }`}
+          >
+            <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
+              <input type="checkbox" className="w-4 h-4 shrink-0" checked={active} onChange={() => toggle(opt.key)} />
+              <span className="text-sm text-on-surface font-medium truncate">{opt.label}</span>
+            </label>
+            {active && (
+              <div className="w-40 shrink-0">
+                <Input
+                  value={valueFor(opt.key)}
+                  onChange={(e) => setValue(opt.key, e.target.value)}
+                  placeholder={opt.placeholder || checkboxLabel}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function InstitutePageEditor() {
+  const navigate = useNavigate();
+  const [main, setMain] = useState({ name: mockPage.name, tagline: mockPage.tagline, banners: mockPage.banners });
+  const [aboutStats, setAboutStats] = useState(mockPageContent.aboutStats);
+  const [whyChooseUs, setWhyChooseUs] = useState(mockPageContent.whyChooseUs);
+  const [keyHighlights, setKeyHighlights] = useState(mockPageContent.keyHighlights);
+  const [facilities, setFacilities] = useState(mockPageContent.facilities);
+  const [campusLife, setCampusLife] = useState(mockPageContent.campusLife);
+  const [achievements, setAchievements] = useState(mockPageContent.achievements);
+  const [tab, setTab] = useState('main');
+  const [savedAt, setSavedAt] = useState(0);
+  const bannerInputRef = useRef(null);
+
+  const setStat = (key) => (e) => setAboutStats((s) => ({ ...s, [key]: e.target.value }));
+  const setAchievement = (key) => (e) => setAchievements((a) => ({ ...a, [key]: e.target.value }));
+
+  const addBanner = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setMain((m) => ({ ...m, banners: [...m.banners, url].slice(0, 3) }));
+  };
+
+  const save = () => {
+    // Mock/local only — the Institute Page has no backend yet (see
+    // docs/EDUCATION_NETWORK_ROADMAP.md Phase 3). Mutating the shared mock
+    // objects in place is enough to make the change visible on /page for
+    // this session.
+    Object.assign(mockPage, { name: main.name, tagline: main.tagline, banners: main.banners });
+    Object.assign(mockPageContent, { aboutStats, whyChooseUs, keyHighlights, facilities, campusLife, achievements });
+    setSavedAt(Date.now());
+  };
+
+  const SaveBar = (
+    <div className="flex items-center gap-3 mt-5">
+      <Button size="sm" onClick={save}>Save Changes</Button>
+      <Button size="sm" variant="outline" onClick={() => navigate('/page')}>Preview Page</Button>
+      {savedAt > 0 && (
+        <span className="text-xs text-secondary font-semibold flex items-center gap-1">
+          <span className="material-symbols-outlined text-[16px]">check_circle</span> Saved
+        </span>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <PageHeader
+        title="Edit Institute Page"
+        subtitle="Select & Fill — pick from predefined options, we build the content and layout."
+      />
+
+      <div className="flex gap-2 mb-5 flex-wrap">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border transition-all cursor-pointer ${
+              tab === t.key
+                ? 'bg-primary text-on-primary border-primary'
+                : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">{t.icon}</span>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'main' && (
+        <Card className="p-5 max-w-2xl">
+          <h4 className="text-sm font-bold text-on-surface mb-3">Main Part</h4>
+          <div className="grid sm:grid-cols-2 gap-4 mb-4">
+            <FormGroup label="Institute Name">
+              <Input value={main.name} onChange={(e) => setMain((m) => ({ ...m, name: e.target.value }))} />
+            </FormGroup>
+            <FormGroup label="Tagline">
+              <Input
+                value={main.tagline}
+                onChange={(e) => setMain((m) => ({ ...m, tagline: e.target.value }))}
+                placeholder="e.g. Where Ambition Meets Achievement"
+              />
+            </FormGroup>
+          </div>
+          <FormGroup label="Banner Images (2–3, recommended 1600×500px, under 2MB each)">
+            <div className="flex flex-wrap gap-3 mb-2">
+              {main.banners.map((src, i) => (
+                <div key={i} className="relative w-32 h-20 rounded-lg overflow-hidden border border-outline-variant">
+                  <img src={src} alt={`Banner ${i + 1}`} className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setMain((m) => ({ ...m, banners: m.banners.filter((_, idx) => idx !== i) }))}
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-on-surface/60 text-white flex items-center justify-center cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                  </button>
+                </div>
+              ))}
+              {main.banners.length < 3 && (
+                <button
+                  type="button"
+                  onClick={() => bannerInputRef.current?.click()}
+                  className="w-32 h-20 rounded-lg border-2 border-dashed border-outline-variant hover:border-primary flex items-center justify-center text-on-surface-variant cursor-pointer"
+                >
+                  <span className="material-symbols-outlined">add_photo_alternate</span>
+                </button>
+              )}
+            </div>
+            <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={addBanner} />
+          </FormGroup>
+          {SaveBar}
+        </Card>
+      )}
+
+      {tab === 'about' && (
+        <Card className="p-5 max-w-2xl">
+          <h4 className="text-sm font-bold text-on-surface mb-1">About Us</h4>
+          <p className="text-xs text-on-surface-variant mb-4">
+            Fill in what applies — we'll write the paragraph for you. Years of Excellence is calculated automatically from the Established Year.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 mb-5">
+            {ABOUT_US_STAT_FIELDS.map((f) => (
+              <FormGroup key={f.key} label={f.label}>
+                <Input value={aboutStats[f.key] || ''} onChange={setStat(f.key)} placeholder={f.placeholder} />
+              </FormGroup>
+            ))}
+          </div>
+          <div className="p-3 rounded-lg bg-surface-container-low border border-outline-variant">
+            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wide mb-1">Preview</p>
+            <p className="text-sm text-on-surface mb-0">
+              {buildAboutParagraph(main.name, aboutStats) || 'Fill in a few fields above to see the generated paragraph.'}
+            </p>
+          </div>
+          {SaveBar}
+        </Card>
+      )}
+
+      {tab === 'why' && (
+        <Card className="p-5 max-w-2xl">
+          <h4 className="text-sm font-bold text-on-surface mb-1">Why Choose Us</h4>
+          <p className="text-xs text-on-surface-variant mb-4">Select around 6 — these render as cards on your page.</p>
+          <ChipMultiSelect options={WHY_CHOOSE_US_OPTIONS} selected={whyChooseUs} onChange={setWhyChooseUs} suggestedMax={6} />
+          {SaveBar}
+        </Card>
+      )}
+
+      {tab === 'highlights' && (
+        <Card className="p-5 max-w-2xl">
+          <h4 className="text-sm font-bold text-on-surface mb-1">Key Highlights</h4>
+          <p className="text-xs text-on-surface-variant mb-4">Select the relevant ones and fill in your numbers.</p>
+          <NumberedPicker options={KEY_HIGHLIGHTS_OPTIONS} selected={keyHighlights} onChange={setKeyHighlights} />
+          {SaveBar}
+        </Card>
+      )}
+
+      {tab === 'facilities' && (
+        <Card className="p-5 max-w-2xl">
+          <h4 className="text-sm font-bold text-on-surface mb-1">Facilities</h4>
+          <p className="text-xs text-on-surface-variant mb-4">Check what's available and add the detail for each.</p>
+          <NumberedPicker options={FACILITIES_OPTIONS} selected={facilities} onChange={setFacilities} />
+          {SaveBar}
+        </Card>
+      )}
+
+      {tab === 'campus' && (
+        <Card className="p-5 max-w-2xl">
+          <h4 className="text-sm font-bold text-on-surface mb-1">Campus Life</h4>
+          <p className="text-xs text-on-surface-variant mb-4">Select what's part of campus life at your institute.</p>
+          <ChipMultiSelect options={CAMPUS_LIFE_OPTIONS} selected={campusLife} onChange={setCampusLife} />
+          {SaveBar}
+        </Card>
+      )}
+
+      {tab === 'achievements' && (
+        <Card className="p-5 max-w-2xl">
+          <h4 className="text-sm font-bold text-on-surface mb-1">Achievements & Placement</h4>
+          <p className="text-xs text-on-surface-variant mb-4">Fill in your numbers — we'll render them as stat cards.</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <FormGroup label="Highest Placement (₹ LPA)">
+              <Input value={achievements.highestPlacement} onChange={setAchievement('highestPlacement')} placeholder="e.g. 24" />
+            </FormGroup>
+            <FormGroup label="Average Placement (₹ LPA)">
+              <Input value={achievements.averagePlacement} onChange={setAchievement('averagePlacement')} placeholder="e.g. 7.5" />
+            </FormGroup>
+            <FormGroup label="Placement Rate (%)">
+              <Input value={achievements.placementRate} onChange={setAchievement('placementRate')} placeholder="e.g. 92" />
+            </FormGroup>
+            <FormGroup label="Recruiters">
+              <Input value={achievements.recruiters} onChange={setAchievement('recruiters')} placeholder="e.g. 180+" />
+            </FormGroup>
+          </div>
+          {SaveBar}
+        </Card>
+      )}
+
+      <div className="mt-4">
+        <Badge tone="neutral">Institute type: {mockPage.type} — content options adjust by type in a later pass</Badge>
+      </div>
+    </div>
+  );
+}

@@ -28,7 +28,63 @@ export const mockPage = {
     { name: 'Sunita Verma', role: 'Admin', email: 'sunita@brightfuture.in' },
   ],
   followers: 1240,
+  tagline: 'Where Ambition Meets Achievement',
+  banners: [],
 };
+
+// The institute's "Select & Fill" landing-page builder state — everything
+// here is chosen from the predefined option banks in pageBuilderContent.js,
+// not typed as prose. See docs/CLIENT_FEEDBACK_2026-08-12.md, Section 5.
+export const mockPageContent = {
+  aboutStats: {
+    establishedYear: '2010',
+    students: '5000+',
+    faculty: '250+',
+    programs: '18',
+    campusArea: '6 Acres',
+  },
+  whyChooseUs: [
+    'Experienced & Qualified Faculty',
+    'Strong Placement Support',
+    'Digital Learning Environment',
+    'Excellent Academic Results',
+    'Career Guidance',
+    'Regular Seminars & Workshops',
+  ],
+  keyHighlights: [
+    { key: 'faculty', value: '250+' },
+    { key: 'placement', value: '92%' },
+    { key: 'toppers', value: '40+' },
+    { key: 'testSeries', value: '1,200+' },
+  ],
+  facilities: [
+    { key: 'library', value: '50,000+' },
+    { key: 'labs', value: '25' },
+    { key: 'wifi', value: 'Full campus' },
+    { key: 'computerLab', value: '120' },
+  ],
+  campusLife: ['Cultural Festivals', 'Sports Meet', 'Regular Guest Lectures', 'Entrepreneurship Cell'],
+  achievements: {
+    highestPlacement: '24',
+    averagePlacement: '7.5',
+    placementRate: '92',
+    recruiters: '180+',
+  },
+};
+
+// Specializations offered under each course, shown on the landing page and
+// in the Enquiry modal both. See docs/CLIENT_FEEDBACK_2026-08-12.md,
+// Section 6.1.
+export const COURSE_SPECIALIZATIONS = {
+  'JEE Main & Advanced': ['PCM Foundation', 'Advanced Problem Solving', 'Crash Course'],
+  'NEET': ['PCB Foundation', 'Biology Intensive', 'Crash Course'],
+  'Class 11-12 Foundation': ['Science Stream', 'Commerce Stream'],
+  'Crash Course (60 Days)': ['JEE Focus', 'NEET Focus'],
+};
+
+// Demo phone number that resolves as an "existing user" in the Enquiry
+// modal's returning-visitor path — everything here is mock, no backend.
+export const EXISTING_ENQUIRY_USER = { phone: '9998887770', name: 'Rohit Das' };
 
 export const mockOpportunities = [
   {

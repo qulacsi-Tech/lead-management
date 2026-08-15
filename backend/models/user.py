@@ -2,7 +2,7 @@ from sqlalchemy import Column, String, Boolean, DateTime, JSON
 from sqlalchemy.sql import func
 from core.database import Base
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from models.enums import UserRole
 import uuid
 
@@ -24,12 +24,16 @@ class User(Base):
     headline = Column(String)
     about = Column(String)
     category = Column(String)
-    qualification = Column(String)
-    experience = Column(String)
+    # education: { tenth_year, twelfth_year, graduation: {college, course, year} | null,
+    #              post_graduation: {college, course, year} | null }
+    education = Column(JSON)
+    # work_experience: [{ id, company, designation, joining_date, leaving_date,
+    #                      location, industry, is_current }, ...] — a career
+    # doesn't have to be education-sector-only, see
+    # docs/CLIENT_FEEDBACK_2026-08-12.md Section 2.
+    work_experience = Column(JSON)
     subjects = Column(JSON)
     skills = Column(JSON)
-    current_institute = Column(String)
-    previous_institutes = Column(JSON)
     profile_photo_url = Column(String)
     cover_photo_url = Column(String)
     resume_url = Column(String)
@@ -59,12 +63,10 @@ class ProfileUpdate(BaseModel):
     headline: Optional[str] = None
     about: Optional[str] = None
     category: Optional[str] = None
-    qualification: Optional[str] = None
-    experience: Optional[str] = None
+    education: Optional[Dict[str, Any]] = None
+    work_experience: Optional[List[Dict[str, Any]]] = None
     subjects: Optional[List[str]] = None
     skills: Optional[List[str]] = None
-    current_institute: Optional[str] = None
-    previous_institutes: Optional[List[str]] = None
 
 class UserResponse(UserBase):
     id: str
@@ -72,12 +74,10 @@ class UserResponse(UserBase):
     headline: Optional[str] = None
     about: Optional[str] = None
     category: Optional[str] = None
-    qualification: Optional[str] = None
-    experience: Optional[str] = None
+    education: Optional[Dict[str, Any]] = None
+    work_experience: Optional[List[Dict[str, Any]]] = None
     subjects: Optional[List[str]] = None
     skills: Optional[List[str]] = None
-    current_institute: Optional[str] = None
-    previous_institutes: Optional[List[str]] = None
     profile_photo_url: Optional[str] = None
     cover_photo_url: Optional[str] = None
     resume_url: Optional[str] = None

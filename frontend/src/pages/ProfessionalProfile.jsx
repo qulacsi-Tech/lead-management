@@ -1,51 +1,239 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Input, Textarea, FormGroup } from '../components/ui/Field';
-import { PROFESSIONAL_CATEGORIES } from './mockData';
 import { useSession } from '../context/useSession';
 import { ApiError } from '../Api/Api';
 import PageHeader from './PageHeader';
 
+// Account Setup (role/category switching) is paused per client feedback
+// 12 Aug 2026 — see docs/CLIENT_FEEDBACK_2026-08-12.md, Section 1. Removed
+// from the tab list; git history has the component if it comes back.
 const TABS = [
   { key: 'overview', label: 'Overview', icon: 'person' },
   { key: 'experience', label: 'Experience & Skills', icon: 'work_history' },
   { key: 'resume', label: 'Resume & Contact', icon: 'description' },
-  { key: 'account', label: 'Account Setup', icon: 'settings_account_box' },
 ];
 
-const EDITABLE_FIELDS = [
-  'name', 'phone', 'headline', 'about', 'qualification', 'experience', 'current_institute',
-];
+const EDITABLE_FIELDS = ['name', 'phone', 'headline', 'about'];
 
 function toFormState(profile) {
   const base = {};
   EDITABLE_FIELDS.forEach((f) => { base[f] = profile?.[f] || ''; });
   base.subjects = profile?.subjects || [];
   base.skills = profile?.skills || [];
-  base.previous_institutes = profile?.previous_institutes || [];
+  base.education = profile?.education || {};
+  base.work_experience = profile?.work_experience || [];
   return base;
 }
 
-function ChipGroup({ options, value, onChange }) {
+// Progressive disclosure: each field only appears once the one before it is
+// filled, and Graduation/Post-Graduation are explicitly optional — someone
+// who started working after 12th shouldn't be forced through them. See
+// docs/CLIENT_FEEDBACK_2026-08-12.md, Section 3.
+function EducationEditor({ value, onChange }) {
+  const edu = value || {};
+  const set = (patch) => onChange({ ...edu, ...patch });
+  const hasGraduation = edu.graduation != null;
+  const hasPostGraduation = edu.post_graduation != null;
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt}
-          type="button"
-          onClick={() => onChange(opt)}
-          className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-            value === opt
-              ? 'bg-primary text-on-primary border-primary'
-              : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
-          }`}
-        >
-          {opt}
-        </button>
+    <div className="space-y-4">
+      <FormGroup label="10th Passing Year">
+        <Input
+          className="max-w-[180px]"
+          value={edu.tenth_year || ''}
+          onChange={(e) => set({ tenth_year: e.target.value })}
+          placeholder="e.g. 2010"
+        />
+      </FormGroup>
+
+      {edu.tenth_year && (
+        <FormGroup label="12th Passing Year">
+          <Input
+            className="max-w-[180px]"
+            value={edu.twelfth_year || ''}
+            onChange={(e) => set({ twelfth_year: e.target.value })}
+            placeholder="e.g. 2012"
+          />
+        </FormGroup>
+      )}
+
+      {edu.twelfth_year && (
+        <FormGroup label="Did you pursue graduation?">
+          <div className="flex gap-2">
+            <Button
+              type="button" size="sm"
+              variant={hasGraduation ? 'primary' : 'outline'}
+              onClick={() => set({ graduation: edu.graduation || { college: '', course: '', year: '' } })}
+            >
+              Yes
+            </Button>
+            <Button
+              type="button" size="sm"
+              variant={!hasGraduation ? 'primary' : 'outline'}
+              onClick={() => set({ graduation: null, post_graduation: null })}
+            >
+              No
+            </Button>
+          </div>
+        </FormGroup>
+      )}
+
+      {hasGraduation && (
+        <div className="pl-4 border-l-2 border-outline-variant space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <FormGroup label="College / University">
+              <Input
+                value={edu.graduation.college || ''}
+                onChange={(e) => set({ graduation: { ...edu.graduation, college: e.target.value } })}
+              />
+            </FormGroup>
+            <FormGroup label="Course">
+              <Input
+                value={edu.graduation.course || ''}
+                onChange={(e) => set({ graduation: { ...edu.graduation, course: e.target.value } })}
+                placeholder="e.g. B.Com"
+              />
+            </FormGroup>
+          </div>
+          <FormGroup label="Passing Year">
+            <Input
+              className="max-w-[180px]"
+              value={edu.graduation.year || ''}
+              onChange={(e) => set({ graduation: { ...edu.graduation, year: e.target.value } })}
+              placeholder="e.g. 2015"
+            />
+          </FormGroup>
+
+          {edu.graduation.year && (
+            <FormGroup label="Did you pursue post-graduation?">
+              <div className="flex gap-2">
+                <Button
+                  type="button" size="sm"
+                  variant={hasPostGraduation ? 'primary' : 'outline'}
+                  onClick={() => set({ post_graduation: edu.post_graduation || { college: '', course: '', year: '' } })}
+                >
+                  Yes
+                </Button>
+                <Button
+                  type="button" size="sm"
+                  variant={!hasPostGraduation ? 'primary' : 'outline'}
+                  onClick={() => set({ post_graduation: null })}
+                >
+                  No
+                </Button>
+              </div>
+            </FormGroup>
+          )}
+
+          {hasPostGraduation && (
+            <div className="pl-4 border-l-2 border-outline-variant space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <FormGroup label="College / University">
+                  <Input
+                    value={edu.post_graduation.college || ''}
+                    onChange={(e) => set({ post_graduation: { ...edu.post_graduation, college: e.target.value } })}
+                  />
+                </FormGroup>
+                <FormGroup label="Course">
+                  <Input
+                    value={edu.post_graduation.course || ''}
+                    onChange={(e) => set({ post_graduation: { ...edu.post_graduation, course: e.target.value } })}
+                    placeholder="e.g. MBA"
+                  />
+                </FormGroup>
+              </div>
+              <FormGroup label="Passing Year">
+                <Input
+                  className="max-w-[180px]"
+                  value={edu.post_graduation.year || ''}
+                  onChange={(e) => set({ post_graduation: { ...edu.post_graduation, year: e.target.value } })}
+                  placeholder="e.g. 2017"
+                />
+              </FormGroup>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function emptyExperience() {
+  return {
+    id: `exp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    company: '', designation: '', joining_date: '', leaving_date: '', location: '', industry: '', is_current: false,
+  };
+}
+
+// A career doesn't have to be education-sector-only — this is a generic,
+// repeatable work-history list (any industry), not a teaching-jobs-only
+// field. See docs/CLIENT_FEEDBACK_2026-08-12.md, Sections 2 & 4.
+function WorkExperienceEditor({ value, onChange }) {
+  const list = value || [];
+  const update = (id, patch) => onChange(list.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const remove = (id) => onChange(list.filter((x) => x.id !== id));
+  const add = () => onChange([...list, emptyExperience()]);
+
+  return (
+    <div className="space-y-3">
+      {list.length === 0 && (
+        <p className="text-xs text-on-surface-variant mb-0">No work experience added yet.</p>
+      )}
+      {list.map((exp, idx) => (
+        <Card key={exp.id} className="p-4 bg-surface-container-low">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wide mb-0">
+              {idx === 0 ? 'Most Recent' : `Experience ${idx + 1}`}
+            </p>
+            <button
+              type="button"
+              onClick={() => remove(exp.id)}
+              className="text-error text-xs font-semibold cursor-pointer flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[16px]">delete</span> Remove
+            </button>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3 mb-3">
+            <FormGroup label="Company / Organization">
+              <Input value={exp.company} onChange={(e) => update(exp.id, { company: e.target.value })} />
+            </FormGroup>
+            <FormGroup label="Designation">
+              <Input value={exp.designation} onChange={(e) => update(exp.id, { designation: e.target.value })} />
+            </FormGroup>
+            <FormGroup label="Industry">
+              <Input
+                value={exp.industry}
+                onChange={(e) => update(exp.id, { industry: e.target.value })}
+                placeholder="e.g. FMCG, IT, Education"
+              />
+            </FormGroup>
+            <FormGroup label="Location">
+              <Input value={exp.location} onChange={(e) => update(exp.id, { location: e.target.value })} />
+            </FormGroup>
+            <FormGroup label="Joining Date">
+              <Input type="month" value={exp.joining_date} onChange={(e) => update(exp.id, { joining_date: e.target.value })} />
+            </FormGroup>
+            {!exp.is_current && (
+              <FormGroup label="Leaving Date">
+                <Input type="month" value={exp.leaving_date} onChange={(e) => update(exp.id, { leaving_date: e.target.value })} />
+              </FormGroup>
+            )}
+          </div>
+          <label className="flex items-center gap-2 text-sm text-on-surface-variant">
+            <input
+              type="checkbox"
+              className="w-4 h-4"
+              checked={exp.is_current}
+              onChange={(e) => update(exp.id, { is_current: e.target.checked, leaving_date: e.target.checked ? '' : exp.leaving_date })}
+            />
+            Currently working here
+          </label>
+        </Card>
       ))}
+      <Button type="button" variant="soft" size="sm" icon="add" onClick={add}>Add Another Experience</Button>
     </div>
   );
 }
@@ -142,99 +330,8 @@ function UploadSlot({ label, kind, currentUrl, uploadFile, shape = 'circle', acc
   );
 }
 
-function AccountSetupTab({ role, category, updateProfile }) {
-  const [busy, setBusy] = useState(false);
-
-  const setRole = async (nextRole) => {
-    setBusy(true);
-    try {
-      await updateProfile({
-        role: nextRole,
-        category: nextRole === 'professional' ? (category || PROFESSIONAL_CATEGORIES[0]) : null,
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const setCategory = async (c) => {
-    setBusy(true);
-    try {
-      await updateProfile({ category: c });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Card className="p-5">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="material-symbols-outlined text-primary">settings_account_box</span>
-        <h4 className="text-sm font-bold text-on-surface mb-0">Account Setup</h4>
-        {!role && <Badge tone="error">Action needed</Badge>}
-        {busy && <span className="material-symbols-outlined text-[16px] text-on-surface-variant animate-spin">progress_activity</span>}
-      </div>
-      <p className="text-xs text-on-surface-variant mb-4">
-        Changes here save immediately and persist to your account.
-      </p>
-
-      <FormGroup label="I am">
-        <div className="grid grid-cols-2 gap-3 max-w-sm">
-          <button
-            type="button"
-            onClick={() => setRole('professional')}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all cursor-pointer text-left ${
-              role === 'professional'
-                ? 'bg-primary text-on-primary border-primary'
-                : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
-            }`}
-          >
-            <span className="material-symbols-outlined block mb-1">badge</span>
-            Professional
-          </button>
-          <button
-            type="button"
-            onClick={() => setRole('student')}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all cursor-pointer text-left ${
-              role === 'student'
-                ? 'bg-primary text-on-primary border-primary'
-                : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
-            }`}
-          >
-            <span className="material-symbols-outlined block mb-1">school</span>
-            Student
-          </button>
-        </div>
-      </FormGroup>
-
-      {role === 'professional' && (
-        <div className="mt-4">
-          <FormGroup label="Professional category">
-            <ChipGroup options={PROFESSIONAL_CATEGORIES} value={category} onChange={setCategory} />
-          </FormGroup>
-        </div>
-      )}
-
-      {role === 'professional' && (
-        <div className="mt-4 pt-4 border-t border-outline-variant flex items-center justify-between flex-wrap gap-2">
-          <p className="text-xs text-on-surface-variant mb-0">Want to create an Institute Page too?</p>
-          <Link to="/create-page">
-            <Button size="sm" variant="soft" icon="add_business">Create Institute Page</Button>
-          </Link>
-        </div>
-      )}
-
-      {role === 'student' && (
-        <p className="text-xs text-on-surface-variant mt-3 mb-0">
-          As a Student you won't see "Looking for a Job" or "Expert Opinion", and can't create a Page.
-        </p>
-      )}
-    </Card>
-  );
-}
-
 export default function ProfessionalProfile() {
-  const { profile, role, name, profilePhotoUrl, coverPhotoUrl, resumeUrl, updateProfile, uploadFile } = useSession();
+  const { profile, name, profilePhotoUrl, coverPhotoUrl, resumeUrl, updateProfile, uploadFile } = useSession();
   const [tab, setTab] = useState('overview');
   const [form, setForm] = useState(() => toFormState(profile));
   const [saving, setSaving] = useState(false);
@@ -250,7 +347,8 @@ export default function ProfessionalProfile() {
   const dirty = EDITABLE_FIELDS.some((f) => (form[f] || '') !== (profile?.[f] || ''))
     || JSON.stringify(form.subjects) !== JSON.stringify(profile?.subjects || [])
     || JSON.stringify(form.skills) !== JSON.stringify(profile?.skills || [])
-    || JSON.stringify(form.previous_institutes) !== JSON.stringify(profile?.previous_institutes || []);
+    || JSON.stringify(form.education) !== JSON.stringify(profile?.education || {})
+    || JSON.stringify(form.work_experience) !== JSON.stringify(profile?.work_experience || []);
 
   const save = async () => {
     setSaving(true);
@@ -346,46 +444,48 @@ export default function ProfessionalProfile() {
       )}
 
       {tab === 'experience' && (
-        <Card className="p-5 max-w-2xl">
-          <h4 className="text-sm font-bold text-on-surface mb-3">Experience & Skills</h4>
-          <div className="grid sm:grid-cols-2 gap-4 mb-4">
-            <FormGroup label="Qualification">
-              <Input value={form.qualification} onChange={set('qualification')} placeholder="e.g. M.Sc Mathematics, B.Ed" />
-            </FormGroup>
-            <FormGroup label="Experience">
-              <Input value={form.experience} onChange={set('experience')} placeholder="e.g. 15 Years" />
-            </FormGroup>
-            <FormGroup label="Current Institute">
-              <Input value={form.current_institute} onChange={set('current_institute')} />
-            </FormGroup>
-          </div>
-          <div className="mb-4">
-            <FormGroup label="Previous Institutes">
-              <TagEditor
-                values={form.previous_institutes}
-                onChange={(v) => setForm((f) => ({ ...f, previous_institutes: v }))}
-                placeholder="Type an institute name, press Enter"
-              />
-            </FormGroup>
-          </div>
-          <div className="mb-4">
-            <FormGroup label="Subjects">
+        <div className="max-w-2xl space-y-5">
+          <Card className="p-5">
+            <h4 className="text-sm font-bold text-on-surface mb-1">Education</h4>
+            <p className="text-xs text-on-surface-variant mb-4">
+              Graduation and Post-Graduation are optional — only fill them in if they apply to you.
+            </p>
+            <EducationEditor
+              value={form.education}
+              onChange={(v) => setForm((f) => ({ ...f, education: v }))}
+            />
+          </Card>
+
+          <Card className="p-5">
+            <h4 className="text-sm font-bold text-on-surface mb-1">Work Experience</h4>
+            <p className="text-xs text-on-surface-variant mb-4">
+              Any job counts — teaching or otherwise. Add every role, most recent first.
+            </p>
+            <WorkExperienceEditor
+              value={form.work_experience}
+              onChange={(v) => setForm((f) => ({ ...f, work_experience: v }))}
+            />
+          </Card>
+
+          <Card className="p-5">
+            <h4 className="text-sm font-bold text-on-surface mb-2">Subjects</h4>
+            <div className="mb-4">
               <TagEditor
                 values={form.subjects}
                 onChange={(v) => setForm((f) => ({ ...f, subjects: v }))}
                 placeholder="Type a subject, press Enter"
               />
-            </FormGroup>
-          </div>
-          <FormGroup label="Skills">
+            </div>
+            <h4 className="text-sm font-bold text-on-surface mb-2">Skills</h4>
             <TagEditor
               values={form.skills}
               onChange={(v) => setForm((f) => ({ ...f, skills: v }))}
               placeholder="Type a skill, press Enter"
             />
-          </FormGroup>
+          </Card>
+
           {SaveBar}
-        </Card>
+        </div>
       )}
 
       {tab === 'resume' && (
@@ -408,10 +508,6 @@ export default function ProfessionalProfile() {
           </FormGroup>
           {SaveBar}
         </Card>
-      )}
-
-      {tab === 'account' && (
-        <AccountSetupTab role={role} category={profile?.category} updateProfile={updateProfile} />
       )}
     </div>
   );

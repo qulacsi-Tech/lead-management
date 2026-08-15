@@ -11,6 +11,7 @@ import AppLayout from './layouts/AppLayout';
 import Feed from './pages/Feed';
 import CreateInstitutePage from './pages/CreateInstitutePage';
 import InstitutePage from './pages/InstitutePage';
+import InstitutePageEditor from './pages/InstitutePageEditor';
 import PostAdmissionNotice from './pages/PostAdmissionNotice';
 import PostJobVacancy from './pages/PostJobVacancy';
 import ProfessionalProfile from './pages/ProfessionalProfile';
@@ -46,6 +47,7 @@ function AppRoutes() {
         <Route path="feed" element={<Feed />} />
         <Route path="create-page" element={<CreateInstitutePage />} />
         <Route path="page" element={<InstitutePage />} />
+        <Route path="page/edit" element={<InstitutePageEditor />} />
         <Route path="page/post-admission" element={<PostAdmissionNotice />} />
         <Route path="page/post-job" element={<PostJobVacancy />} />
         <Route path="profile" element={<ProfessionalProfile />} />
