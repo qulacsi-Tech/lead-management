@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Input, Textarea, FormGroup } from '../components/ui/Field';
 import { useSession } from '../context/useSession';
+import { useFollows } from './useFollows';
+import { mockPages } from './mockData';
 import { ApiError } from '../Api/Api';
 import PageHeader from './PageHeader';
 
@@ -14,6 +17,7 @@ const TABS = [
   { key: 'overview', label: 'Overview', icon: 'person' },
   { key: 'experience', label: 'Experience & Skills', icon: 'work_history' },
   { key: 'resume', label: 'Resume & Contact', icon: 'description' },
+  { key: 'marketplace', label: 'My Network & Marketplace', icon: 'diversity_3' },
 ];
 
 const EDITABLE_FIELDS = ['name', 'phone', 'headline', 'about'];
@@ -330,6 +334,103 @@ function UploadSlot({ label, kind, currentUrl, uploadFile, shape = 'circle', acc
   );
 }
 
+// The marketplace lives inside Profile, gated by which Institute Pages this
+// user follows or has selected as their own — Sell Leads (Admission
+// Notices / Job Vacancies) from those pages show free; everyone else's Buy
+// Leads stay credit-gated behind Search Connections. See
+// docs/CLIENT_FEEDBACK_2026-08-16.md, Sections 3–4.
+function MarketplaceTab() {
+  const { followedSlugs, isFollowing, toggleFollow } = useFollows();
+
+  // "Select pages during profile creation" — selecting one here is treated
+  // as an affiliation *and* auto-follows the page, same as the client's own
+  // example ("I study at X School, so I automatically follow its page").
+  const toggleAffiliation = (slug) => toggleFollow(slug);
+
+  const followedPages = mockPages.filter((p) => followedSlugs.includes(p.slug));
+  const sellLeads = followedPages.flatMap((p) =>
+    p.opportunities.map((op) => ({ ...op, pageName: p.name, pageSlug: p.slug }))
+  );
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <Card className="p-5">
+        <h4 className="text-sm font-bold text-on-surface mb-1">Your Institutes</h4>
+        <p className="text-xs text-on-surface-variant mb-4">
+          Select the institutes you're affiliated with (e.g. where you study or teach) — you'll automatically
+          follow their page, and their Admission Notices / Job Vacancies show up free below.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {mockPages.map((p) => (
+            <button
+              key={p.slug}
+              type="button"
+              onClick={() => toggleAffiliation(p.slug)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                isFollowing(p.slug)
+                  ? 'bg-primary text-on-primary border-primary'
+                  : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">
+                {isFollowing(p.slug) ? 'check_circle' : 'add_circle'}
+              </span>
+              {p.name}
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Badge tone="success">Sell Lead — Free</Badge>
+          <h4 className="text-sm font-bold text-on-surface mb-0">From institutes you follow</h4>
+        </div>
+        <p className="text-xs text-on-surface-variant mb-4">
+          Admission Notices and Job Vacancies from your selected/followed pages — always free to view.
+        </p>
+        {sellLeads.length === 0 ? (
+          <p className="text-sm text-on-surface-variant mb-0">
+            Follow or select an institute above to see their opportunities here.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {sellLeads.map((lead) => (
+              <div key={lead.id} className="p-3 rounded-xl border border-outline-variant">
+                <div className="flex items-center justify-between mb-1">
+                  <Badge tone={lead.type === 'admission' ? 'success' : 'tertiary'}>
+                    {lead.type === 'admission' ? 'Admission Open Notice' : 'Job Vacancy'}
+                  </Badge>
+                  <Link to={`/${lead.pageSlug}`} className="text-xs text-primary font-semibold">
+                    {lead.pageName}
+                  </Link>
+                </div>
+                <p className="text-sm font-semibold text-on-surface mb-0">
+                  {lead.type === 'admission' ? lead.course : lead.position}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Badge tone="error">Buy Lead — Credit-gated</Badge>
+          <h4 className="text-sm font-bold text-on-surface mb-0">Everyone else's enquiries</h4>
+        </div>
+        <p className="text-xs text-on-surface-variant mb-3">
+          "Looking for a Job" / "Looking for Admission" posts from other users aren't free — search, filter,
+          or save your desired criteria and unlock the ones you want with credits.
+        </p>
+        <Link to="/search">
+          <Button size="sm" variant="soft" icon="travel_explore">Search Connections</Button>
+        </Link>
+      </Card>
+    </div>
+  );
+}
+
 export default function ProfessionalProfile() {
   const { profile, name, profilePhotoUrl, coverPhotoUrl, resumeUrl, updateProfile, uploadFile } = useSession();
   const [tab, setTab] = useState('overview');
@@ -509,6 +610,8 @@ export default function ProfessionalProfile() {
           {SaveBar}
         </Card>
       )}
+
+      {tab === 'marketplace' && <MarketplaceTab />}
     </div>
   );
 }

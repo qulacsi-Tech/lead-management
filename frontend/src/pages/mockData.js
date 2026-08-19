@@ -13,64 +13,239 @@ export const PROFESSIONAL_CATEGORIES = [
   'Tuition Teacher',
 ];
 
-export const mockPage = {
-  name: 'Bright Future Coaching Institute',
-  type: 'Coaching',
-  logo: 'BF',
-  about:
-    'Bright Future Coaching Institute has been preparing students for JEE, NEET and board exams since 2010, with a 92% selection ratio in the last 5 years.',
-  address: 'MG Road, Indore, Madhya Pradesh',
-  website: 'www.brightfuturecoaching.in',
-  contact: '+91-731-4567890',
-  courses: ['JEE Main & Advanced', 'NEET', 'Class 11-12 Foundation', 'Crash Course (60 Days)'],
-  admins: [
-    { name: 'Ramesh Sharma', role: 'Owner / Primary Admin', email: 'ramesh@brightfuture.in' },
-    { name: 'Sunita Verma', role: 'Admin', email: 'sunita@brightfuture.in' },
-  ],
-  followers: 1240,
-  tagline: 'Where Ambition Meets Achievement',
-  banners: [],
-};
+export function slugify(name) {
+  return (name || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
 
-// The institute's "Select & Fill" landing-page builder state — everything
-// here is chosen from the predefined option banks in pageBuilderContent.js,
-// not typed as prose. See docs/CLIENT_FEEDBACK_2026-08-12.md, Section 5.
-export const mockPageContent = {
-  aboutStats: {
-    establishedYear: '2010',
-    students: '5000+',
-    faculty: '250+',
-    programs: '18',
-    campusArea: '6 Acres',
+// Multi-page model — every Institute Page (whether created by a Professional
+// from their own account, or bulk-created by Admin) lives here with its own
+// unique slug, so each gets its own URL: connectedus.in/<slug>. See
+// docs/CLIENT_FEEDBACK_2026-08-16.md, Section 6.
+export const mockPages = [
+  {
+    id: 'page1',
+    slug: 'bright-future-coaching',
+    name: 'Bright Future Coaching Institute',
+    type: 'Coaching',
+    logo: 'BF',
+    logoUrl: null,
+    about:
+      'Bright Future Coaching Institute has been preparing students for JEE, NEET and board exams since 2010, with a 92% selection ratio in the last 5 years.',
+    address: 'MG Road, Indore, Madhya Pradesh',
+    website: 'www.brightfuturecoaching.in',
+    contact: '+91-731-4567890',
+    affiliation: '',
+    courses: ['JEE Main & Advanced', 'NEET', 'Class 11-12 Foundation', 'Crash Course (60 Days)'],
+    admins: [
+      { name: 'Ramesh Sharma', role: 'Owner / Primary Admin', email: 'ramesh@brightfuture.in' },
+      { name: 'Sunita Verma', role: 'Admin', email: 'sunita@brightfuture.in' },
+    ],
+    followers: 1240,
+    tagline: 'Where Ambition Meets Achievement',
+    banners: [],
+    // The "Select & Fill" landing-page builder state — everything here is
+    // chosen from the predefined option banks in pageBuilderContent.js, not
+    // typed as prose. See docs/CLIENT_FEEDBACK_2026-08-12.md, Section 5.
+    content: {
+      aboutStats: {
+        establishedYear: '2010',
+        students: '5000+',
+        faculty: '250+',
+        programs: '18',
+        campusArea: '6 Acres',
+      },
+      whyChooseUs: [
+        'Experienced & Qualified Faculty',
+        'Strong Placement Support',
+        'Digital Learning Environment',
+        'Excellent Academic Results',
+        'Career Guidance',
+        'Regular Seminars & Workshops',
+      ],
+      keyHighlights: [
+        { key: 'faculty', value: '250+' },
+        { key: 'placement', value: '92%' },
+        { key: 'toppers', value: '40+' },
+        { key: 'testSeries', value: '1,200+' },
+      ],
+      facilities: [
+        { key: 'library', value: '50,000+' },
+        { key: 'labs', value: '25' },
+        { key: 'wifi', value: 'Full campus' },
+        { key: 'computerLab', value: '120' },
+      ],
+      campusLife: ['Cultural Festivals', 'Sports Meet', 'Regular Guest Lectures', 'Entrepreneurship Cell'],
+      achievements: {
+        highestPlacement: '24',
+        averagePlacement: '7.5',
+        placementRate: '92',
+        recruiters: '180+',
+      },
+    },
+    opportunities: [
+      {
+        id: 'op1',
+        type: 'admission',
+        course: 'JEE Advanced Crash Course',
+        session: '2026-27',
+        startDate: '2026-08-10',
+        endDate: '2026-09-15',
+        eligibility: 'Class 12 pass / appearing, PCM',
+        description: '60-day intensive crash course with daily mock tests and doubt sessions.',
+        reach: 3400,
+        views: 890,
+        ranking: 3,
+      },
+      {
+        id: 'op2',
+        type: 'job',
+        position: 'Physics Faculty',
+        subject: 'Physics',
+        experience: '3+ years',
+        qualification: 'M.Sc Physics / B.Tech',
+        applyBefore: '2026-08-20',
+        description: 'Looking for an experienced Physics faculty for JEE/NEET batches, full-time, Indore campus.',
+        reach: 2100,
+        views: 540,
+        ranking: 1,
+      },
+    ],
   },
-  whyChooseUs: [
-    'Experienced & Qualified Faculty',
-    'Strong Placement Support',
-    'Digital Learning Environment',
-    'Excellent Academic Results',
-    'Career Guidance',
-    'Regular Seminars & Workshops',
-  ],
-  keyHighlights: [
-    { key: 'faculty', value: '250+' },
-    { key: 'placement', value: '92%' },
-    { key: 'toppers', value: '40+' },
-    { key: 'testSeries', value: '1,200+' },
-  ],
-  facilities: [
-    { key: 'library', value: '50,000+' },
-    { key: 'labs', value: '25' },
-    { key: 'wifi', value: 'Full campus' },
-    { key: 'computerLab', value: '120' },
-  ],
-  campusLife: ['Cultural Festivals', 'Sports Meet', 'Regular Guest Lectures', 'Entrepreneurship Cell'],
-  achievements: {
-    highestPlacement: '24',
-    averagePlacement: '7.5',
-    placementRate: '92',
-    recruiters: '180+',
+  {
+    id: 'page2',
+    slug: 'horizon-public-school',
+    name: 'Horizon Public School',
+    type: 'School',
+    logo: 'HS',
+    logoUrl: null,
+    about: 'Horizon Public School has been nurturing well-rounded students from Nursery to Class 12 since 1998.',
+    address: 'Vijay Nagar, Indore, Madhya Pradesh',
+    website: 'www.horizonpublicschool.in',
+    contact: '+91-731-2345678',
+    affiliation: 'CBSE',
+    courses: ['Nursery to Class 5', 'Class 6-10', 'Class 11-12 Science', 'Class 11-12 Commerce'],
+    admins: [{ name: 'Anita Rao', role: 'Owner / Primary Admin', email: 'anita@horizonschool.in' }],
+    followers: 640,
+    tagline: "Nurturing Tomorrow's Leaders",
+    banners: [],
+    content: {
+      aboutStats: { establishedYear: '1998', students: '2200+', faculty: '140+', programs: '4', campusArea: '10 Acres' },
+      whyChooseUs: ['Safe & Secure Campus', 'Holistic Development', 'Sports & Extracurricular Activities', 'Excellent Academic Results'],
+      keyHighlights: [{ key: 'faculty', value: '140+' }, { key: 'years', value: '25+' }],
+      facilities: [{ key: 'sports', value: '8' }, { key: 'transport', value: '18 routes' }],
+      campusLife: ['Cultural Festivals', 'Sports Meet', 'Wellness & Yoga Sessions'],
+      achievements: { highestPlacement: '', averagePlacement: '', placementRate: '', recruiters: '' },
+    },
+    opportunities: [
+      {
+        id: 'op3',
+        type: 'admission',
+        course: 'Nursery to Class 5',
+        session: '2026-27',
+        startDate: '2026-08-01',
+        endDate: '2026-09-30',
+        eligibility: 'Age-appropriate, see admission office',
+        description: 'Limited seats left for the 2026-27 session. Sibling and staff-ward discounts available.',
+        reach: 1900,
+        views: 410,
+        ranking: 1,
+      },
+    ],
   },
-};
+  {
+    id: 'page3',
+    slug: 'zenith-training-institute',
+    name: 'Zenith Training Institute',
+    type: 'Training Institute',
+    logo: 'ZT',
+    logoUrl: null,
+    about: 'Zenith Training Institute runs short-term professional and spoken-skills courses for working professionals.',
+    address: 'Palasia, Indore, Madhya Pradesh',
+    website: 'www.zenithtraining.in',
+    contact: '+91-731-9988776',
+    affiliation: '',
+    courses: ['Spoken English', 'Corporate Communication', 'Tally & Accounting'],
+    admins: [{ name: 'Vikram Joshi', role: 'Owner / Primary Admin', email: 'vikram@zenithtraining.in' }],
+    followers: 310,
+    tagline: 'Skills That Get You Hired',
+    banners: [],
+    content: {
+      aboutStats: { establishedYear: '2016', students: '1500+', faculty: '20+', programs: '6', campusArea: '' },
+      whyChooseUs: ['Industry-Oriented Curriculum', 'Skill Development Programs', 'Career Guidance'],
+      keyHighlights: [{ key: 'placement', value: '78%' }],
+      facilities: [{ key: 'wifi', value: 'Full campus' }],
+      campusLife: [],
+      achievements: { highestPlacement: '', averagePlacement: '', placementRate: '78', recruiters: '40+' },
+    },
+    opportunities: [
+      {
+        id: 'op4',
+        type: 'job',
+        position: 'Spoken English Trainer',
+        subject: 'Spoken English',
+        experience: '2+ years',
+        qualification: 'Any Graduate, fluent English',
+        applyBefore: '2026-09-01',
+        description: 'Part-time / full-time Spoken English trainer needed for corporate batches. Weekend batches also available.',
+        reach: 640,
+        views: 150,
+        ranking: 2,
+      },
+    ],
+  },
+];
+
+export const MY_PAGE_SLUG = 'bright-future-coaching';
+
+/** Returns the live object reference (not a copy) so edits made through it
+ * persist for the session, matching how the rest of this mock layer works. */
+export function findPageBySlug(slug) {
+  return mockPages.find((p) => p.slug === slug);
+}
+
+/** Admin bulk-creates a page — see docs/CLIENT_FEEDBACK_2026-08-16.md, Section 5. */
+export function addPage({ name, type, logoUrl, banners, tagline, address, website, contact, affiliation, courses }) {
+  const baseSlug = slugify(name) || `institute-${mockPages.length + 1}`;
+  let slug = baseSlug;
+  let i = 2;
+  while (findPageBySlug(slug)) {
+    slug = `${baseSlug}-${i}`;
+    i += 1;
+  }
+  const page = {
+    id: `page-${Date.now()}`,
+    slug,
+    name,
+    type,
+    logo: (name || '?').trim().slice(0, 2).toUpperCase(),
+    logoUrl: logoUrl || null,
+    about: '',
+    address: address || '',
+    website: website || '',
+    contact: contact || '',
+    affiliation: affiliation || '',
+    courses: courses?.length ? courses : ['General'],
+    admins: [],
+    followers: 0,
+    tagline: tagline || '',
+    banners: banners || [],
+    content: {
+      aboutStats: { establishedYear: '', students: '', faculty: '', programs: '', campusArea: '' },
+      whyChooseUs: [],
+      keyHighlights: [],
+      facilities: [],
+      campusLife: [],
+      achievements: { highestPlacement: '', averagePlacement: '', placementRate: '', recruiters: '' },
+    },
+    opportunities: [],
+  };
+  mockPages.push(page);
+  return page;
+}
 
 // Specializations offered under each course, shown on the landing page and
 // in the Enquiry modal both. See docs/CLIENT_FEEDBACK_2026-08-12.md,
@@ -85,35 +260,6 @@ export const COURSE_SPECIALIZATIONS = {
 // Demo phone number that resolves as an "existing user" in the Enquiry
 // modal's returning-visitor path — everything here is mock, no backend.
 export const EXISTING_ENQUIRY_USER = { phone: '9998887770', name: 'Rohit Das' };
-
-export const mockOpportunities = [
-  {
-    id: 'op1',
-    type: 'admission',
-    course: 'JEE Advanced Crash Course',
-    session: '2026-27',
-    startDate: '2026-08-10',
-    endDate: '2026-09-15',
-    eligibility: 'Class 12 pass / appearing, PCM',
-    description: '60-day intensive crash course with daily mock tests and doubt sessions.',
-    reach: 3400,
-    views: 890,
-    ranking: 3,
-  },
-  {
-    id: 'op2',
-    type: 'job',
-    position: 'Physics Faculty',
-    subject: 'Physics',
-    experience: '3+ years',
-    qualification: 'M.Sc Physics / B.Tech',
-    applyBefore: '2026-08-20',
-    description: 'Looking for an experienced Physics faculty for JEE/NEET batches, full-time, Indore campus.',
-    reach: 2100,
-    views: 540,
-    ranking: 1,
-  },
-];
 
 export const mockProfessional = {
   name: 'Rakesh Sharma',
@@ -294,7 +440,7 @@ export const mockFeedPosts = [
     likes: 41,
     comments: 9,
     ctaLabel: 'View Notice',
-    ctaTo: '/page',
+    ctaTo: '/horizon-public-school',
   },
   {
     id: 'f6',
@@ -319,14 +465,14 @@ export const feedPostPool = [
     author: { name: 'Zenith Training Institute', sub: 'Training Institute', avatar: 'ZT', kind: 'page' },
     title: 'Hiring: Spoken English Trainer',
     body: 'Part-time / full-time Spoken English trainer needed for corporate batches. Weekend batches also available.',
-    likes: 22, comments: 3, ctaLabel: 'View Vacancy', ctaTo: '/page',
+    likes: 22, comments: 3, ctaLabel: 'View Vacancy', ctaTo: '/zenith-training-institute',
   },
   {
     postType: 'admission',
     author: { name: 'Horizon Public School', sub: 'School', avatar: 'HS', kind: 'page' },
     title: 'Admission Open: Nursery to Class 5',
     body: 'Limited seats left for the 2026-27 session. Sibling and staff-ward discounts available.',
-    likes: 29, comments: 5, ctaLabel: 'View Notice', ctaTo: '/page',
+    likes: 29, comments: 5, ctaLabel: 'View Notice', ctaTo: '/horizon-public-school',
   },
   {
     postType: 'expert',

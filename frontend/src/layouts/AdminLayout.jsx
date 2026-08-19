@@ -6,6 +6,7 @@ import Footer from '../components/ui/Footer';
 
 const NAV = [
   { to: '/admin', label: 'Dashboard', icon: 'dashboard', end: true },
+  { to: '/admin/pages', label: 'Institute Pages', icon: 'storefront' },
   { to: '/admin/institutes', label: 'Institutes', icon: 'account_balance' },
   { to: '/admin/students', label: 'Students', icon: 'school' },
   { to: '/admin/mentors', label: 'Mentors', icon: 'person' },
@@ -26,7 +27,7 @@ export default function AdminLayout() {
     <div className="min-h-screen bg-surface">
       <Sidebar
         title="Admin Portal"
-        subtitle="Next Move Executive Suite"
+        subtitle="Connectedus Executive Suite"
         navItems={NAV}
         bottomSlot={
           <div className="flex flex-col gap-2">
@@ -48,7 +49,7 @@ export default function AdminLayout() {
       />
       <main className="ml-64 pt-16 min-h-screen flex flex-col">
         <Outlet />
-        <Footer brand="Next Move Admin Portal" />
+        <Footer brand="Connectedus Admin Portal" />
       </main>
     </div>
   );

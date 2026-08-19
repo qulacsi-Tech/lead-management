@@ -25,6 +25,7 @@ import ManageInstitutes from './pages/admin/ManageInstitutes';
 import ManageStudents from './pages/admin/ManageStudents';
 import ManageMentors from './pages/admin/ManageMentors';
 import ManageEnquiries from './pages/admin/ManageEnquiries';
+import ManagePages from './pages/admin/ManagePages';
 import AdminSettings from './pages/admin/AdminSettings';
 
 function RequireAdmin({ children }) {
@@ -54,6 +55,10 @@ function AppRoutes() {
         <Route path="dashboard" element={<ProfessionalDashboard />} />
         <Route path="search" element={<SearchConnections />} />
         <Route path="purchased" element={<PurchasedHistory />} />
+        {/* Public, per-institute vanity URL — connectedus.in/<slug>. Static
+            paths above (feed, profile, search, ...) always win over this,
+            since react-router ranks literal segments above dynamic ones. */}
+        <Route path=":instituteSlug" element={<InstitutePage />} />
       </Route>
 
       {/* Admin uses the same unified login above — no separate admin login page. */}
@@ -66,6 +71,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<AdminDashboard />} />
+        <Route path="pages" element={<ManagePages />} />
         <Route path="institutes" element={<ManageInstitutes />} />
         <Route path="students" element={<ManageStudents />} />
         <Route path="mentors" element={<ManageMentors />} />

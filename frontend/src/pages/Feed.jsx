@@ -6,13 +6,14 @@ import Badge from '../components/ui/Badge';
 import {
   mockFeedPosts,
   feedPostPool,
-  mockPage,
+  mockPages,
   mockProfessional,
   RECENTLY_VIEWED,
   TRENDING_TOPICS,
   CLOSING_SOON,
 } from './mockData';
 import { useSession } from '../context/useSession';
+import { useFollows } from './useFollows';
 
 const POST_TYPE_BADGE = {
   admission: { label: 'Admission Open', tone: 'success' },
@@ -194,25 +195,31 @@ function PostCard({ post, highlighted }) {
 }
 
 function SuggestionsRail() {
+  const { isFollowing, toggleFollow } = useFollows();
+  // "My page" (Bright Future) isn't shown here — you don't follow your own page.
+  const suggestions = mockPages.filter((p) => p.slug !== 'bright-future-coaching');
+
   return (
     <div className="space-y-4">
       <Card className="p-4">
         <h4 className="text-sm font-bold text-on-surface mb-3">Institute Pages to follow</h4>
         <div className="space-y-3">
-          {[
-            { name: mockPage.name, sub: mockPage.type, avatar: 'BF' },
-            { name: 'Horizon Public School', sub: 'School', avatar: 'HS' },
-            { name: 'Zenith Training Institute', sub: 'Training Institute', avatar: 'ZT' },
-          ].map((s) => (
-            <div key={s.name} className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                {s.avatar}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-on-surface mb-0 truncate">{s.name}</p>
-                <p className="text-[11px] text-on-surface-variant mb-0 truncate">{s.sub}</p>
-              </div>
-              <Button size="sm" variant="ghost">Follow</Button>
+          {suggestions.map((p) => (
+            <div key={p.slug} className="flex items-center gap-2">
+              <Link to={`/${p.slug}`} className="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-xs font-bold text-primary shrink-0 overflow-hidden">
+                {p.logoUrl ? <img src={p.logoUrl} alt={p.name} className="w-full h-full object-cover" /> : p.logo}
+              </Link>
+              <Link to={`/${p.slug}`} className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-on-surface mb-0 truncate">{p.name}</p>
+                <p className="text-[11px] text-on-surface-variant mb-0 truncate">{p.type}</p>
+              </Link>
+              <Button
+                size="sm"
+                variant={isFollowing(p.slug) ? 'outline' : 'ghost'}
+                onClick={() => toggleFollow(p.slug)}
+              >
+                {isFollowing(p.slug) ? 'Following' : 'Follow'}
+              </Button>
             </div>
           ))}
         </div>
@@ -245,7 +252,7 @@ function SuggestionsRail() {
           <span>About</span><span>·</span><span>Help</span><span>·</span>
           <span>Privacy</span><span>·</span><span>Terms</span>
         </div>
-        EduNet UI Prototype © 2026
+Connectedus UI Prototype © 2026
       </div>
     </div>
   );

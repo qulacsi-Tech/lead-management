@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Input, Textarea, FormGroup } from '../components/ui/Field';
+import { findPageBySlug, MY_PAGE_SLUG } from './mockData';
 import PageHeader from './PageHeader';
 
 export default function PostAdmissionNotice() {
@@ -43,6 +44,15 @@ export default function PostAdmissionNotice() {
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
+            const page = findPageBySlug(MY_PAGE_SLUG);
+            page.opportunities.unshift({
+              id: `op-${Date.now()}`,
+              type: 'admission',
+              ...form,
+              reach: 0,
+              views: 0,
+              ranking: page.opportunities.length + 1,
+            });
             setPosted(true);
           }}
         >

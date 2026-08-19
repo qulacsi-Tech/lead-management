@@ -34,7 +34,7 @@ export default function Login() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">E</div>
-            <span className="text-lg font-bold text-on-surface">EduNet</span>
+            <span className="text-lg font-bold text-on-surface">Connectedus</span>
           </div>
         </div>
       </header>

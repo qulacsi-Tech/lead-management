@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { useSession } from '../context/useSession';
 import { mockNotifications, notificationPool } from '../pages/mockData';
+import { useDesiredCriteria } from '../pages/useDesiredCriteria';
 
 const NAV_ICONS = [
   { to: '/feed', icon: 'home', label: 'Home', end: true },
@@ -20,12 +21,23 @@ function NotificationBell() {
   const [toast, setToast] = useState(null);
   const poolIndex = useRef(0);
   const toastTimer = useRef(null);
+  const { desiredJob } = useDesiredCriteria();
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
     const tick = setInterval(() => {
-      const template = notificationPool[poolIndex.current % notificationPool.length];
+      // Every 4th notification is a real match against the user's saved
+      // desired criteria (matrimony-style "your saved search matched a new
+      // lead"), instead of a random pool item — see
+      // docs/CLIENT_FEEDBACK_2026-08-16.md, Section 4.
+      const isMatch = poolIndex.current > 0 && poolIndex.current % 4 === 0;
+      const template = isMatch
+        ? {
+            icon: 'work',
+            title: `New Job Vacancy matches your saved search: ${desiredJob.role} in ${desiredJob.preferredLocation}`,
+          }
+        : notificationPool[poolIndex.current % notificationPool.length];
       poolIndex.current += 1;
       notifIdCounter += 1;
       const fresh = { ...template, id: notifIdCounter, time: 'Just now', read: false };
@@ -41,7 +53,7 @@ function NotificationBell() {
       clearInterval(tick);
       clearTimeout(toastTimer.current);
     };
-  }, []);
+  }, [desiredJob]);
 
   const toggleOpen = () => {
     setOpen((o) => {
@@ -129,7 +141,7 @@ export default function AppLayout() {
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center gap-4">
           <NavLink to="/feed" className="flex items-center gap-2 shrink-0">
             <div className="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">E</div>
-            <span className="text-lg font-bold text-on-surface hidden sm:inline">EduNet</span>
+            <span className="text-lg font-bold text-on-surface hidden sm:inline">Connectedus</span>
           </NavLink>
 
           <div className="flex-1 max-w-sm hidden md:flex items-center gap-2 bg-surface-container-low border border-outline-variant rounded-full px-4 py-2">

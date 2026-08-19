@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import { Input, FormGroup, Select } from '../components/ui/Field';
-import { mockPage, mockPageContent, mockOpportunities, COURSE_SPECIALIZATIONS, EXISTING_ENQUIRY_USER } from './mockData';
+import { findPageBySlug, MY_PAGE_SLUG, COURSE_SPECIALIZATIONS, EXISTING_ENQUIRY_USER } from './mockData';
 import { KEY_HIGHLIGHTS_OPTIONS, FACILITIES_OPTIONS, buildAboutParagraph } from './pageBuilderContent';
+import { useFollows } from './useFollows';
 import PageHeader from './PageHeader';
 
 function statCardsFrom(options, selected) {
@@ -15,8 +16,13 @@ function statCardsFrom(options, selected) {
     .filter((s) => s.label);
 }
 
-function OpportunityCard({ op }) {
+// Edit/Push to top were previously decorative (no handlers) — fixed
+// 16 Aug 2026, see docs/CLIENT_FEEDBACK_2026-08-16.md, Section 2.
+function OpportunityCard({ op, editable, onPushToTop, onSaveDescription }) {
   const isAdmission = op.type === 'admission';
+  const [editing, setEditing] = useState(false);
+  const [description, setDescription] = useState(op.description);
+
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between mb-2">
@@ -28,7 +34,24 @@ function OpportunityCard({ op }) {
       <h4 className="text-sm font-bold text-on-surface mb-1">
         {isAdmission ? op.course : op.position}
       </h4>
-      <p className="text-xs text-on-surface-variant mb-3">{op.description}</p>
+      {editing ? (
+        <div className="mb-3 space-y-2">
+          <textarea
+            className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <Button
+            size="sm"
+            onClick={() => { onSaveDescription(description); setEditing(false); }}
+          >
+            Save
+          </Button>
+        </div>
+      ) : (
+        <p className="text-xs text-on-surface-variant mb-3">{op.description}</p>
+      )}
       <div className="grid grid-cols-2 gap-y-1 text-xs text-on-surface-variant mb-3">
         {isAdmission ? (
           <>
@@ -49,8 +72,14 @@ function OpportunityCard({ op }) {
       <div className="flex items-center gap-4 text-xs text-on-surface-variant border-t border-outline-variant pt-2">
         <span>Reach {op.reach}</span>
         <span>Views {op.views}</span>
-        <Button variant="ghost" size="sm" icon="edit">Edit</Button>
-        <Button variant="ghost" size="sm" icon="arrow_upward">Push to top</Button>
+        {editable && (
+          <>
+            <Button variant="ghost" size="sm" icon="edit" onClick={() => { setDescription(op.description); setEditing((e) => !e); }}>Edit</Button>
+            <Button variant="ghost" size="sm" icon="arrow_upward" onClick={onPushToTop} disabled={op.ranking === 1}>
+              Push to top
+            </Button>
+          </>
+        )}
       </div>
     </Card>
   );
@@ -108,8 +137,8 @@ function EnquiryModal({ open, onClose, page, course, setCourse, specialization, 
       ) : (
         <>
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center text-sm font-bold text-primary shrink-0">
-              {page.logo}
+            <div className="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center text-sm font-bold text-primary shrink-0 overflow-hidden">
+              {page.logoUrl ? <img src={page.logoUrl} alt={page.name} className="w-full h-full object-cover" /> : page.logo}
             </div>
             <div>
               <h3 className="text-base font-bold text-on-surface mb-0">{page.name}</h3>
@@ -233,12 +262,48 @@ function FloatingEnquiryButton({ onClick }) {
 }
 
 export default function InstitutePage() {
-  const [admins, setAdmins] = useState(mockPage.admins);
+  const { slug } = useParams();
+  const page = findPageBySlug(slug || MY_PAGE_SLUG);
+  const isMyPage = !slug || slug === MY_PAGE_SLUG;
+  const { isFollowing, toggleFollow } = useFollows();
+
+  const [admins, setAdmins] = useState(page?.admins || []);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [course, setCourse] = useState('');
   const [specialization, setSpecialization] = useState('');
+  const [opportunities, setOpportunities] = useState(page?.opportunities || []);
+
+  const pushOpportunityToTop = (id) => {
+    setOpportunities((prev) => {
+      const target = prev.find((x) => x.id === id);
+      if (!target) return prev;
+      const next = prev.map((x) => {
+        if (x.id === id) return { ...x, ranking: 1 };
+        if (x.ranking <= target.ranking) return { ...x, ranking: x.ranking + 1 };
+        return x;
+      });
+      page.opportunities = next;
+      return next;
+    });
+  };
+
+  const saveOpportunityDescription = (id, description) => {
+    setOpportunities((prev) => {
+      const next = prev.map((x) => (x.id === id ? { ...x, description } : x));
+      page.opportunities = next;
+      return next;
+    });
+  };
+
+  if (!page) {
+    return (
+      <div>
+        <PageHeader title="Page not found" subtitle="This Institute Page doesn't exist or hasn't been published yet." />
+      </div>
+    );
+  }
 
   const addAdmin = (e) => {
     e.preventDefault();
@@ -253,41 +318,56 @@ export default function InstitutePage() {
     setEnquiryOpen(true);
   };
 
+  const content = page.content;
+
   return (
     <div>
       <PageHeader
-        title="Institute Page"
-        subtitle="Landing page: Logo / Cover / About / Address / Website / Contact / Courses / Enquiry form."
+        title={isMyPage ? 'Institute Page' : page.name}
+        subtitle={`connectedus.in/${page.slug}`}
       />
 
       {/* Cover + logo */}
       <Card className="overflow-hidden mb-5">
         <div className="h-28 md:h-36 bg-gradient-to-r from-primary to-tertiary" />
-        {mockPage.banners?.length > 0 && (
+        {page.banners?.length > 0 && (
           <div className="grid grid-cols-3 gap-1 px-5 -mt-1">
-            {mockPage.banners.map((src, i) => (
+            {page.banners.map((src, i) => (
               <img key={i} src={src} alt={`Banner ${i + 1}`} className="w-full h-16 md:h-20 object-cover rounded" />
             ))}
           </div>
         )}
         <div className="p-5 pt-0">
-          <div className="w-20 h-20 -mt-10 mb-3 rounded-2xl border-4 border-surface-container-lowest shadow-sm flex items-center justify-center text-xl font-bold text-primary bg-surface-container-high">
-            {mockPage.logo}
+          <div className="w-20 h-20 -mt-10 mb-3 rounded-2xl border-4 border-surface-container-lowest shadow-sm flex items-center justify-center text-xl font-bold text-primary bg-surface-container-high overflow-hidden">
+            {page.logoUrl ? <img src={page.logoUrl} alt={page.name} className="w-full h-full object-cover" /> : page.logo}
           </div>
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-on-surface">{mockPage.name}</h3>
-                <Badge tone="primary">{mockPage.type}</Badge>
+                <h3 className="text-lg font-bold text-on-surface">{page.name}</h3>
+                <Badge tone="primary">{page.type}</Badge>
               </div>
-              {mockPage.tagline && <p className="text-sm text-on-surface-variant italic mb-0.5">{mockPage.tagline}</p>}
-              <p className="text-xs text-on-surface-variant mb-0">{mockPage.followers.toLocaleString()} followers</p>
+              {page.tagline && <p className="text-sm text-on-surface-variant italic mb-0.5">{page.tagline}</p>}
+              <p className="text-xs text-on-surface-variant mb-0">{page.followers.toLocaleString()} followers</p>
             </div>
             <div className="flex gap-2">
-              <Link to="/page/edit">
-                <Button variant="outline" size="sm" icon="edit_square">Edit Page</Button>
-              </Link>
-              <Button variant="outline" size="sm" icon="group_add">Add Admin</Button>
+              {isMyPage ? (
+                <>
+                  <Link to="/page/edit">
+                    <Button variant="outline" size="sm" icon="edit_square">Edit Page</Button>
+                  </Link>
+                  <Button variant="outline" size="sm" icon="group_add" onClick={() => setAdminModalOpen(true)}>Add Admin</Button>
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  variant={isFollowing(page.slug) ? 'outline' : 'primary'}
+                  icon={isFollowing(page.slug) ? 'check' : 'add'}
+                  onClick={() => toggleFollow(page.slug)}
+                >
+                  {isFollowing(page.slug) ? 'Following' : 'Follow'}
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -298,15 +378,15 @@ export default function InstitutePage() {
           <Card className="p-5">
             <h4 className="text-sm font-bold text-on-surface mb-2">About</h4>
             <p className="text-sm text-on-surface-variant mb-0">
-              {buildAboutParagraph(mockPage.name, mockPageContent.aboutStats) || mockPage.about}
+              {buildAboutParagraph(page.name, content.aboutStats) || page.about || 'No description added yet.'}
             </p>
           </Card>
 
-          {mockPageContent.whyChooseUs?.length > 0 && (
+          {content.whyChooseUs?.length > 0 && (
             <Card className="p-5">
               <h4 className="text-sm font-bold text-on-surface mb-3">Why Choose Us</h4>
               <div className="grid sm:grid-cols-2 gap-2">
-                {mockPageContent.whyChooseUs.map((point) => (
+                {content.whyChooseUs.map((point) => (
                   <div key={point} className="flex items-center gap-2 text-sm text-on-surface">
                     <span className="material-symbols-outlined text-secondary text-[18px]">check_circle</span>
                     {point}
@@ -316,11 +396,11 @@ export default function InstitutePage() {
             </Card>
           )}
 
-          {mockPageContent.keyHighlights?.length > 0 && (
+          {content.keyHighlights?.length > 0 && (
             <Card className="p-5">
               <h4 className="text-sm font-bold text-on-surface mb-3">Key Highlights</h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {statCardsFrom(KEY_HIGHLIGHTS_OPTIONS, mockPageContent.keyHighlights).map((h) => (
+                {statCardsFrom(KEY_HIGHLIGHTS_OPTIONS, content.keyHighlights).map((h) => (
                   <div key={h.key} className="p-3 rounded-xl bg-surface-container-low text-center">
                     <p className="text-lg font-bold text-primary mb-0">{h.value}</p>
                     <p className="text-[11px] text-on-surface-variant mb-0">{h.field}</p>
@@ -330,11 +410,11 @@ export default function InstitutePage() {
             </Card>
           )}
 
-          {mockPageContent.facilities?.length > 0 && (
+          {content.facilities?.length > 0 && (
             <Card className="p-5">
               <h4 className="text-sm font-bold text-on-surface mb-3">Facilities</h4>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {statCardsFrom(FACILITIES_OPTIONS, mockPageContent.facilities).map((f) => (
+                {statCardsFrom(FACILITIES_OPTIONS, content.facilities).map((f) => (
                   <div key={f.key} className="p-3 rounded-xl border border-outline-variant">
                     <p className="text-sm font-bold text-on-surface mb-0.5">{f.label}</p>
                     <p className="text-xs text-on-surface-variant mb-0">{f.field}: {f.value}</p>
@@ -344,33 +424,33 @@ export default function InstitutePage() {
             </Card>
           )}
 
-          {mockPageContent.campusLife?.length > 0 && (
+          {content.campusLife?.length > 0 && (
             <Card className="p-5">
               <h4 className="text-sm font-bold text-on-surface mb-3">Campus Life</h4>
               <div className="flex flex-wrap gap-1.5">
-                {mockPageContent.campusLife.map((c) => <Badge key={c} tone="tertiary">{c}</Badge>)}
+                {content.campusLife.map((c) => <Badge key={c} tone="tertiary">{c}</Badge>)}
               </div>
             </Card>
           )}
 
-          {mockPageContent.achievements && (
+          {content.achievements && Object.values(content.achievements).some(Boolean) && (
             <Card className="p-5">
               <h4 className="text-sm font-bold text-on-surface mb-3">Achievements & Placement</h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3 rounded-xl bg-primary-container/30 text-center">
-                  <p className="text-lg font-bold text-primary mb-0">₹{mockPageContent.achievements.highestPlacement} LPA</p>
+                  <p className="text-lg font-bold text-primary mb-0">₹{content.achievements.highestPlacement || '—'} LPA</p>
                   <p className="text-[11px] text-on-surface-variant mb-0">Highest Placement</p>
                 </div>
                 <div className="p-3 rounded-xl bg-primary-container/30 text-center">
-                  <p className="text-lg font-bold text-primary mb-0">₹{mockPageContent.achievements.averagePlacement} LPA</p>
+                  <p className="text-lg font-bold text-primary mb-0">₹{content.achievements.averagePlacement || '—'} LPA</p>
                   <p className="text-[11px] text-on-surface-variant mb-0">Average Placement</p>
                 </div>
                 <div className="p-3 rounded-xl bg-primary-container/30 text-center">
-                  <p className="text-lg font-bold text-primary mb-0">{mockPageContent.achievements.placementRate}%</p>
+                  <p className="text-lg font-bold text-primary mb-0">{content.achievements.placementRate || '—'}%</p>
                   <p className="text-[11px] text-on-surface-variant mb-0">Placement Rate</p>
                 </div>
                 <div className="p-3 rounded-xl bg-primary-container/30 text-center">
-                  <p className="text-lg font-bold text-primary mb-0">{mockPageContent.achievements.recruiters}</p>
+                  <p className="text-lg font-bold text-primary mb-0">{content.achievements.recruiters || '—'}</p>
                   <p className="text-[11px] text-on-surface-variant mb-0">Recruiters</p>
                 </div>
               </div>
@@ -380,19 +460,31 @@ export default function InstitutePage() {
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-bold text-on-surface">Opportunities</h4>
-              <div className="flex gap-2">
-                <Link to="/page/post-admission">
-                  <Button size="sm" variant="soft" icon="campaign">Post Admission Notice</Button>
-                </Link>
-                <Link to="/page/post-job">
-                  <Button size="sm" variant="soft" icon="work">Post Job Vacancy</Button>
-                </Link>
-              </div>
+              {isMyPage && (
+                <div className="flex gap-2">
+                  <Link to="/page/post-admission">
+                    <Button size="sm" variant="soft" icon="campaign">Post Admission Notice</Button>
+                  </Link>
+                  <Link to="/page/post-job">
+                    <Button size="sm" variant="soft" icon="work">Post Job Vacancy</Button>
+                  </Link>
+                </div>
+              )}
             </div>
             <div className="space-y-3">
-              {mockOpportunities.map((op) => (
-                <OpportunityCard key={op.id} op={op} />
-              ))}
+              {opportunities.length > 0 ? (
+                opportunities.map((op) => (
+                  <OpportunityCard
+                    key={op.id}
+                    op={op}
+                    editable={isMyPage}
+                    onPushToTop={() => pushOpportunityToTop(op.id)}
+                    onSaveDescription={(description) => saveOpportunityDescription(op.id, description)}
+                  />
+                ))
+              ) : (
+                <p className="text-sm text-on-surface-variant mb-0">No opportunities posted yet.</p>
+              )}
             </div>
           </Card>
         </div>
@@ -401,22 +493,34 @@ export default function InstitutePage() {
           <Card className="p-5">
             <h4 className="text-sm font-bold text-on-surface mb-3">Details</h4>
             <ul className="space-y-2 text-sm text-on-surface-variant">
-              <li className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">location_on</span>
-                {mockPage.address}
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">language</span>
-                {mockPage.website}
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">call</span>
-                {mockPage.contact}
-              </li>
+              {page.address && (
+                <li className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">location_on</span>
+                  {page.address}
+                </li>
+              )}
+              {page.website && (
+                <li className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">language</span>
+                  {page.website}
+                </li>
+              )}
+              {page.contact && (
+                <li className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">call</span>
+                  {page.contact}
+                </li>
+              )}
+              {page.affiliation && (
+                <li className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">verified</span>
+                  {page.affiliation}
+                </li>
+              )}
             </ul>
             <h4 className="text-sm font-bold text-on-surface mt-4 mb-2">Courses</h4>
             <div className="flex flex-wrap gap-1.5">
-              {mockPage.courses.map((c) => (
+              {page.courses.map((c) => (
                 <button key={c} type="button" onClick={() => openEnquiry(c)} className="cursor-pointer">
                   <Badge tone="neutral">{c}</Badge>
                 </button>
@@ -427,21 +531,27 @@ export default function InstitutePage() {
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-bold text-on-surface">Page Admins</h4>
-              <Button size="sm" variant="ghost" icon="add" onClick={() => setAdminModalOpen(true)}>
-                Add
-              </Button>
+              {isMyPage && (
+                <Button size="sm" variant="ghost" icon="add" onClick={() => setAdminModalOpen(true)}>
+                  Add
+                </Button>
+              )}
             </div>
-            <ul className="space-y-2">
-              {admins.map((a) => (
-                <li key={a.email} className="flex items-center justify-between text-sm">
-                  <div>
-                    <p className="text-on-surface font-semibold mb-0">{a.name}</p>
-                    <p className="text-xs text-on-surface-variant mb-0">{a.email}</p>
-                  </div>
-                  <Badge tone="neutral">{a.role}</Badge>
-                </li>
-              ))}
-            </ul>
+            {admins.length > 0 ? (
+              <ul className="space-y-2">
+                {admins.map((a) => (
+                  <li key={a.email} className="flex items-center justify-between text-sm">
+                    <div>
+                      <p className="text-on-surface font-semibold mb-0">{a.name}</p>
+                      <p className="text-xs text-on-surface-variant mb-0">{a.email}</p>
+                    </div>
+                    <Badge tone="neutral">{a.role}</Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-on-surface-variant mb-0">No admins listed yet.</p>
+            )}
           </Card>
 
           <Card className="p-5">
@@ -452,7 +562,7 @@ export default function InstitutePage() {
             <div className="space-y-3">
               <Select value={course} onChange={(e) => { setCourse(e.target.value); setSpecialization(''); }}>
                 <option value="" disabled>Select Course</option>
-                {mockPage.courses.map((c) => <option key={c} value={c}>{c}</option>)}
+                {page.courses.map((c) => <option key={c} value={c}>{c}</option>)}
               </Select>
               <Select
                 value={specialization}
@@ -495,7 +605,7 @@ export default function InstitutePage() {
       <EnquiryModal
         open={enquiryOpen}
         onClose={() => setEnquiryOpen(false)}
-        page={mockPage}
+        page={page}
         course={course}
         setCourse={setCourse}
         specialization={specialization}

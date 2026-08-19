@@ -4,7 +4,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Input, FormGroup } from '../components/ui/Field';
-import { mockPage, mockPageContent } from './mockData';
+import { findPageBySlug, MY_PAGE_SLUG } from './mockData';
 import {
   WHY_CHOOSE_US_OPTIONS,
   KEY_HIGHLIGHTS_OPTIONS,
@@ -103,16 +103,18 @@ function NumberedPicker({ options, selected, onChange, checkboxLabel = 'Availabl
 
 export default function InstitutePageEditor() {
   const navigate = useNavigate();
-  const [main, setMain] = useState({ name: mockPage.name, tagline: mockPage.tagline, banners: mockPage.banners });
-  const [aboutStats, setAboutStats] = useState(mockPageContent.aboutStats);
-  const [whyChooseUs, setWhyChooseUs] = useState(mockPageContent.whyChooseUs);
-  const [keyHighlights, setKeyHighlights] = useState(mockPageContent.keyHighlights);
-  const [facilities, setFacilities] = useState(mockPageContent.facilities);
-  const [campusLife, setCampusLife] = useState(mockPageContent.campusLife);
-  const [achievements, setAchievements] = useState(mockPageContent.achievements);
+  const page = findPageBySlug(MY_PAGE_SLUG);
+  const [main, setMain] = useState({ name: page.name, tagline: page.tagline, banners: page.banners, logoUrl: page.logoUrl });
+  const [aboutStats, setAboutStats] = useState(page.content.aboutStats);
+  const [whyChooseUs, setWhyChooseUs] = useState(page.content.whyChooseUs);
+  const [keyHighlights, setKeyHighlights] = useState(page.content.keyHighlights);
+  const [facilities, setFacilities] = useState(page.content.facilities);
+  const [campusLife, setCampusLife] = useState(page.content.campusLife);
+  const [achievements, setAchievements] = useState(page.content.achievements);
   const [tab, setTab] = useState('main');
   const [savedAt, setSavedAt] = useState(0);
   const bannerInputRef = useRef(null);
+  const logoInputRef = useRef(null);
 
   const setStat = (key) => (e) => setAboutStats((s) => ({ ...s, [key]: e.target.value }));
   const setAchievement = (key) => (e) => setAchievements((a) => ({ ...a, [key]: e.target.value }));
@@ -125,13 +127,20 @@ export default function InstitutePageEditor() {
     setMain((m) => ({ ...m, banners: [...m.banners, url].slice(0, 3) }));
   };
 
+  const setLogo = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setMain((m) => ({ ...m, logoUrl: URL.createObjectURL(file) }));
+  };
+
   const save = () => {
     // Mock/local only — the Institute Page has no backend yet (see
     // docs/EDUCATION_NETWORK_ROADMAP.md Phase 3). Mutating the shared mock
-    // objects in place is enough to make the change visible on /page for
+    // page object in place is enough to make the change visible on /page for
     // this session.
-    Object.assign(mockPage, { name: main.name, tagline: main.tagline, banners: main.banners });
-    Object.assign(mockPageContent, { aboutStats, whyChooseUs, keyHighlights, facilities, campusLife, achievements });
+    Object.assign(page, { name: main.name, tagline: main.tagline, banners: main.banners, logoUrl: main.logoUrl });
+    Object.assign(page.content, { aboutStats, whyChooseUs, keyHighlights, facilities, campusLife, achievements });
     setSavedAt(Date.now());
   };
 
@@ -187,6 +196,25 @@ export default function InstitutePageEditor() {
               />
             </FormGroup>
           </div>
+          <FormGroup label="Logo (square, recommended 512×512px)">
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                type="button"
+                onClick={() => logoInputRef.current?.click()}
+                className="w-16 h-16 rounded-xl border-2 border-dashed border-outline-variant hover:border-primary flex items-center justify-center text-on-surface-variant cursor-pointer overflow-hidden shrink-0"
+              >
+                {main.logoUrl ? (
+                  <img src={main.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="material-symbols-outlined">add_photo_alternate</span>
+                )}
+              </button>
+              <Button type="button" variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}>
+                {main.logoUrl ? 'Change Logo' : 'Upload Logo'}
+              </Button>
+            </div>
+            <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={setLogo} />
+          </FormGroup>
           <FormGroup label="Banner Images (2–3, recommended 1600×500px, under 2MB each)">
             <div className="flex flex-wrap gap-3 mb-2">
               {main.banners.map((src, i) => (
@@ -299,7 +327,7 @@ export default function InstitutePageEditor() {
       )}
 
       <div className="mt-4">
-        <Badge tone="neutral">Institute type: {mockPage.type} — content options adjust by type in a later pass</Badge>
+        <Badge tone="neutral">Institute type: {page.type} — content options adjust by type in a later pass</Badge>
       </div>
     </div>
   );
