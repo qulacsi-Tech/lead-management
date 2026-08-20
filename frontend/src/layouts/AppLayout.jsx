@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { useSession } from '../context/useSession';
+import { useIsInstituteAdmin } from '../context/InstituteContext';
 import { mockNotifications, notificationPool } from '../pages/mockData';
 import { useDesiredCriteria } from '../pages/useDesiredCriteria';
 
@@ -120,6 +121,10 @@ function NotificationBell() {
 
 export default function AppLayout() {
   const { auth, initializing, name, logout } = useSession();
+  // Surfaces the Institute Console only to users who actually administer a
+  // page — a normal user never sees an institute-management entry point.
+  const instituteAdmin = useIsInstituteAdmin();
+  const isPlatformAdmin = auth?.role === 'admin';
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -194,27 +199,53 @@ export default function AppLayout() {
                   >
                     View Profile
                   </NavLink>
-                  <NavLink
-                    to="/page"
-                    onClick={() => setMenuOpen(false)}
-                    className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
-                  >
-                    My Institute Page
-                  </NavLink>
-                  <NavLink
-                    to="/create-page"
-                    onClick={() => setMenuOpen(false)}
-                    className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
-                  >
-                    Create Institute Page
-                  </NavLink>
-                  <NavLink
-                    to="/purchased"
-                    onClick={() => setMenuOpen(false)}
-                    className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
-                  >
-                    Purchased History
-                  </NavLink>
+                  {/* User-side entries only. A Main Admin creates institutes in
+                      the Admin portal and has no marketplace credits of their
+                      own, so neither belongs in their menu. */}
+                  {!isPlatformAdmin && (
+                    <>
+                      {instituteAdmin ? (
+                        <NavLink
+                          to="/institute"
+                          onClick={() => setMenuOpen(false)}
+                          className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
+                        >
+                          Institute Console
+                        </NavLink>
+                      ) : (
+                        <NavLink
+                          to="/create-page"
+                          onClick={() => setMenuOpen(false)}
+                          className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
+                        >
+                          Create Institute Page
+                        </NavLink>
+                      )}
+                      <NavLink
+                        to="/purchased"
+                        onClick={() => setMenuOpen(false)}
+                        className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
+                      >
+                        Purchased History
+                      </NavLink>
+                    </>
+                  )}
+                  {/* A Main Admin browsing Connectedus as a normal user needs a
+                      way back to the platform portal — otherwise "Back to
+                      Connectedus" in the admin sidebar is a one-way door. */}
+                  {isPlatformAdmin && (
+                    <>
+                      <div className="border-t border-outline-variant my-1" />
+                      <NavLink
+                        to="/admin"
+                        onClick={() => setMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-primary font-semibold hover:bg-surface-container-low"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">shield_person</span>
+                        Back to Admin Dashboard
+                      </NavLink>
+                    </>
+                  )}
                   <div className="border-t border-outline-variant my-1" />
                   <button
                     type="button"

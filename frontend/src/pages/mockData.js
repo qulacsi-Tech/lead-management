@@ -3,6 +3,39 @@
 
 export const INSTITUTE_TYPES = ['School', 'Coaching', 'College', 'University', 'Training Institute'];
 
+// ---------------------------------------------------------------------------
+// PLATFORM-OWNED taxonomy — Main Admin controls these lists; Institute Admins
+// pick from them but cannot add to them. Keeping them here (rather than inline
+// in each form) is what makes that ownership boundary explicit in the UI.
+// ---------------------------------------------------------------------------
+
+export const AFFILIATION_OPTIONS = {
+  School: ['CBSE', 'ICSE', 'State Board', 'IB', 'NIOS'],
+  College: ['Devi Ahilya Vishwavidyalaya', 'RGPV', 'AICTE Approved', 'UGC Recognised'],
+  University: ['UGC', 'AICTE', 'NAAC A++', 'NAAC A+'],
+  Coaching: [],
+  'Training Institute': [],
+};
+
+export const COURSE_CATEGORIES = [
+  'Engineering Entrance',
+  'Medical Entrance',
+  'School Curriculum',
+  'Commerce',
+  'Competitive Exam',
+  'Skill / Vocational',
+  'Language',
+];
+
+export const COURSE_LEVELS = ['Foundation', 'Intermediate', 'Advanced', 'Crash Course', 'Certification'];
+
+export const PLATFORM_LOCATIONS = ['Indore', 'Bhopal', 'Jabalpur', 'Gwalior', 'Ujjain', 'Pune', 'Nagpur'];
+
+/** Lifecycle shared by Admission Notices and Job Vacancies (Sell Leads). */
+export const OPPORTUNITY_STATUSES = ['Draft', 'Published', 'Expired', 'Closed'];
+
+export const EMPLOYMENT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Visiting Faculty'];
+
 export const PROFESSIONAL_CATEGORIES = [
   'School Teacher',
   'Coaching Faculty',
@@ -39,14 +72,48 @@ export const mockPages = [
     website: 'www.brightfuturecoaching.in',
     contact: '+91-731-4567890',
     affiliation: '',
-    courses: ['JEE Main & Advanced', 'NEET', 'Class 11-12 Foundation', 'Crash Course (60 Days)'],
+    // INSTITUTE-OWNED: Courses are first-class records managed by the Institute
+    // Admin (see /institute/courses), not a free-text list typed at page setup.
+    courses: [
+      {
+        id: 'crs-1', name: 'JEE Main & Advanced', category: 'Engineering Entrance', level: 'Advanced',
+        duration: '2 Years', fees: '1,80,000', intake: '120', eligibility: 'Class 10 pass, PCM stream',
+        specializations: ['PCM Foundation', 'Advanced Problem Solving', 'Crash Course'],
+        description: 'Two-year integrated programme covering the complete JEE Main and Advanced syllabus with weekly tests.',
+        status: 'Published', admissionOpen: true, updatedAt: '2026-08-14',
+      },
+      {
+        id: 'crs-2', name: 'NEET', category: 'Medical Entrance', level: 'Advanced',
+        duration: '2 Years', fees: '1,75,000', intake: '100', eligibility: 'Class 10 pass, PCB stream',
+        specializations: ['PCB Foundation', 'Biology Intensive', 'Crash Course'],
+        description: 'Full NEET preparation with daily biology drills, NCERT mastery and all-India mock ranking.',
+        status: 'Published', admissionOpen: true, updatedAt: '2026-08-14',
+      },
+      {
+        id: 'crs-3', name: 'Class 11-12 Foundation', category: 'School Curriculum', level: 'Foundation',
+        duration: '2 Years', fees: '90,000', intake: '150', eligibility: 'Class 10 pass',
+        specializations: ['Science Stream', 'Commerce Stream'],
+        description: 'Board-aligned coaching that runs alongside school, building the base for entrance preparation.',
+        status: 'Published', admissionOpen: true, updatedAt: '2026-08-10',
+      },
+      {
+        id: 'crs-4', name: 'Crash Course (60 Days)', category: 'Competitive Exam', level: 'Crash Course',
+        duration: '60 Days', fees: '35,000', intake: '80', eligibility: 'Class 12 pass / appearing',
+        specializations: ['JEE Focus', 'NEET Focus'],
+        description: 'Intensive final-stretch revision with daily full-length mocks and doubt clinics.',
+        status: 'Published', admissionOpen: true, updatedAt: '2026-08-18',
+      },
+    ],
     admins: [
-      { name: 'Ramesh Sharma', role: 'Owner / Primary Admin', email: 'ramesh@brightfuture.in' },
-      { name: 'Sunita Verma', role: 'Admin', email: 'sunita@brightfuture.in' },
+      { name: 'Ramesh Sharma', role: 'Owner / Primary Admin', email: 'ramesh@brightfuture.in', assignedAt: '2026-07-02' },
+      { name: 'Sunita Verma', role: 'Admin', email: 'sunita@brightfuture.in', assignedAt: '2026-07-20' },
     ],
     followers: 1240,
     tagline: 'Where Ambition Meets Achievement',
     banners: [],
+    gallery: [],
+    socialLinks: { facebook: '', instagram: '', youtube: '', linkedin: '' },
+    enabled: true,
     // The "Select & Fill" landing-page builder state — everything here is
     // chosen from the predefined option banks in pageBuilderContent.js, not
     // typed as prose. See docs/CLIENT_FEEDBACK_2026-08-12.md, Section 5.
@@ -91,11 +158,15 @@ export const mockPages = [
         id: 'op1',
         type: 'admission',
         course: 'JEE Advanced Crash Course',
+        courseId: 'crs-4',
         session: '2026-27',
         startDate: '2026-08-10',
         endDate: '2026-09-15',
         eligibility: 'Class 12 pass / appearing, PCM',
         description: '60-day intensive crash course with daily mock tests and doubt sessions.',
+        applyUrl: 'www.brightfuturecoaching.in/apply',
+        status: 'Published',
+        publishedAt: '2026-08-10',
         reach: 3400,
         views: 890,
         ranking: 3,
@@ -105,10 +176,18 @@ export const mockPages = [
         type: 'job',
         position: 'Physics Faculty',
         subject: 'Physics',
+        department: 'Science',
+        employmentType: 'Full-time',
+        location: 'Indore Campus',
+        salary: '6,00,000 – 9,00,000 / yr',
+        skills: ['JEE Physics', 'Mechanics', 'Doubt Handling'],
         experience: '3+ years',
         qualification: 'M.Sc Physics / B.Tech',
         applyBefore: '2026-08-20',
+        applyUrl: 'careers@brightfuturecoaching.in',
         description: 'Looking for an experienced Physics faculty for JEE/NEET batches, full-time, Indore campus.',
+        status: 'Published',
+        publishedAt: '2026-08-05',
         reach: 2100,
         views: 540,
         ranking: 1,
@@ -127,11 +206,39 @@ export const mockPages = [
     website: 'www.horizonpublicschool.in',
     contact: '+91-731-2345678',
     affiliation: 'CBSE',
-    courses: ['Nursery to Class 5', 'Class 6-10', 'Class 11-12 Science', 'Class 11-12 Commerce'],
-    admins: [{ name: 'Anita Rao', role: 'Owner / Primary Admin', email: 'anita@horizonschool.in' }],
+    courses: [
+      {
+        id: 'crs-5', name: 'Nursery to Class 5', category: 'School Curriculum', level: 'Foundation',
+        duration: '6 Years', fees: '48,000 / yr', intake: '200', eligibility: 'Age 3+ as on 31 March',
+        specializations: [], description: 'Primary wing with activity-based learning and a low student-teacher ratio.',
+        status: 'Published', admissionOpen: true, updatedAt: '2026-08-01',
+      },
+      {
+        id: 'crs-6', name: 'Class 6-10', category: 'School Curriculum', level: 'Intermediate',
+        duration: '5 Years', fees: '62,000 / yr', intake: '180', eligibility: 'Class 5 pass',
+        specializations: [], description: 'CBSE middle and secondary school with integrated olympiad training.',
+        status: 'Published', admissionOpen: true, updatedAt: '2026-08-01',
+      },
+      {
+        id: 'crs-7', name: 'Class 11-12 Science', category: 'School Curriculum', level: 'Advanced',
+        duration: '2 Years', fees: '78,000 / yr', intake: '120', eligibility: 'Class 10 with 60%+',
+        specializations: ['PCM', 'PCB'], description: 'Senior secondary science with in-house entrance coaching.',
+        status: 'Published', admissionOpen: true, updatedAt: '2026-08-05',
+      },
+      {
+        id: 'crs-8', name: 'Class 11-12 Commerce', category: 'Commerce', level: 'Advanced',
+        duration: '2 Years', fees: '70,000 / yr', intake: '80', eligibility: 'Class 10 pass',
+        specializations: ['With Maths', 'Without Maths'], description: 'Commerce stream with CA foundation guidance.',
+        status: 'Draft', admissionOpen: false, updatedAt: '2026-08-12',
+      },
+    ],
+    admins: [{ name: 'Anita Rao', role: 'Owner / Primary Admin', email: 'anita@horizonschool.in', assignedAt: '2026-06-15' }],
     followers: 640,
     tagline: "Nurturing Tomorrow's Leaders",
     banners: [],
+    gallery: [],
+    socialLinks: { facebook: '', instagram: '', youtube: '', linkedin: '' },
+    enabled: true,
     content: {
       aboutStats: { establishedYear: '1998', students: '2200+', faculty: '140+', programs: '4', campusArea: '10 Acres' },
       whyChooseUs: ['Safe & Secure Campus', 'Holistic Development', 'Sports & Extracurricular Activities', 'Excellent Academic Results'],
@@ -150,6 +257,10 @@ export const mockPages = [
         endDate: '2026-09-30',
         eligibility: 'Age-appropriate, see admission office',
         description: 'Limited seats left for the 2026-27 session. Sibling and staff-ward discounts available.',
+        courseId: 'crs-5',
+        applyUrl: 'www.horizonpublicschool.in/admissions',
+        status: 'Published',
+        publishedAt: '2026-08-01',
         reach: 1900,
         views: 410,
         ranking: 1,
@@ -168,11 +279,33 @@ export const mockPages = [
     website: 'www.zenithtraining.in',
     contact: '+91-731-9988776',
     affiliation: '',
-    courses: ['Spoken English', 'Corporate Communication', 'Tally & Accounting'],
-    admins: [{ name: 'Vikram Joshi', role: 'Owner / Primary Admin', email: 'vikram@zenithtraining.in' }],
+    courses: [
+      {
+        id: 'crs-9', name: 'Spoken English', category: 'Language', level: 'Certification',
+        duration: '3 Months', fees: '12,000', intake: '40', eligibility: 'Open to all',
+        specializations: ['Basic', 'Business English'], description: 'Conversation-led spoken English with weekend batches for working professionals.',
+        status: 'Published', admissionOpen: true, updatedAt: '2026-08-08',
+      },
+      {
+        id: 'crs-10', name: 'Corporate Communication', category: 'Skill / Vocational', level: 'Certification',
+        duration: '2 Months', fees: '15,000', intake: '30', eligibility: 'Graduate / working professional',
+        specializations: [], description: 'Presentation, email and client-facing communication skills for corporate teams.',
+        status: 'Published', admissionOpen: true, updatedAt: '2026-08-08',
+      },
+      {
+        id: 'crs-11', name: 'Tally & Accounting', category: 'Skill / Vocational', level: 'Certification',
+        duration: '4 Months', fees: '18,000', intake: '35', eligibility: 'Class 12 Commerce preferred',
+        specializations: ['Tally Prime', 'GST Filing'], description: 'Job-ready accounting certification with live GST filing practice.',
+        status: 'Published', admissionOpen: true, updatedAt: '2026-08-08',
+      },
+    ],
+    admins: [{ name: 'Vikram Joshi', role: 'Owner / Primary Admin', email: 'vikram@zenithtraining.in', assignedAt: '2026-07-11' }],
     followers: 310,
     tagline: 'Skills That Get You Hired',
     banners: [],
+    gallery: [],
+    socialLinks: { facebook: '', instagram: '', youtube: '', linkedin: '' },
+    enabled: true,
     content: {
       aboutStats: { establishedYear: '2016', students: '1500+', faculty: '20+', programs: '6', campusArea: '' },
       whyChooseUs: ['Industry-Oriented Curriculum', 'Skill Development Programs', 'Career Guidance'],
@@ -191,6 +324,14 @@ export const mockPages = [
         qualification: 'Any Graduate, fluent English',
         applyBefore: '2026-09-01',
         description: 'Part-time / full-time Spoken English trainer needed for corporate batches. Weekend batches also available.',
+        department: 'Languages',
+        employmentType: 'Part-time',
+        location: 'Palasia, Indore',
+        salary: '3,00,000 – 4,50,000 / yr',
+        skills: ['Spoken English', 'Corporate Training'],
+        applyUrl: 'hr@zenithtraining.in',
+        status: 'Published',
+        publishedAt: '2026-08-02',
         reach: 640,
         views: 150,
         ranking: 2,
@@ -215,9 +356,79 @@ export function findPageByAdminEmail(email) {
   return mockPages.find((p) => p.admins?.some((a) => a.email?.toLowerCase() === normalized));
 }
 
+/** Course names only — the Enquiry dropdowns and any "pick a course" UI read
+ * this rather than the full course records. */
+export function courseNames(page) {
+  return (page?.courses || []).map((c) => (typeof c === 'string' ? c : c.name));
+}
+
+/** Only Published courses appear on the public Institute Page; Drafts stay
+ * visible to the Institute Admin alone. */
+export function publicCourses(page) {
+  return (page?.courses || []).filter((c) => typeof c === 'string' || c.status === 'Published');
+}
+
+/** Only Published opportunities reach the public page / feed — the Draft,
+ * Expired and Closed states exist for the Institute Admin's own workflow. */
+export function publicOpportunities(page) {
+  return (page?.opportunities || []).filter((o) => !o.status || o.status === 'Published');
+}
+
+/** Every page the given user administers. A user may hold admin rights on more
+ * than one page, so the Institute Console works off a list, not a single page. */
+export function pagesAdministeredBy(email) {
+  if (!email) return [];
+  const normalized = email.trim().toLowerCase();
+  return mockPages.filter((p) => p.admins?.some((a) => a.email?.toLowerCase() === normalized));
+}
+
+/** INSTITUTE-OWNED writes — all course mutations funnel through here so the
+ * ownership boundary lives in one place when this moves to a real API. */
+export function upsertCourse(page, course) {
+  const existing = page.courses.findIndex((c) => c.id === course.id);
+  if (existing >= 0) page.courses[existing] = { ...page.courses[existing], ...course };
+  else page.courses.push({ ...course, id: course.id || `crs-${Date.now()}` });
+  return page.courses;
+}
+
+export function removeCourse(page, courseId) {
+  page.courses = page.courses.filter((c) => c.id !== courseId);
+  return page.courses;
+}
+
+export function upsertOpportunity(page, opportunity) {
+  const existing = page.opportunities.findIndex((o) => o.id === opportunity.id);
+  if (existing >= 0) page.opportunities[existing] = { ...page.opportunities[existing], ...opportunity };
+  else page.opportunities.unshift({ ...opportunity, id: opportunity.id || `op-${Date.now()}` });
+  return page.opportunities;
+}
+
+export function removeOpportunity(page, opportunityId) {
+  page.opportunities = page.opportunities.filter((o) => o.id !== opportunityId);
+  return page.opportunities;
+}
+
+/** PLATFORM-OWNED write — assigning who administers a page belongs to Main
+ * Admin, never to the Institute Admin being assigned. */
+export function assignPageAdmin(page, { name, email, role = 'Admin' }) {
+  const normalized = email.trim().toLowerCase();
+  if (page.admins.some((a) => a.email?.toLowerCase() === normalized)) return page.admins;
+  page.admins = [
+    ...page.admins,
+    { name: name || email.split('@')[0], email, role, assignedAt: new Date().toISOString().slice(0, 10) },
+  ];
+  return page.admins;
+}
+
+export function removePageAdmin(page, email) {
+  const normalized = email.trim().toLowerCase();
+  page.admins = page.admins.filter((a) => a.email?.toLowerCase() !== normalized);
+  return page.admins;
+}
+
 /** Admin bulk-creates a page — see docs/CLIENT_FEEDBACK_2026-08-16.md, Section 5. */
-export function addPage({ name, type, logoUrl, banners, tagline, address, website, contact, affiliation, courses }) {
-  const baseSlug = slugify(name) || `institute-${mockPages.length + 1}`;
+export function addPage({ name, type, logoUrl, banners, tagline, address, website, contact, affiliation, courses, slug: desiredSlug }) {
+  const baseSlug = slugify(desiredSlug || name) || `institute-${mockPages.length + 1}`;
   let slug = baseSlug;
   let i = 2;
   while (findPageBySlug(slug)) {
@@ -236,11 +447,15 @@ export function addPage({ name, type, logoUrl, banners, tagline, address, websit
     website: website || '',
     contact: contact || '',
     affiliation: affiliation || '',
-    courses: courses?.length ? courses : ['General'],
+    courses: courses?.length ? courses : [],
     admins: [],
     followers: 0,
     tagline: tagline || '',
     banners: banners || [],
+    gallery: [],
+    socialLinks: { facebook: '', instagram: '', youtube: '', linkedin: '' },
+    enabled: true,
+    createdAt: new Date().toISOString().slice(0, 10),
     content: {
       aboutStats: { establishedYear: '', students: '', faculty: '', programs: '', campusArea: '' },
       whyChooseUs: [],
@@ -268,6 +483,68 @@ export const COURSE_SPECIALIZATIONS = {
 // Demo phone number that resolves as an "existing user" in the Enquiry
 // modal's returning-visitor path — everything here is mock, no backend.
 export const EXISTING_ENQUIRY_USER = { phone: '9998887770', name: 'Rohit Das' };
+
+// INSTITUTE-OWNED. Enquiries submitted through an Institute Page's enquiry form
+// land with that institute's admin, not with the platform. Main Admin retains a
+// read-only platform-wide view at /admin/enquiries for oversight.
+export const ENQUIRY_STATUSES = ['New', 'Contacted', 'Responded', 'Closed'];
+
+export const mockInstituteEnquiries = [
+  {
+    id: 'enq-1', pageSlug: 'bright-future-coaching', name: 'Aarav Gupta',
+    email: 'aarav.gupta@example.com', phone: '9876543210', city: 'Indore', state: 'Madhya Pradesh',
+    course: 'JEE Main & Advanced', specialization: 'Crash Course', status: 'New',
+    submittedAt: '2026-08-19', note: '',
+  },
+  {
+    id: 'enq-2', pageSlug: 'bright-future-coaching', name: 'Priya Nair',
+    email: 'priya.nair@example.com', phone: '9823456701', city: 'Indore', state: 'Madhya Pradesh',
+    course: 'NEET', specialization: 'Biology Intensive', status: 'Contacted',
+    submittedAt: '2026-08-17', note: 'Called on 18 Aug, asked for a fee structure over email.',
+  },
+  {
+    id: 'enq-3', pageSlug: 'bright-future-coaching', name: 'Rohit Das',
+    email: 'rohit.das@example.com', phone: '9998887770', city: 'Bhopal', state: 'Madhya Pradesh',
+    course: 'Class 11-12 Foundation', specialization: 'Science Stream', status: 'Responded',
+    submittedAt: '2026-08-14', note: 'Sent brochure + demo class invite.',
+  },
+  {
+    id: 'enq-4', pageSlug: 'horizon-public-school', name: 'Meera Joshi',
+    email: 'meera.joshi@example.com', phone: '9812233445', city: 'Indore', state: 'Madhya Pradesh',
+    course: 'Nursery to Class 5', specialization: '', status: 'New',
+    submittedAt: '2026-08-20', note: '',
+  },
+  {
+    id: 'enq-5', pageSlug: 'zenith-training-institute', name: 'Kabir Shah',
+    email: 'kabir.shah@example.com', phone: '9801122334', city: 'Indore', state: 'Madhya Pradesh',
+    course: 'Spoken English', specialization: 'Business English', status: 'New',
+    submittedAt: '2026-08-20', note: '',
+  },
+];
+
+export function enquiriesForPage(slug) {
+  return mockInstituteEnquiries.filter((e) => e.pageSlug === slug);
+}
+
+export function updateEnquiry(id, patch) {
+  const idx = mockInstituteEnquiries.findIndex((e) => e.id === id);
+  if (idx >= 0) mockInstituteEnquiries[idx] = { ...mockInstituteEnquiries[idx], ...patch };
+  return mockInstituteEnquiries[idx];
+}
+
+/** Called by the public Institute Page enquiry form so a submitted enquiry
+ * actually shows up in that institute's console for the rest of the session. */
+export function addEnquiry(enquiry) {
+  const record = {
+    id: `enq-${Date.now()}`,
+    status: 'New',
+    submittedAt: new Date().toISOString().slice(0, 10),
+    note: '',
+    ...enquiry,
+  };
+  mockInstituteEnquiries.unshift(record);
+  return record;
+}
 
 export const mockProfessional = {
   name: 'Rakesh Sharma',

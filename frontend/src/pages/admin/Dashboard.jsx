@@ -15,7 +15,7 @@ export default function AdminDashboard() {
   // Combine all registered entities into a unified recent activity feed
   const recentRegistrations = [
     ...institutes.map((i) => ({ ...i, entityType: 'Institute', icon: 'account_balance', badgeVariant: 'primary' })),
-    ...students.map((s) => ({ ...s, entityType: 'Student', icon: 'school', badgeVariant: 'secondary' })),
+    ...students.map((s) => ({ ...s, entityType: 'Student', icon: 'school', badgeVariant: 'tertiary' })),
     ...mentors.map((m) => ({ ...m, entityType: 'Mentor', icon: 'person', badgeVariant: 'success' })),
   ].sort((a, b) => (b.registeredAt || 0) - (a.registeredAt || 0));
 
@@ -160,7 +160,7 @@ export default function AdminDashboard() {
                     </div>
                   </td>
                   <td className="py-3.5 px-4 font-medium text-xs">
-                    <Badge variant={item.badgeVariant}>{item.entityType}</Badge>
+                    <Badge tone={item.badgeVariant}>{item.entityType}</Badge>
                   </td>
                   <td className="py-3.5 px-4 text-xs text-on-surface-variant font-mono">{item.email}</td>
                   <td className="py-3.5 px-4 text-xs text-on-surface-variant">
@@ -171,7 +171,7 @@ export default function AdminDashboard() {
                     })}
                   </td>
                   <td className="py-3.5 px-4">
-                    <Badge variant="success">Auto-Approved</Badge>
+                    <Badge tone="success">Auto-Approved</Badge>
                   </td>
                 </tr>
               ))}

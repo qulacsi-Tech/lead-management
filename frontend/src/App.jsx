@@ -12,8 +12,6 @@ import Feed from './pages/Feed';
 import CreateInstitutePage from './pages/CreateInstitutePage';
 import InstitutePage from './pages/InstitutePage';
 import InstitutePageEditor from './pages/InstitutePageEditor';
-import PostAdmissionNotice from './pages/PostAdmissionNotice';
-import PostJobVacancy from './pages/PostJobVacancy';
 import ProfessionalProfile from './pages/ProfessionalProfile';
 import ProfessionalDashboard from './pages/ProfessionalDashboard';
 import SearchConnections from './pages/SearchConnections';
@@ -26,13 +24,31 @@ import ManageStudents from './pages/admin/ManageStudents';
 import ManageMentors from './pages/admin/ManageMentors';
 import ManageEnquiries from './pages/admin/ManageEnquiries';
 import ManagePages from './pages/admin/ManagePages';
+import PlatformTaxonomy from './pages/admin/PlatformTaxonomy';
 import AdminSettings from './pages/admin/AdminSettings';
 
+import InstituteAdminLayout from './layouts/InstituteAdminLayout';
+import InstituteDashboard from './pages/institute/InstituteDashboard';
+import ManageCourses from './pages/institute/ManageCourses';
+import ManageOpportunities from './pages/institute/ManageOpportunities';
+import InstituteEnquiries from './pages/institute/InstituteEnquiries';
+
+/** Platform-level gate: only the Main/Platform Admin reaches /admin. */
 function RequireAdmin({ children }) {
   const { role, initializing } = useAuth();
   if (initializing) return null;
   if (!role) return <Navigate to="/" replace />;
   if (role !== 'admin') return <Navigate to="/feed" replace />;
+  return children;
+}
+
+/** Any signed-in user may reach /institute; the layout itself decides whether
+ * they administer a page and shows the "not assigned" state if they don't.
+ * Real per-page authorization arrives with the backend in Phase 2. */
+function RequireSignedIn({ children }) {
+  const { role, initializing } = useAuth();
+  if (initializing) return null;
+  if (!role) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -48,9 +64,12 @@ function AppRoutes() {
         <Route path="feed" element={<Feed />} />
         <Route path="create-page" element={<CreateInstitutePage />} />
         <Route path="page" element={<InstitutePage />} />
-        <Route path="page/edit" element={<InstitutePageEditor />} />
-        <Route path="page/post-admission" element={<PostAdmissionNotice />} />
-        <Route path="page/post-job" element={<PostJobVacancy />} />
+        {/* Institute content management moved into the Institute Console, so
+            ownership of each screen is unambiguous. These keep old links and
+            bookmarks working. */}
+        <Route path="page/edit" element={<Navigate to="/institute/profile" replace />} />
+        <Route path="page/post-admission" element={<Navigate to="/institute/notices" replace />} />
+        <Route path="page/post-job" element={<Navigate to="/institute/jobs" replace />} />
         <Route path="profile" element={<ProfessionalProfile />} />
         <Route path="dashboard" element={<ProfessionalDashboard />} />
         <Route path="search" element={<SearchConnections />} />
@@ -61,7 +80,27 @@ function AppRoutes() {
         <Route path=":instituteSlug" element={<InstitutePage />} />
       </Route>
 
-      {/* Admin uses the same unified login above — no separate admin login page. */}
+      {/* INSTITUTE-OWNED: operational content for the page(s) a user administers.
+          Separate from /admin so an Institute Admin never appears to be
+          managing the whole platform. */}
+      <Route
+        path="/institute"
+        element={
+          <RequireSignedIn>
+            <InstituteAdminLayout />
+          </RequireSignedIn>
+        }
+      >
+        <Route index element={<InstituteDashboard />} />
+        <Route path="profile" element={<InstitutePageEditor />} />
+        <Route path="courses" element={<ManageCourses />} />
+        <Route path="notices" element={<ManageOpportunities type="admission" />} />
+        <Route path="jobs" element={<ManageOpportunities type="job" />} />
+        <Route path="enquiries" element={<InstituteEnquiries />} />
+      </Route>
+
+      {/* PLATFORM-OWNED: Main Admin. Uses the same unified login above — no
+          separate admin login page. */}
       <Route
         path="/admin"
         element={
@@ -76,6 +115,7 @@ function AppRoutes() {
         <Route path="students" element={<ManageStudents />} />
         <Route path="mentors" element={<ManageMentors />} />
         <Route path="enquiries" element={<ManageEnquiries />} />
+        <Route path="taxonomy" element={<PlatformTaxonomy />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 

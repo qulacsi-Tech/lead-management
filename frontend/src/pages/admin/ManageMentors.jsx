@@ -189,7 +189,7 @@ export default function ManageMentors() {
                       {m.testsCreated || 0} Tests / {m.opportunitiesPosted || 0} Opps
                     </td>
                     <td className="py-4 px-5">
-                      <Badge variant={m.status === 'Active' ? 'success' : 'error'}>
+                      <Badge tone={m.status === 'Active' ? 'success' : 'error'}>
                         {m.status}
                       </Badge>
                     </td>
@@ -231,7 +231,7 @@ export default function ManageMentors() {
       </Card>
 
       {/* Add Mentor Modal */}
-      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)}>
+      <Modal open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} width={440}>
         <div className="p-2">
           <h2 className="text-xl font-bold text-on-surface m-0 mb-1">Add New Mentor</h2>
           <p className="text-xs text-on-surface-variant m-0 mb-6">
@@ -266,7 +266,7 @@ export default function ManageMentors() {
 
       {/* Detail View Modal */}
       {selectedMentor && (
-        <Modal isOpen={!!selectedMentor} onClose={() => setSelectedMentor(null)}>
+        <Modal open={!!selectedMentor} onClose={() => setSelectedMentor(null)} width={440}>
           <div className="p-2">
             <div className="flex items-center gap-4 mb-6">
               <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 font-bold">
@@ -275,7 +275,7 @@ export default function ManageMentors() {
               <div>
                 <h2 className="text-lg font-bold text-on-surface m-0">{selectedMentor.name}</h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={selectedMentor.status === 'Active' ? 'success' : 'error'}>
+                  <Badge tone={selectedMentor.status === 'Active' ? 'success' : 'error'}>
                     {selectedMentor.status}
                   </Badge>
                   <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">

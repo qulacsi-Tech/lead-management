@@ -53,10 +53,13 @@ export default function CreateInstitutePage() {
           <h3 className="text-lg font-bold text-on-surface mt-2">"{created.name}" page is live</h3>
           <p className="text-xs text-on-surface-variant mb-1">connectedus.in/{created.slug}</p>
           <p className="text-sm text-on-surface-variant mb-4">
-            You are now the Admin of this page. You can add more admins and start posting Admission
-            Notices or Job Vacancies.
+            You are now the Institute Admin for this page. Manage its courses, admission notices, job
+            vacancies and enquiries from your Institute Console.
           </p>
-          <Button onClick={() => navigate(`/${created.slug}`)}>Go to Institute Page</Button>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={() => navigate('/institute')} icon="tune">Open Institute Console</Button>
+            <Button variant="outline" onClick={() => navigate(`/${created.slug}`)}>View public page</Button>
+          </div>
         </Card>
       </div>
     );

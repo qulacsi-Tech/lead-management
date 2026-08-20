@@ -31,9 +31,11 @@ export default function ManageEnquiries() {
     <div className="max-w-7xl w-full mx-auto px-10 py-8 box-border">
       <div className="flex justify-between items-end gap-6 flex-wrap mb-6">
         <div>
-          <h2 className="font-display text-2xl font-bold m-0 mb-2">Student Enquiries</h2>
-          <p className="text-on-surface-variant m-0">
-            Coaching &amp; College enquiries submitted by students, and how many institutes match their state.
+          <h2 className="font-display text-2xl font-bold m-0 mb-2">All Enquiries</h2>
+          <p className="text-on-surface-variant m-0 text-sm max-w-2xl">
+            Platform-wide oversight of student enquiries and how many institutes match their state.
+            Responding to an enquiry belongs to the institute it was sent to — each Institute Admin
+            handles their own in their console.
           </p>
         </div>
         <input
