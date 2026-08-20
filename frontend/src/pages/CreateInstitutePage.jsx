@@ -6,6 +6,7 @@ import Badge from '../components/ui/Badge';
 import { Input, Textarea, FormGroup } from '../components/ui/Field';
 import { INSTITUTE_TYPES, addPage } from './mockData';
 import PageHeader from './PageHeader';
+import { useAuth } from '../context/AuthContext';
 
 const BOARD_OPTIONS = ['CBSE', 'ICSE', 'State Board', 'IB', 'Other'];
 
@@ -19,6 +20,7 @@ function affiliationConfig(type) {
 
 export default function CreateInstitutePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [type, setType] = useState(null);
   const [form, setForm] = useState({ name: '', about: '', address: '', website: '', contact: '', affiliation: '', tagline: '', logoUrl: null, banners: [] });
   const [created, setCreated] = useState(null); // null | the created page object
@@ -109,7 +111,11 @@ export default function CreateInstitutePage() {
                 affiliation: form.affiliation,
               });
               page.about = form.about;
-              page.admins = [{ name: 'You', role: 'Owner / Primary Admin', email: 'you@example.com' }];
+              page.admins = [{
+                name: user?.name || 'You',
+                role: 'Owner / Primary Admin',
+                email: user?.email || '',
+              }];
               setCreated(page);
             }}
           >

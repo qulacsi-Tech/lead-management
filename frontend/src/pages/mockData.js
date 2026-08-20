@@ -199,12 +199,20 @@ export const mockPages = [
   },
 ];
 
-export const MY_PAGE_SLUG = 'bright-future-coaching';
-
 /** Returns the live object reference (not a copy) so edits made through it
  * persist for the session, matching how the rest of this mock layer works. */
 export function findPageBySlug(slug) {
   return mockPages.find((p) => p.slug === slug);
+}
+
+/** Ownership lookup: a page belongs to whoever is listed in its `admins`
+ * array, matched by the logged-in user's email. This is the single source
+ * of truth for "is this my page" — never a hardcoded slug — so that Edit
+ * Page / Add Admin / Post Notice never leak across accounts. */
+export function findPageByAdminEmail(email) {
+  if (!email) return undefined;
+  const normalized = email.trim().toLowerCase();
+  return mockPages.find((p) => p.admins?.some((a) => a.email?.toLowerCase() === normalized));
 }
 
 /** Admin bulk-creates a page — see docs/CLIENT_FEEDBACK_2026-08-16.md, Section 5. */

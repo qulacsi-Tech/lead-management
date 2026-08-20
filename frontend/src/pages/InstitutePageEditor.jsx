@@ -4,7 +4,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Input, FormGroup } from '../components/ui/Field';
-import { findPageBySlug, MY_PAGE_SLUG } from './mockData';
+import { findPageByAdminEmail } from './mockData';
 import {
   WHY_CHOOSE_US_OPTIONS,
   KEY_HIGHLIGHTS_OPTIONS,
@@ -14,6 +14,7 @@ import {
   buildAboutParagraph,
 } from './pageBuilderContent';
 import PageHeader from './PageHeader';
+import { useAuth } from '../context/AuthContext';
 
 const TABS = [
   { key: 'main', label: 'Main', icon: 'storefront' },
@@ -103,7 +104,22 @@ function NumberedPicker({ options, selected, onChange, checkboxLabel = 'Availabl
 
 export default function InstitutePageEditor() {
   const navigate = useNavigate();
-  const page = findPageBySlug(MY_PAGE_SLUG);
+  const { user } = useAuth();
+  const page = findPageByAdminEmail(user?.email);
+
+  if (!page) {
+    return (
+      <div>
+        <PageHeader title="You don't have an Institute Page yet" subtitle="Create one before editing its content." />
+        <Button onClick={() => navigate('/create-page')}>Create Institute Page</Button>
+      </div>
+    );
+  }
+
+  return <InstitutePageEditorForm page={page} navigate={navigate} />;
+}
+
+function InstitutePageEditorForm({ page, navigate }) {
   const [main, setMain] = useState({ name: page.name, tagline: page.tagline, banners: page.banners, logoUrl: page.logoUrl });
   const [aboutStats, setAboutStats] = useState(page.content.aboutStats);
   const [whyChooseUs, setWhyChooseUs] = useState(page.content.whyChooseUs);

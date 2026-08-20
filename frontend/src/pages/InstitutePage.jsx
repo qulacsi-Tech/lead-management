@@ -5,9 +5,10 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import { Input, FormGroup, Select } from '../components/ui/Field';
-import { findPageBySlug, MY_PAGE_SLUG, COURSE_SPECIALIZATIONS, EXISTING_ENQUIRY_USER } from './mockData';
+import { findPageBySlug, findPageByAdminEmail, COURSE_SPECIALIZATIONS, EXISTING_ENQUIRY_USER } from './mockData';
 import { KEY_HIGHLIGHTS_OPTIONS, FACILITIES_OPTIONS, buildAboutParagraph } from './pageBuilderContent';
 import { useFollows } from './useFollows';
+import { useAuth } from '../context/AuthContext';
 import PageHeader from './PageHeader';
 
 function statCardsFrom(options, selected) {
@@ -262,9 +263,13 @@ function FloatingEnquiryButton({ onClick }) {
 }
 
 export default function InstitutePage() {
-  const { slug } = useParams();
-  const page = findPageBySlug(slug || MY_PAGE_SLUG);
-  const isMyPage = !slug || slug === MY_PAGE_SLUG;
+  const { instituteSlug: slug } = useParams();
+  const { user } = useAuth();
+  // Ownership is decided by admin membership on the page itself, never by
+  // which slug is in the URL — a slug matching *someone else's* page must
+  // never grant Edit Page / Add Admin / Post Notice controls.
+  const page = slug ? findPageBySlug(slug) : findPageByAdminEmail(user?.email);
+  const isMyPage = !!page && !!user && page.admins?.some((a) => a.email?.toLowerCase() === user.email?.toLowerCase());
   const { isFollowing, toggleFollow } = useFollows();
 
   const [admins, setAdmins] = useState(page?.admins || []);
@@ -300,14 +305,26 @@ export default function InstitutePage() {
   if (!page) {
     return (
       <div>
-        <PageHeader title="Page not found" subtitle="This Institute Page doesn't exist or hasn't been published yet." />
+        <PageHeader
+          title={slug ? 'Page not found' : "You don't have an Institute Page yet"}
+          subtitle={
+            slug
+              ? "This Institute Page doesn't exist or hasn't been published yet."
+              : 'Create one to start posting Admission Notices and Job Vacancies.'
+          }
+        />
+        {!slug && (
+          <Link to="/create-page">
+            <Button icon="add_business">Create Institute Page</Button>
+          </Link>
+        )}
       </div>
     );
   }
 
   const addAdmin = (e) => {
     e.preventDefault();
-    if (!newAdminEmail) return;
+    if (!isMyPage || !newAdminEmail) return;
     setAdmins((a) => [...a, { name: newAdminEmail.split('@')[0], role: 'Admin', email: newAdminEmail }]);
     setNewAdminEmail('');
     setAdminModalOpen(false);

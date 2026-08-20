@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Input, Textarea, FormGroup } from '../components/ui/Field';
-import { findPageBySlug, MY_PAGE_SLUG } from './mockData';
+import { findPageByAdminEmail } from './mockData';
 import PageHeader from './PageHeader';
+import { useAuth } from '../context/AuthContext';
 
 export default function PostAdmissionNotice() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const myPage = findPageByAdminEmail(user?.email);
   const [form, setForm] = useState({
     course: '',
     session: '',
@@ -19,6 +22,15 @@ export default function PostAdmissionNotice() {
   const [posted, setPosted] = useState(false);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  if (!myPage) {
+    return (
+      <div>
+        <PageHeader title="You don't have an Institute Page yet" subtitle="Create one before posting an Admission Notice." />
+        <Button onClick={() => navigate('/create-page')}>Create Institute Page</Button>
+      </div>
+    );
+  }
 
   if (posted) {
     return (
@@ -44,14 +56,13 @@ export default function PostAdmissionNotice() {
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
-            const page = findPageBySlug(MY_PAGE_SLUG);
-            page.opportunities.unshift({
+            myPage.opportunities.unshift({
               id: `op-${Date.now()}`,
               type: 'admission',
               ...form,
               reach: 0,
               views: 0,
-              ranking: page.opportunities.length + 1,
+              ranking: myPage.opportunities.length + 1,
             });
             setPosted(true);
           }}
