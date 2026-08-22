@@ -5,8 +5,23 @@ Each endpoint:
   1. Checks for duplicate email in the `users` table.
   2. Creates a User row (hashed password, correct role).
   3. Creates the role-specific profile row (Student / Mentor / Institute).
-  4. Returns a JWT TokenResponse so the frontend can auto-log the user in
-     without a second round-trip.
+  4. Returns a JWT TokenResponse.
+
+Access model (Phase 2, P0 security fix)
+---------------------------------------
+`/register/student` is genuinely public self-service signup.
+
+`/register/mentor` and `/register/institute` are ADMIN PROVISIONING
+endpoints — the product treats Mentor and Institute as accounts the platform
+team creates on someone's behalf (see docs/EDUCATION_NETWORK_ROADMAP.md and
+the Admin "Add Mentor"/"Add Institute" screens). They were previously
+unauthenticated, so anyone could self-promote to those roles by calling the
+API directly. They now require an authenticated Main Admin.
+
+Because an Admin is provisioning an account *for someone else*, these two
+endpoints no longer return a session token for the created user — handing the
+caller a token for another person's account would be a privilege leak. They
+return the created account instead.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from core.database import get_db
+from core.deps import require_roles
 from core.security import get_password_hash, create_access_token
 from models.user import User, UserResponse, TokenResponse
 from models.enums import UserRole
@@ -22,6 +38,8 @@ from models.mentor import Mentor, MentorCreate, MentorResponse      # noqa: F401
 from models.institute import Institute, InstituteCreate, InstituteResponse  # noqa: F401
 
 router = APIRouter(prefix="/register", tags=["Registration"])
+
+require_main_admin = require_roles(UserRole.ADMIN)
 
 
 # ---------------------------------------------------------------------------
@@ -80,8 +98,16 @@ async def register_student(payload: StudentCreate, db: AsyncSession = Depends(ge
 # Mentor Registration
 # ---------------------------------------------------------------------------
 
-@router.post("/mentor", response_model=TokenResponse, summary="Register a new mentor")
-async def register_mentor(payload: MentorCreate, db: AsyncSession = Depends(get_db)):
+@router.post(
+    "/mentor",
+    response_model=UserResponse,
+    summary="Provision a mentor account (Main Admin only)",
+)
+async def register_mentor(
+    payload: MentorCreate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_main_admin),
+):
     await _check_email_unique(payload.email, db)
 
     user = User(
@@ -108,15 +134,23 @@ async def register_mentor(payload: MentorCreate, db: AsyncSession = Depends(get_
     await db.commit()
     await db.refresh(user)
 
-    return _make_token(user)
+    return UserResponse.model_validate(user)
 
 
 # ---------------------------------------------------------------------------
 # Institute Registration
 # ---------------------------------------------------------------------------
 
-@router.post("/institute", response_model=TokenResponse, summary="Register a new institute")
-async def register_institute(payload: InstituteCreate, db: AsyncSession = Depends(get_db)):
+@router.post(
+    "/institute",
+    response_model=UserResponse,
+    summary="Provision an institute account (Main Admin only)",
+)
+async def register_institute(
+    payload: InstituteCreate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_main_admin),
+):
     await _check_email_unique(payload.email, db)
 
     user = User(
@@ -146,4 +180,4 @@ async def register_institute(payload: InstituteCreate, db: AsyncSession = Depend
     await db.commit()
     await db.refresh(user)
 
-    return _make_token(user)
+    return UserResponse.model_validate(user)

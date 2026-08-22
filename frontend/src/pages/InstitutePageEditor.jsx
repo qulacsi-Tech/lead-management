@@ -4,7 +4,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Input, FormGroup } from '../components/ui/Field';
-import { findPageByAdminEmail } from './mockData';
+import { Textarea } from '../components/ui/Field';
 import {
   WHY_CHOOSE_US_OPTIONS,
   KEY_HIGHLIGHTS_OPTIONS,
@@ -13,17 +13,25 @@ import {
   ABOUT_US_STAT_FIELDS,
   buildAboutParagraph,
 } from './pageBuilderContent';
-import PageHeader from './PageHeader';
-import { useAuth } from '../context/AuthContext';
+import { useInstitute } from '../context/InstituteContext';
 
 const TABS = [
   { key: 'main', label: 'Main', icon: 'storefront' },
   { key: 'about', label: 'About Us', icon: 'info' },
+  { key: 'contact', label: 'Contact & Social', icon: 'contact_page' },
+  { key: 'gallery', label: 'Gallery', icon: 'photo_library' },
   { key: 'why', label: 'Why Choose Us', icon: 'stars' },
   { key: 'highlights', label: 'Key Highlights', icon: 'insights' },
   { key: 'facilities', label: 'Facilities', icon: 'apartment' },
   { key: 'campus', label: 'Campus Life', icon: 'diversity_3' },
   { key: 'achievements', label: 'Achievements', icon: 'military_tech' },
+];
+
+const SOCIAL_FIELDS = [
+  { key: 'facebook', label: 'Facebook', placeholder: 'facebook.com/yourinstitute' },
+  { key: 'instagram', label: 'Instagram', placeholder: 'instagram.com/yourinstitute' },
+  { key: 'youtube', label: 'YouTube', placeholder: 'youtube.com/@yourinstitute' },
+  { key: 'linkedin', label: 'LinkedIn', placeholder: 'linkedin.com/company/yourinstitute' },
 ];
 
 // A simple pick-any-N chip list — used by Why Choose Us and Campus Life,
@@ -102,25 +110,30 @@ function NumberedPicker({ options, selected, onChange, checkboxLabel = 'Availabl
   );
 }
 
+/**
+ * INSTITUTE-OWNED. The "Select & Fill" content builder for the institute's own
+ * public page — reached from the Institute Console at /institute/profile.
+ * Which institute this edits comes from InstituteContext, never from the URL.
+ */
 export default function InstitutePageEditor() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const page = findPageByAdminEmail(user?.email);
-
-  if (!page) {
-    return (
-      <div>
-        <PageHeader title="You don't have an Institute Page yet" subtitle="Create one before editing its content." />
-        <Button onClick={() => navigate('/create-page')}>Create Institute Page</Button>
-      </div>
-    );
-  }
-
-  return <InstitutePageEditorForm page={page} navigate={navigate} />;
+  const { page, commit } = useInstitute();
+  if (!page) return null;
+  // Keyed on slug so switching the managed institute remounts with its own data.
+  return <InstitutePageEditorForm key={page.slug} page={page} navigate={navigate} commit={commit} />;
 }
 
-function InstitutePageEditorForm({ page, navigate }) {
+function InstitutePageEditorForm({ page, navigate, commit }) {
   const [main, setMain] = useState({ name: page.name, tagline: page.tagline, banners: page.banners, logoUrl: page.logoUrl });
+  const [contact, setContact] = useState({
+    address: page.address || '',
+    website: page.website || '',
+    contact: page.contact || '',
+    about: page.about || '',
+  });
+  const [socialLinks, setSocialLinks] = useState(page.socialLinks || {});
+  const [gallery, setGallery] = useState(page.gallery || []);
+  const galleryInputRef = useRef(null);
   const [aboutStats, setAboutStats] = useState(page.content.aboutStats);
   const [whyChooseUs, setWhyChooseUs] = useState(page.content.whyChooseUs);
   const [keyHighlights, setKeyHighlights] = useState(page.content.keyHighlights);
@@ -150,20 +163,33 @@ function InstitutePageEditorForm({ page, navigate }) {
     setMain((m) => ({ ...m, logoUrl: URL.createObjectURL(file) }));
   };
 
+  const addGalleryImage = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setGallery((g) => [...g, { id: `img-${Date.now()}`, url: URL.createObjectURL(file), caption: '' }]);
+  };
+
   const save = () => {
     // Mock/local only — the Institute Page has no backend yet (see
     // docs/EDUCATION_NETWORK_ROADMAP.md Phase 3). Mutating the shared mock
-    // page object in place is enough to make the change visible on /page for
-    // this session.
-    Object.assign(page, { name: main.name, tagline: main.tagline, banners: main.banners, logoUrl: main.logoUrl });
-    Object.assign(page.content, { aboutStats, whyChooseUs, keyHighlights, facilities, campusLife, achievements });
+    // page object in place is enough to make the change visible on the public
+    // page for this session.
+    commit(() => {
+      Object.assign(page, {
+        name: main.name, tagline: main.tagline, banners: main.banners, logoUrl: main.logoUrl,
+        address: contact.address, website: contact.website, contact: contact.contact, about: contact.about,
+        socialLinks, gallery,
+      });
+      Object.assign(page.content, { aboutStats, whyChooseUs, keyHighlights, facilities, campusLife, achievements });
+    });
     setSavedAt(Date.now());
   };
 
   const SaveBar = (
     <div className="flex items-center gap-3 mt-5">
       <Button size="sm" onClick={save}>Save Changes</Button>
-      <Button size="sm" variant="outline" onClick={() => navigate('/page')}>Preview Page</Button>
+      <Button size="sm" variant="outline" onClick={() => navigate(`/${page.slug}`)}>Preview Page</Button>
       {savedAt > 0 && (
         <span className="text-xs text-secondary font-semibold flex items-center gap-1">
           <span className="material-symbols-outlined text-[16px]">check_circle</span> Saved
@@ -173,11 +199,14 @@ function InstitutePageEditorForm({ page, navigate }) {
   );
 
   return (
-    <div>
-      <PageHeader
-        title="Edit Institute Page"
-        subtitle="Select & Fill — pick from predefined options, we build the content and layout."
-      />
+    <div className="p-8 max-w-7xl mx-auto flex-1 w-full box-border">
+      <div className="mb-8">
+        <h1 className="font-display text-2xl font-bold text-on-surface m-0">Profile &amp; Branding</h1>
+        <p className="text-xs text-on-surface-variant m-0 mt-1 max-w-2xl">
+          Your institute's public content. Select &amp; Fill — pick from predefined options and we
+          build the page layout for you.
+        </p>
+      </div>
 
       <div className="flex gap-2 mb-5 flex-wrap">
         {TABS.map((t) => (
@@ -280,6 +309,108 @@ function InstitutePageEditorForm({ page, navigate }) {
               {buildAboutParagraph(main.name, aboutStats) || 'Fill in a few fields above to see the generated paragraph.'}
             </p>
           </div>
+          {SaveBar}
+        </Card>
+      )}
+
+      {tab === 'contact' && (
+        <Card className="p-5 max-w-2xl">
+          <h4 className="text-sm font-bold text-on-surface mb-1">Contact &amp; Social</h4>
+          <p className="text-xs text-on-surface-variant mb-4">
+            Shown in the Details panel on your public page and used by the enquiry form.
+          </p>
+          <div className="space-y-4 mb-5">
+            <FormGroup label="Address">
+              <Input
+                value={contact.address}
+                onChange={(e) => setContact((c) => ({ ...c, address: e.target.value }))}
+                placeholder="MG Road, Indore, Madhya Pradesh"
+              />
+            </FormGroup>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <FormGroup label="Website">
+                <Input
+                  value={contact.website}
+                  onChange={(e) => setContact((c) => ({ ...c, website: e.target.value }))}
+                  placeholder="www.example.in"
+                />
+              </FormGroup>
+              <FormGroup label="Contact Number">
+                <Input
+                  value={contact.contact}
+                  onChange={(e) => setContact((c) => ({ ...c, contact: e.target.value }))}
+                  placeholder="+91-XXXXXXXXXX"
+                />
+              </FormGroup>
+            </div>
+            <FormGroup label="Short description (fallback if About Us stats are empty)">
+              <Textarea
+                rows={3}
+                value={contact.about}
+                onChange={(e) => setContact((c) => ({ ...c, about: e.target.value }))}
+                placeholder="One or two lines about the institute"
+              />
+            </FormGroup>
+          </div>
+
+          <h4 className="text-sm font-bold text-on-surface mb-3 pt-3 border-t border-outline-variant">
+            Social Links
+          </h4>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {SOCIAL_FIELDS.map((f) => (
+              <FormGroup key={f.key} label={f.label}>
+                <Input
+                  value={socialLinks[f.key] || ''}
+                  onChange={(e) => setSocialLinks((s) => ({ ...s, [f.key]: e.target.value }))}
+                  placeholder={f.placeholder}
+                />
+              </FormGroup>
+            ))}
+          </div>
+          {SaveBar}
+        </Card>
+      )}
+
+      {tab === 'gallery' && (
+        <Card className="p-5 max-w-2xl">
+          <h4 className="text-sm font-bold text-on-surface mb-1">Gallery</h4>
+          <p className="text-xs text-on-surface-variant mb-4">
+            Campus and classroom photos shown as a grid on your public page. Add a caption to each.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+            {gallery.map((img, i) => (
+              <div key={img.id} className="rounded-xl border border-outline-variant overflow-hidden">
+                <div className="relative h-24">
+                  <img src={img.url} alt={img.caption || `Gallery ${i + 1}`} className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setGallery((g) => g.filter((x) => x.id !== img.id))}
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-on-surface/60 text-white flex items-center justify-center cursor-pointer border-none"
+                    aria-label="Remove image"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                  </button>
+                </div>
+                <input
+                  value={img.caption}
+                  onChange={(e) =>
+                    setGallery((g) => g.map((x) => (x.id === img.id ? { ...x, caption: e.target.value } : x)))
+                  }
+                  placeholder="Caption"
+                  className="w-full bg-surface-container-low border-none px-2 py-1.5 text-[11px] text-on-surface outline-none"
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => galleryInputRef.current?.click()}
+              className="h-24 rounded-xl border-2 border-dashed border-outline-variant hover:border-primary flex flex-col items-center justify-center text-on-surface-variant cursor-pointer gap-1"
+            >
+              <span className="material-symbols-outlined">add_photo_alternate</span>
+              <span className="text-[11px]">Add photo</span>
+            </button>
+          </div>
+          <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={addGalleryImage} />
           {SaveBar}
         </Card>
       )}

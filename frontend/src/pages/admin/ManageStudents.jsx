@@ -187,7 +187,7 @@ export default function ManageStudents() {
                       {stud.points || 0} pts
                     </td>
                     <td className="py-4 px-5">
-                      <Badge variant={stud.status === 'Active' ? 'success' : 'error'}>
+                      <Badge tone={stud.status === 'Active' ? 'success' : 'error'}>
                         {stud.status}
                       </Badge>
                     </td>
@@ -229,7 +229,7 @@ export default function ManageStudents() {
       </Card>
 
       {/* Add Student Modal */}
-      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)}>
+      <Modal open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} width={440}>
         <div className="p-2">
           <h2 className="text-xl font-bold text-on-surface m-0 mb-1">Register New Student</h2>
           <p className="text-xs text-on-surface-variant m-0 mb-6">
@@ -270,7 +270,7 @@ export default function ManageStudents() {
 
       {/* View Student Detail Modal */}
       {selectedStudent && (
-        <Modal isOpen={!!selectedStudent} onClose={() => setSelectedStudent(null)}>
+        <Modal open={!!selectedStudent} onClose={() => setSelectedStudent(null)} width={440}>
           <div className="p-2">
             <div className="flex items-center gap-4 mb-6">
               <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">
@@ -279,7 +279,7 @@ export default function ManageStudents() {
               <div>
                 <h2 className="text-lg font-bold text-on-surface m-0">{selectedStudent.name}</h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={selectedStudent.status === 'Active' ? 'success' : 'error'}>
+                  <Badge tone={selectedStudent.status === 'Active' ? 'success' : 'error'}>
                     {selectedStudent.status}
                   </Badge>
                   <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">

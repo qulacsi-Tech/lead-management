@@ -16,66 +16,46 @@ export function AuthProvider({ children }) {
       setInitializing(false);
       return;
     }
+    // A stored token is only ever trusted after the server confirms it. If
+    // /auth/me fails for any reason the token is discarded — there is no
+    // locally-decodable session to fall back on.
     getMe()
       .then((me) => {
         setUser(me);
         setRole(roleToClient(me.role));
       })
-      .catch(() => {
-        try {
-          const mock = JSON.parse(token);
-          if (mock && mock.user) {
-            setUser(mock.user);
-            setRole(roleToClient(mock.user.role));
-            return;
-          }
-        } catch {}
-        setToken(null);
-      })
+      .catch(() => setToken(null))
       .finally(() => setInitializing(false));
   }, []);
 
-  const login = useCallback(async (email, password, requestedRole) => {
-    try {
-      const data = await loginApi(email, password);
-      setToken(data.access_token);
-      setUser(data.user);
-      const clientRole = roleToClient(data.user.role);
-      setRole(clientRole);
-      // Callers (e.g. Login.jsx redirecting on role) compare against the
-      // same lowercased role the context itself uses internally — the raw
-      // backend value ("Admin") would never match a lowercase check.
-      return { ...data.user, role: clientRole };
-    } catch (err) {
-      // The backend rejected the credentials (wrong password, unknown
-      // email, inactive account) — a real answer, not an outage. Surface it
-      // instead of silently logging the user into a fake session.
-      if (err instanceof ApiError) throw err;
-
-      // Backend unreachable (network/connection error): offline demo fallback.
-      const determinedRole = requestedRole || (email.includes('admin') ? 'admin' : 'student');
-      const mockUser = {
-        id: `usr-${Date.now()}`,
-        name: email.split('@')[0].replace('.', ' ').replace(/^./, (c) => c.toUpperCase()),
-        email,
-        role: determinedRole,
-      };
-      const mockToken = JSON.stringify({ access_token: `mock-${Date.now()}`, user: mockUser });
-      setToken(mockToken);
-      setUser(mockUser);
-      setRole(roleToClient(determinedRole));
-      return mockUser;
-    }
+  /**
+   * The server is the sole authority on identity and role.
+   *
+   * There is deliberately NO offline fallback here. An earlier version
+   * fabricated a local session (with the role guessed from the email address)
+   * whenever the backend was unreachable, which meant `/admin` was reachable
+   * by anyone using an email containing "admin" while the API was down. A
+   * failed login must stay a failed login — see Phase 2, P0 security fixes.
+   */
+  const login = useCallback(async (email, password) => {
+    const data = await loginApi(email, password);
+    setToken(data.access_token);
+    setUser(data.user);
+    // Callers (e.g. Login.jsx redirecting on role) compare against the
+    // same lowercased role the context itself uses internally — the raw
+    // backend value ("Admin") would never match a lowercase check.
+    const clientRole = roleToClient(data.user.role);
+    setRole(clientRole);
+    return { ...data.user, role: clientRole };
   }, []);
 
-  const register = useCallback(async ({ name, email, password, role: signupRole, ...extra }) => {
+  const register = useCallback(async ({ name, email, password, role: signupRole }) => {
     const roleLabel = signupRole ? signupRole[0].toUpperCase() + signupRole.slice(1) : undefined;
-    try {
-      await registerApi({ name, email, password, role: roleLabel });
-    } catch (err) {
-      // Prototype fallback when offline
-    }
-    return login(email, password, signupRole);
+    // Registration failures propagate — silently swallowing them and then
+    // attempting login produced a confusing "invalid credentials" error for
+    // what was really a duplicate-email or validation failure.
+    await registerApi({ name, email, password, role: roleLabel });
+    return login(email, password);
   }, [login]);
 
   /**

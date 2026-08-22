@@ -5,7 +5,15 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import { Input, FormGroup, Select } from '../components/ui/Field';
-import { findPageBySlug, findPageByAdminEmail, COURSE_SPECIALIZATIONS, EXISTING_ENQUIRY_USER } from './mockData';
+import {
+  findPageBySlug,
+  findPageByAdminEmail,
+  COURSE_SPECIALIZATIONS,
+  EXISTING_ENQUIRY_USER,
+  publicCourses,
+  publicOpportunities,
+  addEnquiry,
+} from './mockData';
 import { KEY_HIGHLIGHTS_OPTIONS, FACILITIES_OPTIONS, buildAboutParagraph } from './pageBuilderContent';
 import { useFollows } from './useFollows';
 import { useAuth } from '../context/AuthContext';
@@ -17,12 +25,11 @@ function statCardsFrom(options, selected) {
     .filter((s) => s.label);
 }
 
-// Edit/Push to top were previously decorative (no handlers) — fixed
-// 16 Aug 2026, see docs/CLIENT_FEEDBACK_2026-08-16.md, Section 2.
-function OpportunityCard({ op, editable, onPushToTop, onSaveDescription }) {
+// Public, read-only. Editing an opportunity now belongs to the Institute
+// Console (/institute/notices, /institute/jobs) so that the public page has a
+// single job: showing published content to visitors.
+function OpportunityCard({ op }) {
   const isAdmission = op.type === 'admission';
-  const [editing, setEditing] = useState(false);
-  const [description, setDescription] = useState(op.description);
 
   return (
     <Card className="p-4">
@@ -35,24 +42,7 @@ function OpportunityCard({ op, editable, onPushToTop, onSaveDescription }) {
       <h4 className="text-sm font-bold text-on-surface mb-1">
         {isAdmission ? op.course : op.position}
       </h4>
-      {editing ? (
-        <div className="mb-3 space-y-2">
-          <textarea
-            className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
-            rows={2}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-          <Button
-            size="sm"
-            onClick={() => { onSaveDescription(description); setEditing(false); }}
-          >
-            Save
-          </Button>
-        </div>
-      ) : (
-        <p className="text-xs text-on-surface-variant mb-3">{op.description}</p>
-      )}
+      <p className="text-xs text-on-surface-variant mb-3">{op.description}</p>
       <div className="grid grid-cols-2 gap-y-1 text-xs text-on-surface-variant mb-3">
         {isAdmission ? (
           <>
@@ -70,17 +60,12 @@ function OpportunityCard({ op, editable, onPushToTop, onSaveDescription }) {
           </>
         )}
       </div>
+      {op.applyUrl && (
+        <p className="text-xs text-primary mb-3">Apply: {op.applyUrl}</p>
+      )}
       <div className="flex items-center gap-4 text-xs text-on-surface-variant border-t border-outline-variant pt-2">
         <span>Reach {op.reach}</span>
         <span>Views {op.views}</span>
-        {editable && (
-          <>
-            <Button variant="ghost" size="sm" icon="edit" onClick={() => { setDescription(op.description); setEditing((e) => !e); }}>Edit</Button>
-            <Button variant="ghost" size="sm" icon="arrow_upward" onClick={onPushToTop} disabled={op.ranking === 1}>
-              Push to top
-            </Button>
-          </>
-        )}
       </div>
     </Card>
   );
@@ -97,7 +82,13 @@ function EnquiryModal({ open, onClose, page, course, setCourse, specialization, 
   const [existingMatch, setExistingMatch] = useState(null); // null | user object | false (not found)
   const [submitted, setSubmitted] = useState(false);
 
-  const specializations = COURSE_SPECIALIZATIONS[course] || [];
+  const courses = publicCourses(page);
+  // Specializations come from the institute's own course record when it has
+  // them, falling back to the platform's demo map for legacy string courses.
+  const selectedCourse = courses.find((c) => c.name === course);
+  const specializations = selectedCourse?.specializations?.length
+    ? selectedCourse.specializations
+    : COURSE_SPECIALIZATIONS[course] || [];
 
   const close = () => {
     onClose();
@@ -112,8 +103,21 @@ function EnquiryModal({ open, onClose, page, course, setCourse, specialization, 
     }, 200);
   };
 
+  // The enquiry is recorded against this institute so it appears in that
+  // institute's console (/institute/enquiries) — enquiries belong to the
+  // institute they were addressed to, not to the platform.
   const submitNewUser = (e) => {
     e.preventDefault();
+    addEnquiry({
+      pageSlug: page.slug,
+      name: newUser.name,
+      email: newUser.email,
+      phone: newUser.mobile,
+      city: newUser.city,
+      state: newUser.state,
+      course,
+      specialization,
+    });
     setSubmitted(true);
   };
 
@@ -122,7 +126,19 @@ function EnquiryModal({ open, onClose, page, course, setCourse, specialization, 
     setExistingMatch(existingPhone.trim() === EXISTING_ENQUIRY_USER.phone ? EXISTING_ENQUIRY_USER : false);
   };
 
-  const submitExisting = () => setSubmitted(true);
+  const submitExisting = () => {
+    addEnquiry({
+      pageSlug: page.slug,
+      name: existingMatch.name,
+      email: `${existingMatch.name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
+      phone: existingMatch.phone,
+      city: '',
+      state: '',
+      course,
+      specialization,
+    });
+    setSubmitted(true);
+  };
 
   return (
     <Modal open={open} onClose={close} width={420}>
@@ -151,7 +167,7 @@ function EnquiryModal({ open, onClose, page, course, setCourse, specialization, 
             <FormGroup label="Select Course">
               <Select value={course} onChange={(e) => { setCourse(e.target.value); setSpecialization(''); }}>
                 <option value="" disabled>Choose a course</option>
-                {page.courses.map((c) => <option key={c} value={c}>{c}</option>)}
+                {courses.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
               </Select>
             </FormGroup>
             <FormGroup label="Specialization">
@@ -272,35 +288,10 @@ export default function InstitutePage() {
   const isMyPage = !!page && !!user && page.admins?.some((a) => a.email?.toLowerCase() === user.email?.toLowerCase());
   const { isFollowing, toggleFollow } = useFollows();
 
-  const [admins, setAdmins] = useState(page?.admins || []);
-  const [adminModalOpen, setAdminModalOpen] = useState(false);
-  const [newAdminEmail, setNewAdminEmail] = useState('');
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [course, setCourse] = useState('');
   const [specialization, setSpecialization] = useState('');
-  const [opportunities, setOpportunities] = useState(page?.opportunities || []);
-
-  const pushOpportunityToTop = (id) => {
-    setOpportunities((prev) => {
-      const target = prev.find((x) => x.id === id);
-      if (!target) return prev;
-      const next = prev.map((x) => {
-        if (x.id === id) return { ...x, ranking: 1 };
-        if (x.ranking <= target.ranking) return { ...x, ranking: x.ranking + 1 };
-        return x;
-      });
-      page.opportunities = next;
-      return next;
-    });
-  };
-
-  const saveOpportunityDescription = (id, description) => {
-    setOpportunities((prev) => {
-      const next = prev.map((x) => (x.id === id ? { ...x, description } : x));
-      page.opportunities = next;
-      return next;
-    });
-  };
+  const [courseDetail, setCourseDetail] = useState(null);
 
   if (!page) {
     return (
@@ -322,20 +313,20 @@ export default function InstitutePage() {
     );
   }
 
-  const addAdmin = (e) => {
-    e.preventDefault();
-    if (!isMyPage || !newAdminEmail) return;
-    setAdmins((a) => [...a, { name: newAdminEmail.split('@')[0], role: 'Admin', email: newAdminEmail }]);
-    setNewAdminEmail('');
-    setAdminModalOpen(false);
-  };
-
   const openEnquiry = (preselectedCourse) => {
     if (preselectedCourse) setCourse(preselectedCourse);
     setEnquiryOpen(true);
   };
 
   const content = page.content;
+  const courses = publicCourses(page);
+  const opportunities = publicOpportunities(page);
+  const gallery = page.gallery || [];
+  const socials = Object.entries(page.socialLinks || {}).filter(([, v]) => v);
+  const quickSelected = courses.find((c) => c.name === course);
+  const quickSpecializations = quickSelected?.specializations?.length
+    ? quickSelected.specializations
+    : COURSE_SPECIALIZATIONS[course] || [];
 
   return (
     <div>
@@ -369,12 +360,11 @@ export default function InstitutePage() {
             </div>
             <div className="flex gap-2">
               {isMyPage ? (
-                <>
-                  <Link to="/page/edit">
-                    <Button variant="outline" size="sm" icon="edit_square">Edit Page</Button>
-                  </Link>
-                  <Button variant="outline" size="sm" icon="group_add" onClick={() => setAdminModalOpen(true)}>Add Admin</Button>
-                </>
+                /* Owner controls send you to the Institute Console rather than
+                   editing in place — one place owns this institute's content. */
+                <Link to="/institute">
+                  <Button variant="outline" size="sm" icon="tune">Manage this page</Button>
+                </Link>
               ) : (
                 <Button
                   size="sm"
@@ -474,36 +464,88 @@ export default function InstitutePage() {
             </Card>
           )}
 
+          {/* Courses — INSTITUTE-OWNED, managed at /institute/courses */}
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-bold text-on-surface">Courses Offered</h4>
+              {isMyPage && (
+                <Link to="/institute/courses">
+                  <Button size="sm" variant="ghost" icon="tune">Manage</Button>
+                </Link>
+              )}
+            </div>
+            {courses.length > 0 ? (
+              <div className="grid sm:grid-cols-2 gap-3">
+                {courses.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCourseDetail(c)}
+                    className="text-left p-4 rounded-xl border border-outline-variant hover:border-primary transition-colors cursor-pointer bg-transparent"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-sm font-bold text-on-surface m-0">{c.name}</p>
+                      {c.admissionOpen && <Badge tone="success">Open</Badge>}
+                    </div>
+                    <p className="text-[11px] text-on-surface-variant m-0 mb-2">
+                      {c.category} · {c.level}
+                    </p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-on-surface-variant">
+                      {c.duration && <span><strong className="text-on-surface">{c.duration}</strong> duration</span>}
+                      {c.fees && <span><strong className="text-on-surface">₹{c.fees}</strong></span>}
+                      {c.intake && <span><strong className="text-on-surface">{c.intake}</strong> seats</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-on-surface-variant mb-0">No courses listed yet.</p>
+            )}
+          </Card>
+
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-bold text-on-surface">Opportunities</h4>
               {isMyPage && (
                 <div className="flex gap-2">
-                  <Link to="/page/post-admission">
-                    <Button size="sm" variant="soft" icon="campaign">Post Admission Notice</Button>
+                  <Link to="/institute/notices">
+                    <Button size="sm" variant="soft" icon="campaign">Notices</Button>
                   </Link>
-                  <Link to="/page/post-job">
-                    <Button size="sm" variant="soft" icon="work">Post Job Vacancy</Button>
+                  <Link to="/institute/jobs">
+                    <Button size="sm" variant="soft" icon="work">Vacancies</Button>
                   </Link>
                 </div>
               )}
             </div>
             <div className="space-y-3">
               {opportunities.length > 0 ? (
-                opportunities.map((op) => (
-                  <OpportunityCard
-                    key={op.id}
-                    op={op}
-                    editable={isMyPage}
-                    onPushToTop={() => pushOpportunityToTop(op.id)}
-                    onSaveDescription={(description) => saveOpportunityDescription(op.id, description)}
-                  />
-                ))
+                opportunities.map((op) => <OpportunityCard key={op.id} op={op} />)
               ) : (
                 <p className="text-sm text-on-surface-variant mb-0">No opportunities posted yet.</p>
               )}
             </div>
           </Card>
+
+          {/* Gallery — INSTITUTE-OWNED, managed at /institute/profile */}
+          {gallery.length > 0 && (
+            <Card className="p-5">
+              <h4 className="text-sm font-bold text-on-surface mb-3">Gallery</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {gallery.map((img) => (
+                  <figure key={img.id} className="m-0">
+                    <img
+                      src={img.url}
+                      alt={img.caption || page.name}
+                      className="w-full h-28 object-cover rounded-xl border border-outline-variant"
+                    />
+                    {img.caption && (
+                      <figcaption className="text-[11px] text-on-surface-variant mt-1">{img.caption}</figcaption>
+                    )}
+                  </figure>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
 
         <div className="space-y-5">
@@ -535,40 +577,33 @@ export default function InstitutePage() {
                 </li>
               )}
             </ul>
+            {socials.length > 0 && (
+              <div className="flex gap-2 mt-4 pt-3 border-t border-outline-variant">
+                {socials.map(([key, url]) => (
+                  <a
+                    key={key}
+                    href={url.startsWith('http') ? url : `https://${url}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={key}
+                    className="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-primary no-underline transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">link</span>
+                  </a>
+                ))}
+              </div>
+            )}
             <h4 className="text-sm font-bold text-on-surface mt-4 mb-2">Courses</h4>
             <div className="flex flex-wrap gap-1.5">
-              {page.courses.map((c) => (
-                <button key={c} type="button" onClick={() => openEnquiry(c)} className="cursor-pointer">
-                  <Badge tone="neutral">{c}</Badge>
+              {courses.map((c) => (
+                <button key={c.id} type="button" onClick={() => openEnquiry(c.name)} className="cursor-pointer bg-transparent border-none p-0">
+                  <Badge tone="neutral">{c.name}</Badge>
                 </button>
               ))}
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold text-on-surface">Page Admins</h4>
-              {isMyPage && (
-                <Button size="sm" variant="ghost" icon="add" onClick={() => setAdminModalOpen(true)}>
-                  Add
-                </Button>
+              {courses.length === 0 && (
+                <p className="text-xs text-on-surface-variant mb-0">No courses listed yet.</p>
               )}
             </div>
-            {admins.length > 0 ? (
-              <ul className="space-y-2">
-                {admins.map((a) => (
-                  <li key={a.email} className="flex items-center justify-between text-sm">
-                    <div>
-                      <p className="text-on-surface font-semibold mb-0">{a.name}</p>
-                      <p className="text-xs text-on-surface-variant mb-0">{a.email}</p>
-                    </div>
-                    <Badge tone="neutral">{a.role}</Badge>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-on-surface-variant mb-0">No admins listed yet.</p>
-            )}
           </Card>
 
           <Card className="p-5">
@@ -579,15 +614,15 @@ export default function InstitutePage() {
             <div className="space-y-3">
               <Select value={course} onChange={(e) => { setCourse(e.target.value); setSpecialization(''); }}>
                 <option value="" disabled>Select Course</option>
-                {page.courses.map((c) => <option key={c} value={c}>{c}</option>)}
+                {courses.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
               </Select>
               <Select
                 value={specialization}
                 onChange={(e) => setSpecialization(e.target.value)}
-                disabled={!(COURSE_SPECIALIZATIONS[course] || []).length}
+                disabled={!quickSpecializations.length}
               >
                 <option value="" disabled>Select Specialization</option>
-                {(COURSE_SPECIALIZATIONS[course] || []).map((s) => <option key={s} value={s}>{s}</option>)}
+                {quickSpecializations.map((s) => <option key={s} value={s}>{s}</option>)}
               </Select>
               <Button size="sm" className="w-full" onClick={() => openEnquiry()} disabled={!course}>
                 Continue
@@ -597,25 +632,52 @@ export default function InstitutePage() {
         </div>
       </div>
 
-      <Modal open={adminModalOpen} onClose={() => setAdminModalOpen(false)} width={360}>
-        <h3 className="text-base font-bold text-on-surface mb-3">Add Page Admin</h3>
-        <form onSubmit={addAdmin} className="space-y-3">
-          <FormGroup label="Admin email">
-            <Input
-              type="email"
-              required
-              value={newAdminEmail}
-              onChange={(e) => setNewAdminEmail(e.target.value)}
-              placeholder="name@example.com"
-            />
-          </FormGroup>
-          <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" size="sm" onClick={() => setAdminModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm">Add Admin</Button>
-          </div>
-        </form>
+      {/* Public course detail — the enquiry funnel's entry point from a course */}
+      <Modal open={!!courseDetail} onClose={() => setCourseDetail(null)} width={440}>
+        {courseDetail && (
+          <>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-base font-bold text-on-surface m-0">{courseDetail.name}</h3>
+                <p className="text-xs text-on-surface-variant m-0 mt-0.5">
+                  {courseDetail.category} · {courseDetail.level}
+                </p>
+              </div>
+              {courseDetail.admissionOpen && <Badge tone="success">Admissions Open</Badge>}
+            </div>
+
+            <div className="bg-surface-container-low rounded-2xl p-4 grid grid-cols-2 gap-3 mb-4 border border-outline-variant text-xs">
+              <div><span className="text-on-surface-variant">Duration</span><p className="font-semibold text-on-surface m-0">{courseDetail.duration || '—'}</p></div>
+              <div><span className="text-on-surface-variant">Fees</span><p className="font-semibold text-on-surface m-0">{courseDetail.fees ? `₹${courseDetail.fees}` : '—'}</p></div>
+              <div><span className="text-on-surface-variant">Intake</span><p className="font-semibold text-on-surface m-0">{courseDetail.intake || '—'}</p></div>
+              <div><span className="text-on-surface-variant">Eligibility</span><p className="font-semibold text-on-surface m-0">{courseDetail.eligibility || '—'}</p></div>
+            </div>
+
+            {courseDetail.specializations?.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-on-surface-variant mb-1.5">Specializations</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {courseDetail.specializations.map((s) => <Badge key={s} tone="tertiary">{s}</Badge>)}
+                </div>
+              </div>
+            )}
+
+            {courseDetail.description && (
+              <p className="text-sm text-on-surface-variant mb-4">{courseDetail.description}</p>
+            )}
+
+            <div className="flex gap-2 justify-end border-t border-outline-variant pt-4">
+              <Button variant="outline" size="sm" onClick={() => setCourseDetail(null)}>Close</Button>
+              <Button
+                size="sm"
+                icon="edit_note"
+                onClick={() => { const name = courseDetail.name; setCourseDetail(null); openEnquiry(name); }}
+              >
+                Enquire about this course
+              </Button>
+            </div>
+          </>
+        )}
       </Modal>
 
       <FloatingEnquiryButton onClick={() => openEnquiry()} />

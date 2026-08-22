@@ -13,6 +13,7 @@ import {
   CLOSING_SOON,
 } from './mockData';
 import { useSession } from '../context/useSession';
+import { useIsInstituteAdmin } from '../context/InstituteContext';
 import { useFollows } from './useFollows';
 
 const POST_TYPE_BADGE = {
@@ -33,6 +34,9 @@ const REFRESH_SECONDS = 30;
 // `role`/`category` fields are kept on the backend (unused here) so this is
 // reversible without a data migration if the client asks for it back.
 function ProfileRail({ name }) {
+  const instituteAdmin = useIsInstituteAdmin();
+  const { auth } = useSession();
+  const isPlatformAdmin = auth?.role === 'admin';
   return (
     <div className="space-y-4">
       <Card className="overflow-hidden">
@@ -52,12 +56,26 @@ function ProfileRail({ name }) {
           <Link to="/profile">
             <Button variant="ghost" size="sm" className="w-full justify-start" icon="person">My Profile</Button>
           </Link>
-          <Link to="/page">
-            <Button variant="ghost" size="sm" className="w-full justify-start" icon="storefront">My Institute Page</Button>
-          </Link>
-          <Link to="/purchased">
-            <Button variant="ghost" size="sm" className="w-full justify-start" icon="bookmark">Saved / Purchased</Button>
-          </Link>
+          {/* Institute management and marketplace history are user-side; a Main
+              Admin does all of their work in the Admin portal instead. */}
+          {isPlatformAdmin ? (
+            <Link to="/admin">
+              <Button variant="ghost" size="sm" className="w-full justify-start" icon="shield_person">
+                Admin Dashboard
+              </Button>
+            </Link>
+          ) : (
+            <>
+              {instituteAdmin && (
+                <Link to="/institute">
+                  <Button variant="ghost" size="sm" className="w-full justify-start" icon="storefront">Institute Console</Button>
+                </Link>
+              )}
+              <Link to="/purchased">
+                <Button variant="ghost" size="sm" className="w-full justify-start" icon="bookmark">Saved / Purchased</Button>
+              </Link>
+            </>
+          )}
         </div>
       </Card>
 
@@ -196,8 +214,13 @@ function PostCard({ post, highlighted }) {
 
 function SuggestionsRail() {
   const { isFollowing, toggleFollow } = useFollows();
-  // "My page" (Bright Future) isn't shown here — you don't follow your own page.
-  const suggestions = mockPages.filter((p) => p.slug !== 'bright-future-coaching');
+  const { auth } = useSession();
+  // You don't follow a page you administer — resolved from actual admin
+  // membership rather than a hardcoded slug.
+  const myEmail = auth?.email?.toLowerCase();
+  const suggestions = mockPages.filter(
+    (p) => !p.admins?.some((a) => a.email?.toLowerCase() === myEmail),
+  );
 
   return (
     <div className="space-y-4">

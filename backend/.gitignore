@@ -4,3 +4,7 @@ __pycache__/
 .venv/
 venv/
 uploads/
+
+# Test artifacts
+test_isolation_*.db
+.pytest_cache/
