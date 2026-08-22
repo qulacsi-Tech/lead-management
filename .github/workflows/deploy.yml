@@ -19,3 +19,17 @@ jobs:
           script: |
             sudo chmod +x /opt/lead-management/deploy.sh
             /opt/lead-management/deploy.sh
+            cd /opt/lead-management/backend
+            if [ -d "../venv" ]; then
+              source ../venv/bin/activate
+            elif [ -d "venv" ]; then
+              source venv/bin/activate
+            elif [ -d "../env" ]; then
+              source ../env/bin/activate
+            elif [ -d "env" ]; then
+              source env/bin/activate
+            fi
+            pip install -r requirements.txt
+            python migrate.py
+            sudo systemctl restart lead-backend || pm2 restart all || pm2 restart backend || true
+
