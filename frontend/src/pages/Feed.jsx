@@ -13,7 +13,7 @@ import {
   CLOSING_SOON,
 } from './mockData';
 import { useSession } from '../context/useSession';
-import { useIsInstituteAdmin } from '../context/InstituteContext';
+import { useMyPages } from '../hooks/useMyPages';
 import { useFollows } from './useFollows';
 
 const POST_TYPE_BADGE = {
@@ -34,7 +34,7 @@ const REFRESH_SECONDS = 30;
 // `role`/`category` fields are kept on the backend (unused here) so this is
 // reversible without a data migration if the client asks for it back.
 function ProfileRail({ name }) {
-  const instituteAdmin = useIsInstituteAdmin();
+  const { isInstituteAdmin: instituteAdmin } = useMyPages();
   const { auth } = useSession();
   const isPlatformAdmin = auth?.role === 'admin';
   return (

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { useSession } from '../context/useSession';
-import { useIsInstituteAdmin } from '../context/InstituteContext';
+import { useMyPages } from '../hooks/useMyPages';
 import { mockNotifications, notificationPool } from '../pages/mockData';
 import { useDesiredCriteria } from '../pages/useDesiredCriteria';
 
@@ -122,8 +122,9 @@ function NotificationBell() {
 export default function AppLayout() {
   const { auth, initializing, name, logout } = useSession();
   // Surfaces the Institute Console only to users who actually administer a
-  // page — a normal user never sees an institute-management entry point.
-  const instituteAdmin = useIsInstituteAdmin();
+  // page — a normal user never sees an institute-management entry point. Read
+  // from /pages/mine (the page_admins table), not from a bundled array.
+  const { isInstituteAdmin: instituteAdmin } = useMyPages();
   const isPlatformAdmin = auth?.role === 'admin';
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);

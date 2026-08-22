@@ -72,6 +72,25 @@ class InstituteProfileUpdate(BaseModel):
     about: Optional[str] = None
 
 
+class OrganizationProfileUpdate(BaseModel):
+    """Organisation details a user maintains for their own account.
+
+    Mirrors the fields the Admin panel fills when it provisions an institute,
+    minus the credentials: email stays the account's sign-in address and the
+    password is changed through /auth/change-password, so neither is editable
+    here. Every field is optional — the form saves incrementally.
+    """
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    phone: Optional[str] = None
+    state: Optional[str] = None
+    district: Optional[str] = None
+    block: Optional[str] = None
+    city: Optional[str] = None
+    programs: Optional[str] = None
+    website: Optional[str] = None
+    about: Optional[str] = None
+
+
 class AdminInstituteUpdate(BaseModel):
     """What a Main Admin may change about an institute account.
 

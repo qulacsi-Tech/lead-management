@@ -112,6 +112,15 @@ export const fetchMyProfile = async () => apiFetch('/profile/me');
 export const updateMyProfile = async (patch) =>
   apiFetch('/profile/me', { method: 'PATCH', body: patch });
 
+/** Organisation details for the current account (null when nothing saved
+ *  yet). Stored against the same `institutes` record the Admin panel reads. */
+export const fetchMyOrganization = async () => apiFetch('/profile/me/organization');
+
+/** Upsert the current account's organisation details. Also marks the account
+ *  as an organisation server-side. */
+export const saveMyOrganization = async (details) =>
+  apiFetch('/profile/me/organization', { method: 'PUT', body: details });
+
 /** kind: 'photo' | 'cover' | 'resume' */
 export const uploadProfileFile = async (kind, file) => {
   const formData = new FormData();
@@ -172,6 +181,10 @@ export const fetchPages = async (q) =>
   apiFetch(`/pages${q ? `?q=${encodeURIComponent(q)}` : ''}`);
 
 export const fetchPage = async (pageId) => apiFetch(`/pages/${pageId}`);
+
+/** The institute pages the signed-in user administers — the real answer to
+ *  "do I have an Institute Console?", from the page_admins table. */
+export const fetchMyPages = async () => apiFetch('/pages/mine');
 
 export const createPage = async (payload) =>
   apiFetch('/pages', { method: 'POST', body: payload });

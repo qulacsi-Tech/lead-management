@@ -3,11 +3,14 @@ import { Link } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
 import { Input, Textarea, FormGroup } from '../components/ui/Field';
 import { useSession } from '../context/useSession';
 import { useFollows } from './useFollows';
 import { mockPages } from './mockData';
-import { ApiError } from '../Api/Api';
+import { ApiError, fetchMyOrganization, saveMyOrganization } from '../Api/Api';
+import { isOrgAccount, isOrgRole } from '../constants/roles';
+import { useMyPages } from '../hooks/useMyPages';
 import PageHeader from './PageHeader';
 
 // Account Setup (role/category switching) is paused per client feedback
@@ -15,10 +18,29 @@ import PageHeader from './PageHeader';
 // from the tab list; git history has the component if it comes back.
 const TABS = [
   { key: 'overview', label: 'Overview', icon: 'person' },
+  { key: 'organization', label: 'Organisation Details', icon: 'apartment' },
   { key: 'experience', label: 'Experience & Skills', icon: 'work_history' },
   { key: 'resume', label: 'Resume & Contact', icon: 'description' },
   { key: 'marketplace', label: 'My Network & Marketplace', icon: 'diversity_3' },
 ];
+
+// Personal-history tabs: 10th passing year, work experience, skills, CV.
+// They describe a *person*, so an organisation account never sees them — an
+// institute has no schooling or resume of its own.
+const INDIVIDUAL_ONLY_TABS = new Set(['experience', 'resume']);
+
+/** The mirror image: only an organisation account maintains these. */
+const ORG_ONLY_TABS = new Set(['organization']);
+
+/** Organisation fields, matching what the Admin panel fills for an institute
+ *  (minus the credentials — this account already has its own). */
+const ORG_FIELDS = ['name', 'phone', 'city', 'state', 'district', 'block', 'programs', 'website', 'about'];
+
+function toOrgFormState(org) {
+  const base = {};
+  ORG_FIELDS.forEach((f) => { base[f] = org?.[f] || ''; });
+  return base;
+}
 
 const EDITABLE_FIELDS = ['name', 'phone', 'headline', 'about'];
 
@@ -432,16 +454,90 @@ function MarketplaceTab() {
 }
 
 export default function ProfessionalProfile() {
-  const { profile, name, profilePhotoUrl, coverPhotoUrl, resumeUrl, updateProfile, uploadFile } = useSession();
+  const { role, profile, name, profilePhotoUrl, coverPhotoUrl, resumeUrl, updateProfile, uploadFile } = useSession();
+  const isOrg = isOrgAccount(role, profile);
+  // Real answer from page_admins, so the console link only appears to someone
+  // who actually administers a page.
+  const { pages: myPages, loading: myPagesLoading } = useMyPages();
+  // An Admin-provisioned Institute account is an organisation by definition,
+  // so it gets no toggle — only a self-registered account chooses.
+  const canChooseKind = !isOrgRole(role) && role !== 'admin';
+  const tabs = TABS.filter((t) =>
+    isOrg ? !INDIVIDUAL_ONLY_TABS.has(t.key) : !ORG_ONLY_TABS.has(t.key),
+  );
   const [tab, setTab] = useState('overview');
   const [form, setForm] = useState(() => toFormState(profile));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [savedAt, setSavedAt] = useState(0);
 
+  // --- Account kind + organisation details ---
+  const [kindSaving, setKindSaving] = useState(false);
+  const [kindError, setKindError] = useState('');
+  const [confirmOrgOpen, setConfirmOrgOpen] = useState(false);
+  const [org, setOrg] = useState(null);
+  const [orgForm, setOrgForm] = useState(() => toOrgFormState(null));
+  const [orgSaving, setOrgSaving] = useState(false);
+  const [orgError, setOrgError] = useState('');
+  const [orgSavedAt, setOrgSavedAt] = useState(0);
+
   useEffect(() => {
     setForm(toFormState(profile));
   }, [profile?.email]);
+
+  // Details are only fetched once the account actually is an organisation —
+  // an individual has none to show.
+  useEffect(() => {
+    if (!isOrg) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchMyOrganization();
+        if (cancelled) return;
+        setOrg(data);
+        setOrgForm(toOrgFormState(data));
+      } catch {
+        // Leaving the form blank is the right fallback — the user can still
+        // fill it in and save.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOrg, profile?.email]);
+
+  const setOrgField = (key) => (e) => setOrgForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const orgDirty = ORG_FIELDS.some((f) => (orgForm[f] || '') !== (org?.[f] || ''));
+
+  const saveOrg = async () => {
+    setOrgSaving(true);
+    setOrgError('');
+    try {
+      const saved = await saveMyOrganization(orgForm);
+      setOrg(saved);
+      setOrgForm(toOrgFormState(saved));
+      setOrgSavedAt(Date.now());
+    } catch (err) {
+      setOrgError(err instanceof ApiError ? err.message : 'Could not save organisation details.');
+    } finally {
+      setOrgSaving(false);
+    }
+  };
+
+  // One-way by design, and enforced by the backend — the switch reshapes the
+  // account, so there is no "off" path here at all.
+  const confirmBecomeOrganization = async () => {
+    setKindSaving(true);
+    setKindError('');
+    try {
+      await updateProfile({ is_organization: true });
+      setConfirmOrgOpen(false);
+      setTab('organization');
+    } catch (err) {
+      setKindError(err instanceof ApiError ? err.message : 'Could not change the account type.');
+    } finally {
+      setKindSaving(false);
+    }
+  };
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -509,7 +605,7 @@ export default function ProfessionalProfile() {
       </Card>
 
       <div className="flex gap-2 mb-5 flex-wrap">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
@@ -527,7 +623,62 @@ export default function ProfessionalProfile() {
       </div>
 
       {tab === 'overview' && (
-        <Card className="p-5 max-w-2xl">
+        <div className="max-w-2xl space-y-5">
+        {/* Sign-up always creates an individual account, so this is where a
+            school, coaching centre or company says otherwise. It changes what
+            the profile asks for — it grants no extra access. */}
+        {canChooseKind && (
+          <Card className="p-5">
+            <h4 className="text-sm font-bold text-on-surface mb-1">Account Type</h4>
+            <p className="text-xs text-on-surface-variant mb-4">
+              Individual accounts keep a personal profile — schooling, work history and a CV.
+              Organisation accounts swap all of that for the institute&apos;s own details.
+            </p>
+            <div className="flex items-center justify-between gap-4 p-3 rounded-xl border border-outline-variant">
+              <div>
+                <p className="text-sm font-semibold text-on-surface m-0">
+                  This account represents an organisation
+                </p>
+                <p className="text-[11px] text-on-surface-variant m-0 mt-0.5">
+                  A school, college, coaching centre or training institute — not a person.
+                </p>
+              </div>
+              {/* Permanent once set, so the control is locked afterwards
+                  rather than offering an "off" that the server would reject. */}
+              <label
+                className={`relative inline-flex items-center shrink-0 ${
+                  isOrg ? 'cursor-not-allowed' : 'cursor-pointer'
+                }`}
+                title={isOrg ? 'Organisation accounts cannot be changed back' : undefined}
+              >
+                <input
+                  type="checkbox"
+                  checked={isOrg}
+                  disabled={isOrg || kindSaving}
+                  onChange={() => setConfirmOrgOpen(true)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary peer-disabled:opacity-60" />
+              </label>
+            </div>
+            {isOrg ? (
+              <p className="text-[11px] text-on-surface-variant mt-3 mb-0 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[14px]">lock</span>
+                This account is an organisation. That cannot be changed back.
+              </p>
+            ) : (
+              <p className="text-[11px] text-amber-700 mt-3 mb-0 flex items-start gap-1.5">
+                <span className="material-symbols-outlined text-[14px] mt-px">warning</span>
+                Switching to an organisation is permanent — it cannot be undone.
+              </p>
+            )}
+            {kindError && (
+              <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 mt-3 mb-0">{kindError}</p>
+            )}
+          </Card>
+        )}
+
+        <Card className="p-5">
           <h4 className="text-sm font-bold text-on-surface mb-3">Overview</h4>
           <div className="grid sm:grid-cols-2 gap-4 mb-4">
             <FormGroup label="Full name">
@@ -542,9 +693,129 @@ export default function ProfessionalProfile() {
           </FormGroup>
           {SaveBar}
         </Card>
+        </div>
       )}
 
-      {tab === 'experience' && (
+      {/* Same basic details the Admin panel records for an institute. Sign-in
+          email and password are not here: the account already has both, and
+          the password is changed from the account menu. */}
+      {tab === 'organization' && isOrg && (
+        <div className="max-w-2xl space-y-5">
+          <Card className="p-5">
+            <h4 className="text-sm font-bold text-on-surface mb-1">Organisation Details</h4>
+            <p className="text-xs text-on-surface-variant mb-4">
+              Basic information about the institute. Enquiries are matched to institutes by state,
+              so filling in the location makes yours reachable.
+            </p>
+
+            <div className="grid sm:grid-cols-2 gap-4 mb-4">
+              <FormGroup label="Organisation name">
+                <Input value={orgForm.name} onChange={setOrgField('name')} placeholder="e.g. Apex Institute of Technology" />
+              </FormGroup>
+              <FormGroup label="Contact number">
+                <Input value={orgForm.phone} onChange={setOrgField('phone')} placeholder="+91-XXXXXXXXXX" />
+              </FormGroup>
+            </div>
+
+            <FormGroup label="Sign-in email">
+              <Input value={profile?.email || ''} disabled readOnly />
+            </FormGroup>
+            <p className="text-[11px] text-on-surface-variant -mt-2 mb-4">
+              This is your account address — change it from the account menu, not here.
+            </p>
+
+            <div className="grid sm:grid-cols-2 gap-4 mb-4">
+              <FormGroup label="State">
+                <Input value={orgForm.state} onChange={setOrgField('state')} placeholder="Madhya Pradesh" />
+              </FormGroup>
+              <FormGroup label="District">
+                <Input value={orgForm.district} onChange={setOrgField('district')} placeholder="Indore" />
+              </FormGroup>
+              <FormGroup label="Block / Area">
+                <Input value={orgForm.block} onChange={setOrgField('block')} placeholder="Vijay Nagar" />
+              </FormGroup>
+              <FormGroup label="City">
+                <Input value={orgForm.city} onChange={setOrgField('city')} placeholder="Indore" />
+              </FormGroup>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4 mb-4">
+              <FormGroup label="Courses offered">
+                <Input value={orgForm.programs} onChange={setOrgField('programs')} placeholder="Comma separated" />
+              </FormGroup>
+              <FormGroup label="Website">
+                <Input value={orgForm.website} onChange={setOrgField('website')} placeholder="www.example.com" />
+              </FormGroup>
+            </div>
+
+            <FormGroup label="About the organisation">
+              <Textarea rows={4} value={orgForm.about} onChange={setOrgField('about')} placeholder="What the institute does, who it teaches" />
+            </FormGroup>
+
+            {orgError && (
+              <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 mt-3 mb-0">{orgError}</p>
+            )}
+
+            <div className="flex items-center gap-3 mt-4">
+              <Button size="sm" onClick={saveOrg} disabled={!orgDirty || orgSaving}>
+                {orgSaving ? 'Saving...' : 'Save Details'}
+              </Button>
+              {!orgSaving && !orgDirty && orgSavedAt > 0 && (
+                <span className="text-xs text-emerald-600 font-semibold">Saved</span>
+              )}
+            </div>
+          </Card>
+
+          {/* Where an organisation goes next: publish a public Institute Page,
+              then manage its courses, notices and vacancies in the console. */}
+          <Card className="p-5">
+            <h4 className="text-sm font-bold text-on-surface mb-1">Institute Page</h4>
+            {myPagesLoading ? (
+              <p className="text-xs text-on-surface-variant m-0">Checking your institute pages…</p>
+            ) : myPages.length > 0 ? (
+              <>
+                <p className="text-xs text-on-surface-variant mb-4">
+                  You administer {myPages.length === 1 ? 'this institute page' : `${myPages.length} institute pages`}.
+                  Courses, admission notices, vacancies and enquiries are managed in the console.
+                </p>
+                <ul className="list-none p-0 m-0 mb-4 space-y-2">
+                  {myPages.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center justify-between gap-3 p-3 rounded-xl border border-outline-variant"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-on-surface m-0 truncate">{p.name}</p>
+                        <p className="text-[11px] text-on-surface-variant m-0 font-mono truncate">
+                          connectedus.in/{p.slug}
+                        </p>
+                      </div>
+                      <Link to={`/${p.slug}`} className="shrink-0">
+                        <Button size="sm" variant="outline" icon="open_in_new">View</Button>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <Link to="/institute">
+                  <Button size="sm" icon="dashboard">Open Institute Console</Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-on-surface-variant mb-4">
+                  You don&apos;t have a public Institute Page yet. Create one to start posting
+                  admission notices and job vacancies.
+                </p>
+                <Link to="/create-page">
+                  <Button size="sm" icon="add_business">Create Institute Page</Button>
+                </Link>
+              </>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {tab === 'experience' && !isOrg && (
         <div className="max-w-2xl space-y-5">
           <Card className="p-5">
             <h4 className="text-sm font-bold text-on-surface mb-1">Education</h4>
@@ -589,7 +860,7 @@ export default function ProfessionalProfile() {
         </div>
       )}
 
-      {tab === 'resume' && (
+      {tab === 'resume' && !isOrg && (
         <Card className="p-5 max-w-2xl">
           <h4 className="text-sm font-bold text-on-surface mb-3">Resume</h4>
           <div className="flex items-center gap-4 mb-6">
@@ -612,6 +883,45 @@ export default function ProfessionalProfile() {
       )}
 
       {tab === 'marketplace' && <MarketplaceTab />}
+
+      {/* Deliberately a blocking confirmation rather than an instant toggle:
+          the change is permanent and rewrites what the profile collects. */}
+      <Modal open={confirmOrgOpen} onClose={() => !kindSaving && setConfirmOrgOpen(false)} width={420}>
+        <div className="flex items-start gap-3 mb-4">
+          <span className="material-symbols-outlined text-amber-600">warning</span>
+          <div>
+            <h2 className="text-lg font-bold text-on-surface m-0 mb-1">Switch to an organisation account?</h2>
+            <p className="text-xs text-on-surface-variant m-0">
+              <strong className="text-on-surface">This cannot be undone.</strong> You will not be able
+              to switch back to an individual account afterwards.
+            </p>
+          </div>
+        </div>
+
+        <ul className="list-none p-0 m-0 mb-5 space-y-2 text-xs text-on-surface-variant">
+          <li className="flex items-start gap-2">
+            <span className="material-symbols-outlined text-[16px] text-on-surface-variant">remove</span>
+            Experience &amp; Skills and Resume &amp; Contact are removed from your profile.
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="material-symbols-outlined text-[16px] text-on-surface-variant">add</span>
+            You get an Organisation Details tab and can publish an Institute Page.
+          </li>
+        </ul>
+
+        {kindError && (
+          <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 mb-4 mt-0">{kindError}</p>
+        )}
+
+        <div className="flex justify-end gap-3">
+          <Button type="button" variant="outline" onClick={() => setConfirmOrgOpen(false)} disabled={kindSaving}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={confirmBecomeOrganization} disabled={kindSaving}>
+            {kindSaving ? 'Switching…' : 'Yes, this is an organisation'}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

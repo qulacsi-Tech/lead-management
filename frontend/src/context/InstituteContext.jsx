@@ -66,8 +66,10 @@ export function useInstitute() {
   return ctx;
 }
 
-/** Safe variant for screens outside the Institute Console (e.g. the top-bar
- * link in AppLayout) that only need to know whether the console applies. */
+/** Superseded by `useMyPages` (hooks/useMyPages.js), which asks the backend's
+ * /pages/mine — i.e. the page_admins table — instead of matching the user's
+ * email against a bundled array. Kept only so the Institute Console below
+ * still resolves; screens outside the console should use `useMyPages`. */
 export function useIsInstituteAdmin() {
   const { user } = useAuth();
   return pagesAdministeredBy(user?.email).length > 0;

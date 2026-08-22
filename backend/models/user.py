@@ -17,6 +17,18 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(String, default=UserRole.AGENT)
     is_active = Column(Boolean, default=True)
+    # Account KIND, deliberately separate from `role`.
+    #
+    # Self-registration always produces an individual, and role changes are
+    # admin-only (see ProfileUpdate below), so this is how a self-registered
+    # user declares "I am an organisation, not a person". It is purely
+    # presentational: it hides individual-only UI (schooling, work history,
+    # CV) and unlocks the organisation details form. It grants NO permissions
+    # — those still come from `role` and the page_admins table.
+    #
+    # ONE-WAY: once true it cannot be set back to false. See the guard in
+    # routers/profile.py's update_my_profile.
+    is_organization = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -56,10 +68,17 @@ class UserUpdate(BaseModel):
 
 class ProfileUpdate(BaseModel):
     """Partial update for the Professional Profile screen — every field is
-    optional so the frontend can PATCH just what changed."""
+    optional so the frontend can PATCH just what changed.
+
+    `role` is deliberately NOT here. It used to be, which let any signed-in
+    user PATCH themselves to `Admin` and immediately read every admin-only
+    endpoint — role is an authorization decision, so it is set by an admin or
+    at registration, never by the account itself. `is_organization` is safe to
+    expose because it changes presentation only.
+    """
     name: Optional[str] = None
     phone: Optional[str] = None
-    role: Optional[UserRole] = None
+    is_organization: Optional[bool] = None
     headline: Optional[str] = None
     about: Optional[str] = None
     category: Optional[str] = None
@@ -71,6 +90,7 @@ class ProfileUpdate(BaseModel):
 class UserResponse(UserBase):
     id: str
     is_active: bool
+    is_organization: bool = False
     headline: Optional[str] = None
     about: Optional[str] = None
     category: Optional[str] = None

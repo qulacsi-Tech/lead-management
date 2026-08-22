@@ -22,17 +22,14 @@ export function useSession() {
     return authLogin(email, password);
   };
 
-  /** Partial update — pass only the fields that changed (e.g. { headline }
-   * or { role: 'professional', category: 'Mentor' }). Persists to the
-   * backend and merges the result back into the shared session. */
+  /** Partial update — pass only the fields that changed (e.g. { headline }).
+   * Persists to the backend and merges the result back into the shared
+   * session.
+   *
+   * `role` is not settable here: it is an authorization decision, owned by the
+   * backend and changed only by an admin or at registration. */
   const updateProfile = async (patch) => {
-    // The backend's UserRole enum is capitalized ("Professional", "Student")
-    // — every caller here works with the lowercase client-side role, so
-    // normalize it in one place rather than at each call site.
-    const normalized = patch.role
-      ? { ...patch, role: patch.role[0].toUpperCase() + patch.role.slice(1) }
-      : patch;
-    const updated = await updateMyProfile(normalized);
+    const updated = await updateMyProfile(patch);
     patchUser(updated);
     return updated;
   };
