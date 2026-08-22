@@ -14,16 +14,6 @@ export default function AdminSettings() {
     setTimeout(() => setSaved(false), 3000);
   };
 
-  const handleResetDemoData = () => {
-    if (window.confirm('Reset local demo data to initial seed state?')) {
-      localStorage.removeItem('lm.institutes');
-      localStorage.removeItem('lm.students');
-      localStorage.removeItem('lm.mentors');
-      localStorage.removeItem('lm.leads');
-      window.location.reload();
-    }
-  };
-
   return (
     <div className="p-8 max-w-4xl mx-auto flex-1 w-full box-border">
       <div className="mb-8">
@@ -100,11 +90,7 @@ export default function AdminSettings() {
         </Card>
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-between border-t border-outline-variant pt-6">
-          <Button type="button" variant="secondary" icon="refresh" onClick={handleResetDemoData}>
-            Reset Local Prototype Data
-          </Button>
-
+        <div className="flex items-center justify-end border-t border-outline-variant pt-6">
           <div className="flex items-center gap-3">
             {saved && (
               <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">

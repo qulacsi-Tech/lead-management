@@ -9,7 +9,7 @@ import {
   COURSE_LEVELS,
   PLATFORM_LOCATIONS,
   AFFILIATION_OPTIONS,
-} from '../mockData';
+} from '../../constants/taxonomy';
 
 /**
  * PLATFORM-OWNED. The controlled vocabularies every Institute Admin picks from

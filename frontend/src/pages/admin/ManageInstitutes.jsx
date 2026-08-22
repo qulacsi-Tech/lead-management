@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useData } from '../../context/DataContext';
-import { registerInstitute } from '../../Api/Api';
+import { registerInstitute, ApiError } from '../../Api/Api';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -8,7 +8,7 @@ import Modal from '../../components/ui/Modal';
 import { Input, Label } from '../../components/ui/Field';
 
 export default function ManageInstitutes() {
-  const { institutes, updateEntityStatus, deleteEntity, autoRegisterUser, refreshAdminData } = useData();
+  const { institutes, loading, error, updateEntityStatus, deleteEntity, refreshAdminData } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   
@@ -22,10 +22,8 @@ export default function ManageInstitutes() {
   const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
   const [course, setCourse] = useState('');
-
-  useEffect(() => {
-    refreshAdminData();
-  }, [refreshAdminData]);
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const filteredInstitutes = institutes.filter((inst) => {
     const matchesSearch =
@@ -40,6 +38,8 @@ export default function ManageInstitutes() {
     e.preventDefault();
     if (!name || !email) return;
 
+    setSaving(true);
+    setFormError('');
     try {
       await registerInstitute({
         name,
@@ -49,18 +49,12 @@ export default function ManageInstitutes() {
         city,
         programs: course,
       });
-    } catch {
-      // Fallback
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : 'Could not create the institute.');
+      setSaving(false);
+      return;
     }
-
-    autoRegisterUser({
-      name,
-      email,
-      role: 'institute',
-      city,
-      phone,
-      course: course || 'Higher Education',
-    });
+    setSaving(false);
 
     setName('');
     setEmail('');
@@ -68,7 +62,7 @@ export default function ManageInstitutes() {
     setPhone('');
     setCourse('');
     setIsAddModalOpen(false);
-    refreshAdminData();
+    await refreshAdminData();
   };
 
   const handleToggleStatus = (inst) => {
@@ -153,10 +147,16 @@ export default function ManageInstitutes() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant text-sm">
-              {filteredInstitutes.length === 0 ? (
+              {loading ? (
                 <tr>
                   <td colSpan="6" className="text-center py-12 text-on-surface-variant text-xs">
-                    No institutes found matching criteria.
+                    Loading institutes…
+                  </td>
+                </tr>
+              ) : filteredInstitutes.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-12 text-on-surface-variant text-xs">
+                    {error || 'No institutes found matching criteria.'}
                   </td>
                 </tr>
               ) : (
@@ -266,11 +266,14 @@ export default function ManageInstitutes() {
               <Label>Primary Course Offered</Label>
               <Input value={course} onChange={(e) => setCourse(e.target.value)} placeholder="e.g. Cybersecurity & AI" />
             </div>
+            {formError && (
+              <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{formError}</p>
+            )}
             <div className="flex justify-end gap-3 mt-4">
               <Button type="button" variant="secondary" onClick={() => setIsAddModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Add Institute</Button>
+              <Button type="submit" disabled={saving}>Add Institute</Button>
             </div>
           </form>
         </div>
@@ -313,7 +316,7 @@ export default function ManageInstitutes() {
               <div className="flex justify-between">
                 <span className="text-on-surface-variant">Registered Date:</span>
                 <span className="font-semibold text-on-surface">
-                  {new Date(selectedInstitute.registeredAt || Date.now()).toLocaleDateString()}
+                  {selectedInstitute.registeredAt ? new Date(selectedInstitute.registeredAt).toLocaleDateString() : '—'}
                 </span>
               </div>
             </div>

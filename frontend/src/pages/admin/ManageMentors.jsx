@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useData } from '../../context/DataContext';
-import { registerMentor } from '../../Api/Api';
+import { registerMentor, ApiError } from '../../Api/Api';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -8,7 +8,7 @@ import Modal from '../../components/ui/Modal';
 import { Input, Label } from '../../components/ui/Field';
 
 export default function ManageMentors() {
-  const { mentors, updateEntityStatus, deleteEntity, autoRegisterUser, refreshAdminData } = useData();
+  const { mentors, loading, error, updateEntityStatus, deleteEntity, refreshAdminData } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
 
@@ -19,10 +19,8 @@ export default function ManageMentors() {
   const [email, setEmail] = useState('');
   const [domain, setDomain] = useState('');
   const [company, setCompany] = useState('');
-
-  useEffect(() => {
-    refreshAdminData();
-  }, [refreshAdminData]);
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const filteredMentors = mentors.filter((m) => {
     const matchesSearch =
@@ -38,6 +36,8 @@ export default function ManageMentors() {
     e.preventDefault();
     if (!name || !email) return;
 
+    setSaving(true);
+    setFormError('');
     try {
       await registerMentor({
         name,
@@ -46,24 +46,19 @@ export default function ManageMentors() {
         domain: domain || 'Software Engineering',
         company: company || 'Independent Expert',
       });
-    } catch {
-      // Fallback
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : 'Could not create the mentor.');
+      setSaving(false);
+      return;
     }
-
-    autoRegisterUser({
-      name,
-      email,
-      role: 'mentor',
-      domain: domain || 'Software Engineering',
-      company: company || 'Independent Expert',
-    });
+    setSaving(false);
 
     setName('');
     setEmail('');
     setDomain('');
     setCompany('');
     setIsAddModalOpen(false);
-    refreshAdminData();
+    await refreshAdminData();
   };
 
   const handleToggleStatus = (m) => {
@@ -142,17 +137,23 @@ export default function ManageMentors() {
                 <th className="py-3.5 px-5">Mentor Name</th>
                 <th className="py-3.5 px-5">Domain Expertise</th>
                 <th className="py-3.5 px-5">Company / Org</th>
-                <th className="py-3.5 px-5">Rating</th>
-                <th className="py-3.5 px-5">Tests / Opps</th>
+                <th className="py-3.5 px-5">Phone</th>
+                <th className="py-3.5 px-5">Registered</th>
                 <th className="py-3.5 px-5">Status</th>
                 <th className="py-3.5 px-5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant text-sm">
-              {filteredMentors.length === 0 ? (
+              {loading ? (
                 <tr>
                   <td colSpan="7" className="text-center py-12 text-on-surface-variant text-xs">
-                    No mentors found matching your search.
+                    Loading mentors…
+                  </td>
+                </tr>
+              ) : filteredMentors.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-12 text-on-surface-variant text-xs">
+                    {error || 'No mentors found matching your search.'}
                   </td>
                 </tr>
               ) : (
@@ -179,14 +180,9 @@ export default function ManageMentors() {
                     <td className="py-4 px-5 text-xs text-on-surface-variant font-medium">
                       {m.company || 'Independent'}
                     </td>
-                    <td className="py-4 px-5 text-xs font-bold text-amber-600">
-                      <div className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-sm text-amber-500">star</span>
-                        {m.rating || '5.0'}
-                      </div>
-                    </td>
-                    <td className="py-4 px-5 text-xs text-on-surface-variant font-medium">
-                      {m.testsCreated || 0} Tests / {m.opportunitiesPosted || 0} Opps
+                    <td className="py-4 px-5 text-xs text-on-surface-variant">{m.phone}</td>
+                    <td className="py-4 px-5 text-xs text-on-surface-variant">
+                      {m.registeredAt ? new Date(m.registeredAt).toLocaleDateString() : '—'}
                     </td>
                     <td className="py-4 px-5">
                       <Badge tone={m.status === 'Active' ? 'success' : 'error'}>
@@ -254,11 +250,14 @@ export default function ManageMentors() {
               <Label>Company / Organization</Label>
               <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Tech Corp / Google" />
             </div>
+            {formError && (
+              <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{formError}</p>
+            )}
             <div className="flex justify-end gap-3 mt-4">
               <Button type="button" variant="secondary" onClick={() => setIsAddModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Add Mentor</Button>
+              <Button type="submit" disabled={saving}>Add Mentor</Button>
             </div>
           </form>
         </div>
@@ -299,8 +298,8 @@ export default function ManageMentors() {
                 <span className="font-semibold text-on-surface">{selectedMentor.company}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-on-surface-variant">Mentor Rating:</span>
-                <span className="font-bold text-amber-600">⭐ {selectedMentor.rating || '5.0'} / 5.0</span>
+                <span className="text-on-surface-variant">Phone:</span>
+                <span className="font-semibold text-on-surface">{selectedMentor.phone}</span>
               </div>
             </div>
 

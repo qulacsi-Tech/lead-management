@@ -1,6 +1,5 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
@@ -8,16 +7,20 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import DataTable, { RowAction } from '../../components/ui/DataTable';
 import { Input, Label, FormGroup } from '../../components/ui/Field';
+import { INSTITUTE_TYPES, AFFILIATION_OPTIONS, slugify } from '../../constants/taxonomy';
 import {
-  mockPages,
-  addPage,
-  INSTITUTE_TYPES,
-  AFFILIATION_OPTIONS,
-  slugify,
-  findPageBySlug,
+  ApiError,
+  resolveAssetUrl,
+  fetchPages,
+  createPage,
+  updatePage,
+  fetchPageAdmins,
   assignPageAdmin,
-  removePageAdmin,
-} from '../mockData';
+  revokePageAdmin,
+  uploadPageMedia,
+  fetchPageCourses,
+  fetchPageOpportunities,
+} from '../../Api/Api';
 
 function affiliationConfig(type) {
   if (type === 'School') return { mode: 'select', label: 'Board' };
@@ -27,93 +30,189 @@ function affiliationConfig(type) {
 }
 
 const emptyForm = {
-  name: '', type: 'Coaching', tagline: '', logoUrl: null, banners: [],
-  address: '', website: '', contact: '', affiliation: '', slug: '',
-  adminName: '', adminEmail: '',
+  name: '', type: 'Coaching', tagline: '', logoFile: null, logoPreview: null, banners: [],
+  address: '', city: '', state: '', website: '', contact: '', affiliation: '', slug: '',
+  adminEmail: '',
 };
+
+/** Two-letter monogram, shown when an institute has not uploaded a logo. */
+function initials(name) {
+  return (name || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+}
+
+function locationOf(page) {
+  return [page.address, page.city, page.state].filter(Boolean).join(', ');
+}
 
 // Bulk page-creation tool for Admin — built per client's explicit priority
 // request, 16 Aug 2026: "give me an admin panel where I (and 2-3 free team
 // members) can start creating institute/school/coaching pages ourselves,
 // while the rest of the concept is still being built." See
 // docs/CLIENT_FEEDBACK_2026-08-16.md, Section 5.
+//
+// Every row here is read from /api/pages — nothing on this screen is seeded
+// client-side.
 export default function ManagePages() {
-  const [pages, setPages] = useState(mockPages);
+  const [pages, setPages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [adminsFor, setAdminsFor] = useState(null); // page whose admins are being managed
-  const [newAdmin, setNewAdmin] = useState({ name: '', email: '' });
+  const [newAdmin, setNewAdmin] = useState({ email: '', role: 'ADMIN' });
+  const [adminError, setAdminError] = useState('');
   const logoInputRef = useRef(null);
   const bannerInputRef = useRef(null);
+  // Overlapping callers share one round-trip — otherwise StrictMode's
+  // double-invoked mount effect fetches the whole page list twice.
+  const inFlight = useRef(null);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
   const affiliation = affiliationConfig(form.type);
   const affiliationChoices = AFFILIATION_OPTIONS[form.type] || [];
 
-  const refresh = () => setPages([...mockPages]);
+  // The list endpoint returns the page records only; admins and content counts
+  // are page-scoped resources, so each row is enriched alongside the others.
+  const load = useCallback(() => {
+    if (inFlight.current) return inFlight.current;
+    inFlight.current = (async () => {
+      setLoading(true);
+      try {
+        const list = await fetchPages();
+        setError('');
+        const enriched = await Promise.all(
+          list.map(async (p) => {
+            const [admins, courses, opportunities] = await Promise.allSettled([
+              fetchPageAdmins(p.id),
+              fetchPageCourses(p.id),
+              fetchPageOpportunities(p.id),
+            ]);
+            return {
+              ...p,
+              admins: admins.status === 'fulfilled' ? admins.value : [],
+              coursesCount: courses.status === 'fulfilled' ? courses.value.length : 0,
+              opportunitiesCount: opportunities.status === 'fulfilled' ? opportunities.value.length : 0,
+            };
+          }),
+        );
+        setPages(enriched);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Could not load institute pages.');
+        setPages([]);
+      } finally {
+        setLoading(false);
+        inFlight.current = null;
+      }
+    })();
+    return inFlight.current;
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   // PLATFORM-OWNED action: enabling/disabling an institute's public page.
-  const toggleEnabled = (page) => {
-    page.enabled = !page.enabled;
-    refresh();
+  const toggleEnabled = async (page) => {
+    try {
+      const updated = await updatePage(page.id, { is_enabled: !page.is_enabled });
+      setPages((prev) => prev.map((p) => (p.id === page.id ? { ...p, ...updated } : p)));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not update the page.');
+    }
   };
 
-  const addAdmin = (e) => {
+  const addAdmin = async (e) => {
     e.preventDefault();
     if (!newAdmin.email) return;
-    assignPageAdmin(adminsFor, {
-      name: newAdmin.name,
-      email: newAdmin.email,
-      role: adminsFor.admins.length === 0 ? 'Owner / Primary Admin' : 'Admin',
-    });
-    setNewAdmin({ name: '', email: '' });
-    refresh();
-    setAdminsFor(findPageBySlug(adminsFor.slug));
+    setAdminError('');
+    try {
+      const admins = await assignPageAdmin(adminsFor.id, newAdmin);
+      setNewAdmin({ email: '', role: 'ADMIN' });
+      setAdminsFor((p) => ({ ...p, admins }));
+      setPages((prev) => prev.map((p) => (p.id === adminsFor.id ? { ...p, admins } : p)));
+    } catch (err) {
+      setAdminError(err instanceof ApiError ? err.message : 'Could not assign that admin.');
+    }
   };
 
-  const revokeAdmin = (email) => {
-    if (!window.confirm(`Remove ${email} as an admin of ${adminsFor.name}?`)) return;
-    removePageAdmin(adminsFor, email);
-    refresh();
-    setAdminsFor(findPageBySlug(adminsFor.slug));
+  const revokeAdmin = async (admin) => {
+    if (!window.confirm(`Remove ${admin.email} as an admin of ${adminsFor.name}?`)) return;
+    setAdminError('');
+    try {
+      const admins = await revokePageAdmin(adminsFor.id, admin.user_id);
+      setAdminsFor((p) => ({ ...p, admins }));
+      setPages((prev) => prev.map((p) => (p.id === adminsFor.id ? { ...p, admins } : p)));
+    } catch (err) {
+      setAdminError(err instanceof ApiError ? err.message : 'Could not revoke that admin.');
+    }
   };
 
   // Slug auto-fills from the name until the admin types their own.
   const previewSlug = slugify(form.slug || form.name) || 'institute-name';
+  const slugTaken = pages.some((p) => p.slug === previewSlug);
 
   const setLogo = (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    setForm((f) => ({ ...f, logoUrl: URL.createObjectURL(file) }));
+    setForm((f) => ({ ...f, logoFile: file, logoPreview: URL.createObjectURL(file) }));
   };
 
   const addBanner = (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    setForm((f) => ({ ...f, banners: [...f.banners, URL.createObjectURL(file)].slice(0, 3) }));
+    setForm((f) => ({
+      ...f,
+      banners: [...f.banners, { file, preview: URL.createObjectURL(file) }].slice(0, 3),
+    }));
   };
 
   const closeCreate = () => {
     setCreateOpen(false);
     setForm(emptyForm);
+    setFormError('');
   };
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    const page = addPage({ ...form, courses: [] });
-    // Assigning the first Institute Admin is part of institute creation — the
-    // platform establishes the entity and hands it to someone to run.
-    if (form.adminEmail) {
-      assignPageAdmin(page, {
-        name: form.adminName,
-        email: form.adminEmail,
-        role: 'Owner / Primary Admin',
+    setSaving(true);
+    setFormError('');
+    try {
+      // The record is created first because media uploads are page-scoped.
+      const page = await createPage({
+        name: form.name,
+        type: form.type,
+        slug: form.slug || undefined,
+        tagline: form.tagline || undefined,
+        address: form.address || undefined,
+        city: form.city || undefined,
+        state: form.state || undefined,
+        website: form.website || undefined,
+        contact: form.contact || undefined,
+        affiliation: form.affiliation || undefined,
+        admin_email: form.adminEmail || undefined,
       });
+
+      if (form.logoFile) await uploadPageMedia(page.id, 'logo', form.logoFile);
+      for (const banner of form.banners) {
+        await uploadPageMedia(page.id, 'banner', banner.file);
+      }
+
+      closeCreate();
+      await load();
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : 'Could not create the institute.');
+    } finally {
+      setSaving(false);
     }
-    refresh();
-    closeCreate();
   };
 
   return (
@@ -124,13 +223,17 @@ export default function ManagePages() {
           <p className="text-xs text-on-surface-variant m-0 mt-1 max-w-3xl">
             Create the institute, set its public identity and hand it to an Institute Admin. Courses,
             notices, vacancies and enquiries are then managed by that admin in their own console —
-            the platform team does not maintain each institute's day-to-day content.
+            the platform team does not maintain each institute&apos;s day-to-day content.
           </p>
         </div>
         <Button icon="add_business" onClick={() => setCreateOpen(true)}>
           Create Institute
         </Button>
       </div>
+
+      {error && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-error-container text-on-error-container text-sm">{error}</div>
+      )}
 
       <DataTable
         rows={pages}
@@ -141,7 +244,11 @@ export default function ManagePages() {
             render: (p) => (
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary-fixed flex items-center justify-center text-primary font-bold overflow-hidden shrink-0">
-                  {p.logoUrl ? <img src={p.logoUrl} alt={p.name} className="w-full h-full object-cover" /> : p.logo}
+                  {p.logo_url ? (
+                    <img src={resolveAssetUrl(p.logo_url)} alt={p.name} className="w-full h-full object-cover" />
+                  ) : (
+                    initials(p.name)
+                  )}
                 </div>
                 <div className="min-w-0">
                   <p className="font-bold text-on-surface m-0 text-sm">{p.name}</p>
@@ -154,7 +261,7 @@ export default function ManagePages() {
           {
             key: 'location',
             label: 'Location',
-            render: (p) => <span className="text-xs text-on-surface">{p.address || '—'}</span>,
+            render: (p) => <span className="text-xs text-on-surface">{locationOf(p) || '—'}</span>,
           },
           {
             key: 'admin',
@@ -162,7 +269,7 @@ export default function ManagePages() {
             render: (p) =>
               p.admins.length > 0 ? (
                 <div>
-                  <p className="text-xs font-medium text-on-surface m-0">{p.admins[0].name}</p>
+                  <p className="text-xs font-medium text-on-surface m-0">{p.admins[0].name || p.admins[0].email}</p>
                   <p className="text-[11px] text-on-surface-variant m-0">
                     {p.admins.length > 1 ? `+${p.admins.length - 1} more` : p.admins[0].email}
                   </p>
@@ -176,14 +283,14 @@ export default function ManagePages() {
             label: 'Content',
             render: (p) => (
               <span className="text-xs text-on-surface-variant">
-                {p.courses.length} courses · {p.opportunities.length} leads
+                {p.coursesCount} courses · {p.opportunitiesCount} leads
               </span>
             ),
           },
           {
             key: 'status',
             label: 'Page',
-            render: (p) => <StatusBadge status={p.enabled === false ? 'Disabled' : 'Active'} />,
+            render: (p) => <StatusBadge status={p.is_enabled ? 'Active' : 'Disabled'} />,
           },
           {
             key: 'actions',
@@ -194,11 +301,15 @@ export default function ManagePages() {
                 <Link to={`/${p.slug}`} title="Open public page">
                   <RowAction icon="open_in_new" title="Open public page" />
                 </Link>
-                <RowAction icon="manage_accounts" title="Manage admins" onClick={() => setAdminsFor(p)} />
                 <RowAction
-                  icon={p.enabled === false ? 'check_circle' : 'block'}
-                  title={p.enabled === false ? 'Enable page' : 'Disable page'}
-                  tone={p.enabled === false ? 'good' : 'warn'}
+                  icon="manage_accounts"
+                  title="Manage admins"
+                  onClick={() => { setAdminError(''); setAdminsFor(p); }}
+                />
+                <RowAction
+                  icon={p.is_enabled ? 'block' : 'check_circle'}
+                  title={p.is_enabled ? 'Disable page' : 'Enable page'}
+                  tone={p.is_enabled ? 'warn' : 'good'}
                   onClick={() => toggleEnabled(p)}
                 />
               </div>
@@ -206,13 +317,17 @@ export default function ManagePages() {
           },
         ]}
         empty={
-          <EmptyState
-            icon="storefront"
-            title="No institutes yet"
-            description="Create the first Institute Page — it goes live at its own URL immediately."
-            actionLabel="Create Institute"
-            onAction={() => setCreateOpen(true)}
-          />
+          loading ? (
+            <p className="text-center text-xs text-on-surface-variant py-12 m-0">Loading institutes…</p>
+          ) : (
+            <EmptyState
+              icon="storefront"
+              title="No institutes yet"
+              description="Create the first Institute Page — it goes live at its own URL immediately."
+              actionLabel="Create Institute"
+              onAction={() => setCreateOpen(true)}
+            />
+          )
         }
       />
 
@@ -255,7 +370,7 @@ export default function ManagePages() {
             />
             <p className="text-[11px] text-on-surface-variant mt-1 mb-0 font-mono">
               connectedus.in/{previewSlug}
-              {findPageBySlug(previewSlug) && (
+              {slugTaken && (
                 <span className="text-error font-sans ml-2">taken — a suffix will be added</span>
               )}
             </p>
@@ -273,14 +388,14 @@ export default function ManagePages() {
                 onClick={() => logoInputRef.current?.click()}
                 className="w-14 h-14 rounded-xl border-2 border-dashed border-outline-variant hover:border-primary flex items-center justify-center text-on-surface-variant cursor-pointer overflow-hidden shrink-0"
               >
-                {form.logoUrl ? (
-                  <img src={form.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                {form.logoPreview ? (
+                  <img src={form.logoPreview} alt="Logo" className="w-full h-full object-cover" />
                 ) : (
                   <span className="material-symbols-outlined">add_photo_alternate</span>
                 )}
               </button>
               <Button type="button" variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}>
-                {form.logoUrl ? 'Change Logo' : 'Upload Logo'}
+                {form.logoPreview ? 'Change Logo' : 'Upload Logo'}
               </Button>
             </div>
             <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={setLogo} />
@@ -289,9 +404,9 @@ export default function ManagePages() {
           <div>
             <Label>Header Banner Images (2–3)</Label>
             <div className="flex flex-wrap gap-2 mt-1.5">
-              {form.banners.map((src, i) => (
-                <div key={i} className="relative w-20 h-14 rounded-lg overflow-hidden border border-outline-variant">
-                  <img src={src} alt={`Banner ${i + 1}`} className="w-full h-full object-cover" />
+              {form.banners.map((b, i) => (
+                <div key={b.preview} className="relative w-20 h-14 rounded-lg overflow-hidden border border-outline-variant">
+                  <img src={b.preview} alt={`Banner ${i + 1}`} className="w-full h-full object-cover" />
                   <button
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, banners: f.banners.filter((_, idx) => idx !== i) }))}
@@ -314,19 +429,29 @@ export default function ManagePages() {
             <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={addBanner} />
           </div>
 
+          <div>
+            <Label>Address</Label>
+            <Input value={form.address} onChange={set('address')} placeholder="Street / area" />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Address</Label>
-              <Input value={form.address} onChange={set('address')} placeholder="City, State" />
+              <Label>City</Label>
+              <Input value={form.city} onChange={set('city')} placeholder="Indore" />
             </div>
+            <div>
+              <Label>State</Label>
+              <Input value={form.state} onChange={set('state')} placeholder="Madhya Pradesh" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Website</Label>
               <Input value={form.website} onChange={set('website')} placeholder="www.example.com" />
             </div>
-          </div>
-          <div>
-            <Label>Contact Number</Label>
-            <Input value={form.contact} onChange={set('contact')} placeholder="+91-XXXXXXXXXX" />
+            <div>
+              <Label>Contact Number</Label>
+              <Input value={form.contact} onChange={set('contact')} placeholder="+91-XXXXXXXXXX" />
+            </div>
           </div>
 
           <div>
@@ -349,18 +474,20 @@ export default function ManagePages() {
           <div className="pt-3 border-t border-outline-variant">
             <Label>Assign Institute Admin</Label>
             <p className="text-[11px] text-on-surface-variant mt-0 mb-2">
-              They manage this institute's courses, notices, vacancies and enquiries from their own
-              console. You can add more admins later.
+              They manage this institute&apos;s courses, notices, vacancies and enquiries from their own
+              console. The person must already have an account — enter the email they signed up with.
+              You can add more admins later.
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Input value={form.adminName} onChange={set('adminName')} placeholder="Admin name" />
-              <Input type="email" value={form.adminEmail} onChange={set('adminEmail')} placeholder="admin@institute.in" />
-            </div>
+            <Input type="email" value={form.adminEmail} onChange={set('adminEmail')} placeholder="admin@institute.in" />
           </div>
+
+          {formError && (
+            <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{formError}</p>
+          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="outline" onClick={closeCreate}>Cancel</Button>
-            <Button type="submit">Create Institute</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create Institute'}</Button>
           </div>
         </form>
       </Modal>
@@ -379,19 +506,21 @@ export default function ManagePages() {
               <ul className="space-y-2 list-none p-0 m-0 mb-5">
                 {adminsFor.admins.map((a) => (
                   <li
-                    key={a.email}
+                    key={a.id}
                     className="flex items-center justify-between gap-3 p-3 rounded-xl border border-outline-variant"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-on-surface m-0 truncate">{a.name}</p>
+                      <p className="text-sm font-semibold text-on-surface m-0 truncate">{a.name || a.email}</p>
                       <p className="text-[11px] text-on-surface-variant m-0 truncate">{a.email}</p>
-                      {a.assignedAt && (
-                        <p className="text-[10px] text-on-surface-variant m-0">Assigned {a.assignedAt}</p>
+                      {a.assigned_at && (
+                        <p className="text-[10px] text-on-surface-variant m-0">
+                          Assigned {new Date(a.assigned_at).toLocaleDateString()}
+                        </p>
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <Badge tone="neutral">{a.role.includes('Owner') ? 'Owner' : 'Admin'}</Badge>
-                      <RowAction icon="person_remove" title="Revoke access" tone="danger" onClick={() => revokeAdmin(a.email)} />
+                      <Badge tone="neutral">{a.role === 'OWNER' ? 'Owner' : 'Admin'}</Badge>
+                      <RowAction icon="person_remove" title="Revoke access" tone="danger" onClick={() => revokeAdmin(a)} />
                     </div>
                   </li>
                 ))}
@@ -409,19 +538,25 @@ export default function ManagePages() {
               <FormGroup label="Assign a new admin">
                 <div className="grid grid-cols-2 gap-2">
                   <Input
-                    value={newAdmin.name}
-                    onChange={(e) => setNewAdmin((a) => ({ ...a, name: e.target.value }))}
-                    placeholder="Name"
-                  />
-                  <Input
                     type="email"
                     required
                     value={newAdmin.email}
                     onChange={(e) => setNewAdmin((a) => ({ ...a, email: e.target.value }))}
                     placeholder="admin@institute.in"
                   />
+                  <select
+                    value={newAdmin.role}
+                    onChange={(e) => setNewAdmin((a) => ({ ...a, role: e.target.value }))}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2.5 text-sm text-on-surface cursor-pointer"
+                  >
+                    <option value="ADMIN">Admin</option>
+                    <option value="OWNER">Owner / Primary Admin</option>
+                  </select>
                 </div>
               </FormGroup>
+              {adminError && (
+                <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{adminError}</p>
+              )}
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => setAdminsFor(null)}>Done</Button>
                 <Button type="submit" size="sm" icon="person_add">Assign Admin</Button>

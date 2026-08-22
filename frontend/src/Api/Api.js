@@ -151,3 +151,43 @@ export const fetchAdminStudents = async () => apiFetch('/admin/students');
 export const fetchAdminMentors = async () => apiFetch('/admin/mentors');
 export const fetchAdminInstitutes = async () => apiFetch('/admin/institutes');
 export const fetchAdminEnquiries = async () => apiFetch('/admin/enquiries');
+
+// ----------------------------------------------------
+// Institute Page Endpoints (Main Admin console)
+// ----------------------------------------------------
+
+export const fetchPages = async (q) =>
+  apiFetch(`/pages${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+
+export const fetchPage = async (pageId) => apiFetch(`/pages/${pageId}`);
+
+export const createPage = async (payload) =>
+  apiFetch('/pages', { method: 'POST', body: payload });
+
+export const updatePage = async (pageId, patch) =>
+  apiFetch(`/pages/${pageId}`, { method: 'PATCH', body: patch });
+
+export const deletePage = async (pageId) =>
+  apiFetch(`/pages/${pageId}`, { method: 'DELETE' });
+
+export const fetchPageAdmins = async (pageId) => apiFetch(`/pages/${pageId}/admins`);
+
+/** role: 'OWNER' | 'ADMIN' */
+export const assignPageAdmin = async (pageId, { email, role = 'ADMIN' }) =>
+  apiFetch(`/pages/${pageId}/admins`, { method: 'POST', body: { email, role } });
+
+export const revokePageAdmin = async (pageId, userId) =>
+  apiFetch(`/pages/${pageId}/admins/${userId}`, { method: 'DELETE' });
+
+/** kind: 'logo' | 'banner' | 'gallery' */
+export const uploadPageMedia = async (pageId, kind, file, caption = '') => {
+  const formData = new FormData();
+  formData.append('kind', kind);
+  formData.append('caption', caption);
+  formData.append('file', file);
+  return apiUpload(`/pages/${pageId}/media`, formData);
+};
+
+export const fetchPageCourses = async (pageId) => apiFetch(`/pages/${pageId}/courses`);
+
+export const fetchPageOpportunities = async (pageId) => apiFetch(`/pages/${pageId}/opportunities`);

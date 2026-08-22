@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { getMe, loginApi, registerApi, logoutApi, getToken, setToken, ApiError } from '../Api/Api';
 
 const AuthContext = createContext(null);
@@ -10,7 +10,13 @@ export function AuthProvider({ children }) {
   const [role, setRole] = useState(null); // 'student' | 'mentor' | 'institute' | 'admin' | null
   const [initializing, setInitializing] = useState(true);
 
+  // StrictMode invokes mount effects twice in development; without this the
+  // session would be verified against /auth/me twice on every page load.
+  const verified = useRef(false);
+
   useEffect(() => {
+    if (verified.current) return;
+    verified.current = true;
     const token = getToken();
     if (!token) {
       setInitializing(false);

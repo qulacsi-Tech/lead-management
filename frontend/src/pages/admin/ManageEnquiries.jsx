@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Card from '../../components/ui/Card';
 import { fetchAdminEnquiries, ApiError } from '../../Api/Api';
 
@@ -8,7 +8,13 @@ export default function ManageEnquiries() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // StrictMode invokes this effect twice in development; the guard keeps that
+  // from issuing a second identical request.
+  const loaded = useRef(false);
+
   useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
     (async () => {
       try {
         const data = await fetchAdminEnquiries();

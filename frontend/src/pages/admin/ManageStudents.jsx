@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useData } from '../../context/DataContext';
-import { registerStudent } from '../../Api/Api';
+import { registerStudent, ApiError } from '../../Api/Api';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -8,7 +8,7 @@ import Modal from '../../components/ui/Modal';
 import { Input, Label } from '../../components/ui/Field';
 
 export default function ManageStudents() {
-  const { students, updateEntityStatus, deleteEntity, autoRegisterUser, refreshAdminData } = useData();
+  const { students, loading, error, updateEntityStatus, deleteEntity, refreshAdminData } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   
@@ -20,10 +20,8 @@ export default function ManageStudents() {
   const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
   const [course, setCourse] = useState('');
-
-  useEffect(() => {
-    refreshAdminData();
-  }, [refreshAdminData]);
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const filteredStudents = students.filter((stud) => {
     const matchesSearch =
@@ -39,6 +37,8 @@ export default function ManageStudents() {
     e.preventDefault();
     if (!name || !email) return;
 
+    setSaving(true);
+    setFormError('');
     try {
       await registerStudent({
         name,
@@ -48,18 +48,12 @@ export default function ManageStudents() {
         city,
         target_course: course || 'Computer Science',
       });
-    } catch {
-      // Fallback
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : 'Could not create the student.');
+      setSaving(false);
+      return;
     }
-
-    autoRegisterUser({
-      name,
-      email,
-      role: 'student',
-      city,
-      phone,
-      course: course || 'Computer Science',
-    });
+    setSaving(false);
 
     setName('');
     setEmail('');
@@ -67,7 +61,7 @@ export default function ManageStudents() {
     setPhone('');
     setCourse('');
     setIsAddModalOpen(false);
-    refreshAdminData();
+    await refreshAdminData();
   };
 
   const handleToggleStatus = (stud) => {
@@ -146,17 +140,23 @@ export default function ManageStudents() {
                 <th className="py-3.5 px-5">Student Name</th>
                 <th className="py-3.5 px-5">Target Course / City</th>
                 <th className="py-3.5 px-5">Contact Email</th>
-                <th className="py-3.5 px-5">Leads Posted</th>
-                <th className="py-3.5 px-5">Points</th>
+                <th className="py-3.5 px-5">Phone</th>
+                <th className="py-3.5 px-5">Registered</th>
                 <th className="py-3.5 px-5">Status</th>
                 <th className="py-3.5 px-5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant text-sm">
-              {filteredStudents.length === 0 ? (
+              {loading ? (
                 <tr>
                   <td colSpan="7" className="text-center py-12 text-on-surface-variant text-xs">
-                    No students match your filter.
+                    Loading students…
+                  </td>
+                </tr>
+              ) : filteredStudents.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-12 text-on-surface-variant text-xs">
+                    {error || 'No students match your filter.'}
                   </td>
                 </tr>
               ) : (
@@ -180,11 +180,9 @@ export default function ManageStudents() {
                       <p className="m-0 text-[11px]">{stud.city}</p>
                     </td>
                     <td className="py-4 px-5 text-xs text-on-surface-variant font-mono">{stud.email}</td>
-                    <td className="py-4 px-5 text-xs font-semibold text-on-surface">
-                      {stud.leadsPosted || 0} Leads ({stud.verifiedLeads || 0} Verified)
-                    </td>
-                    <td className="py-4 px-5 text-xs font-bold text-amber-600">
-                      {stud.points || 0} pts
+                    <td className="py-4 px-5 text-xs text-on-surface-variant">{stud.phone}</td>
+                    <td className="py-4 px-5 text-xs text-on-surface-variant">
+                      {stud.registeredAt ? new Date(stud.registeredAt).toLocaleDateString() : '—'}
                     </td>
                     <td className="py-4 px-5">
                       <Badge tone={stud.status === 'Active' ? 'success' : 'error'}>
@@ -258,11 +256,14 @@ export default function ManageStudents() {
               <Label>Target Course / Degree</Label>
               <Input value={course} onChange={(e) => setCourse(e.target.value)} placeholder="Cybersecurity" />
             </div>
+            {formError && (
+              <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{formError}</p>
+            )}
             <div className="flex justify-end gap-3 mt-4">
               <Button type="button" variant="secondary" onClick={() => setIsAddModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Add Student</Button>
+              <Button type="submit" disabled={saving}>Add Student</Button>
             </div>
           </form>
         </div>
@@ -303,13 +304,13 @@ export default function ManageStudents() {
                 <span className="font-semibold text-on-surface">{selectedStudent.city}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-on-surface-variant">Reward Points:</span>
-                <span className="font-bold text-amber-600">{selectedStudent.points || 0} pts</span>
+                <span className="text-on-surface-variant">Phone:</span>
+                <span className="font-semibold text-on-surface">{selectedStudent.phone}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-on-surface-variant">Registered Date:</span>
                 <span className="font-semibold text-on-surface">
-                  {new Date(selectedStudent.registeredAt || Date.now()).toLocaleDateString()}
+                  {selectedStudent.registeredAt ? new Date(selectedStudent.registeredAt).toLocaleDateString() : '—'}
                 </span>
               </div>
             </div>

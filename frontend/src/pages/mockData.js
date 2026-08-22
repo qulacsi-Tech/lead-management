@@ -1,58 +1,22 @@
 // Static mock data for the Education Network UI prototype.
 // No backend calls — everything here is local, in-memory demo state.
 
-export const INSTITUTE_TYPES = ['School', 'Coaching', 'College', 'University', 'Training Institute'];
+// The platform taxonomy now lives in src/constants/taxonomy.js — it is real
+// configuration, not demo data. Re-exported here so the screens that still
+// read from this module keep working.
+export {
+  INSTITUTE_TYPES,
+  AFFILIATION_OPTIONS,
+  COURSE_CATEGORIES,
+  COURSE_LEVELS,
+  PLATFORM_LOCATIONS,
+  OPPORTUNITY_STATUSES,
+  EMPLOYMENT_TYPES,
+  PROFESSIONAL_CATEGORIES,
+  slugify,
+} from '../constants/taxonomy';
 
-// ---------------------------------------------------------------------------
-// PLATFORM-OWNED taxonomy — Main Admin controls these lists; Institute Admins
-// pick from them but cannot add to them. Keeping them here (rather than inline
-// in each form) is what makes that ownership boundary explicit in the UI.
-// ---------------------------------------------------------------------------
-
-export const AFFILIATION_OPTIONS = {
-  School: ['CBSE', 'ICSE', 'State Board', 'IB', 'NIOS'],
-  College: ['Devi Ahilya Vishwavidyalaya', 'RGPV', 'AICTE Approved', 'UGC Recognised'],
-  University: ['UGC', 'AICTE', 'NAAC A++', 'NAAC A+'],
-  Coaching: [],
-  'Training Institute': [],
-};
-
-export const COURSE_CATEGORIES = [
-  'Engineering Entrance',
-  'Medical Entrance',
-  'School Curriculum',
-  'Commerce',
-  'Competitive Exam',
-  'Skill / Vocational',
-  'Language',
-];
-
-export const COURSE_LEVELS = ['Foundation', 'Intermediate', 'Advanced', 'Crash Course', 'Certification'];
-
-export const PLATFORM_LOCATIONS = ['Indore', 'Bhopal', 'Jabalpur', 'Gwalior', 'Ujjain', 'Pune', 'Nagpur'];
-
-/** Lifecycle shared by Admission Notices and Job Vacancies (Sell Leads). */
-export const OPPORTUNITY_STATUSES = ['Draft', 'Published', 'Expired', 'Closed'];
-
-export const EMPLOYMENT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Visiting Faculty'];
-
-export const PROFESSIONAL_CATEGORIES = [
-  'School Teacher',
-  'Coaching Faculty',
-  'College Professor',
-  'Guest Faculty',
-  'Mentor',
-  'Trainer',
-  'Tuition Teacher',
-];
-
-export function slugify(name) {
-  return (name || '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
+import { slugify } from '../constants/taxonomy';
 
 // Multi-page model — every Institute Page (whether created by a Professional
 // from their own account, or bulk-created by Admin) lives here with its own

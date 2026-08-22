@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import StatCard from '../../components/ui/StatCard';
@@ -6,11 +5,7 @@ import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 
 export default function AdminDashboard() {
-  const { institutes, students, mentors, refreshAdminData } = useData();
-
-  useEffect(() => {
-    refreshAdminData();
-  }, [refreshAdminData]);
+  const { institutes, students, mentors, loading, error } = useData();
 
   // Combine all registered entities into a unified recent activity feed
   const recentRegistrations = [
@@ -146,6 +141,13 @@ export default function AdminDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant text-sm">
+              {(loading || recentRegistrations.length === 0) && (
+                <tr>
+                  <td colSpan="5" className="text-center py-12 text-on-surface-variant text-xs">
+                    {loading ? 'Loading registrations…' : error || 'No registrations yet.'}
+                  </td>
+                </tr>
+              )}
               {recentRegistrations.slice(0, 8).map((item) => (
                 <tr key={item.id} className="hover:bg-surface-container-low transition-colors">
                   <td className="py-3.5 px-4">
@@ -164,11 +166,13 @@ export default function AdminDashboard() {
                   </td>
                   <td className="py-3.5 px-4 text-xs text-on-surface-variant font-mono">{item.email}</td>
                   <td className="py-3.5 px-4 text-xs text-on-surface-variant">
-                    {new Date(item.registeredAt || Date.now()).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
+                    {item.registeredAt
+                      ? new Date(item.registeredAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })
+                      : '—'}
                   </td>
                   <td className="py-3.5 px-4">
                     <Badge tone="success">Auto-Approved</Badge>
