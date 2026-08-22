@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useData } from '../../context/DataContext';
-import { registerInstitute, ApiError } from '../../Api/Api';
+import { registerInstitute, updateAdminInstitute, ApiError } from '../../Api/Api';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -15,15 +15,72 @@ export default function ManageInstitutes() {
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedInstitute, setSelectedInstitute] = useState(null);
+  const [editing, setEditing] = useState(null); // institute whose account is being edited
 
   // Form states for adding new institute
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
   const [course, setCourse] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Edit form — `password` stays blank unless the admin is resetting it.
+  const [editForm, setEditForm] = useState(null);
+  const [editError, setEditError] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  const openEdit = (inst) => {
+    setEditError('');
+    setEditForm({
+      name: inst.name || '',
+      email: inst.email || '',
+      phone: inst.phone === 'N/A' ? '' : inst.phone || '',
+      city: inst.city === 'N/A' ? '' : inst.city || '',
+      programs: (inst.courses || []).join(', '),
+      password: '',
+    });
+    setEditing(inst);
+  };
+
+  const setEdit = (key) => (e) => setEditForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditSaving(true);
+    setEditError('');
+
+    // Only send what actually changed, so an untouched field is never
+    // rewritten — and an empty password box means "keep the current one"
+    // rather than "blank the password".
+    const patch = {};
+    if (editForm.name !== editing.name) patch.name = editForm.name;
+    if (editForm.email !== editing.email) patch.email = editForm.email;
+    if (editForm.phone !== (editing.phone === 'N/A' ? '' : editing.phone || '')) patch.phone = editForm.phone;
+    if (editForm.city !== (editing.city === 'N/A' ? '' : editing.city || '')) patch.city = editForm.city;
+    if (editForm.programs !== (editing.courses || []).join(', ')) patch.programs = editForm.programs;
+    if (editForm.password) patch.password = editForm.password;
+
+    if (Object.keys(patch).length === 0) {
+      setEditSaving(false);
+      setEditing(null);
+      return;
+    }
+
+    try {
+      await updateAdminInstitute(editing.id, patch);
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : 'Could not save those changes.');
+      setEditSaving(false);
+      return;
+    }
+    setEditSaving(false);
+    setEditing(null);
+    setSelectedInstitute(null);
+    await refreshAdminData();
+  };
 
   const filteredInstitutes = institutes.filter((inst) => {
     const matchesSearch =
@@ -44,7 +101,7 @@ export default function ManageInstitutes() {
       await registerInstitute({
         name,
         email,
-        password: 'password123',
+        password,
         phone,
         city,
         programs: course,
@@ -58,6 +115,7 @@ export default function ManageInstitutes() {
 
     setName('');
     setEmail('');
+    setPassword('');
     setCity('');
     setPhone('');
     setCourse('');
@@ -209,6 +267,13 @@ export default function ManageInstitutes() {
                           <span className="material-symbols-outlined text-base">visibility</span>
                         </button>
                         <button
+                          onClick={() => openEdit(inst)}
+                          className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container-high rounded-lg transition-colors border-none bg-transparent cursor-pointer"
+                          title="Edit account & credentials"
+                        >
+                          <span className="material-symbols-outlined text-base">edit</span>
+                        </button>
+                        <button
                           onClick={() => handleToggleStatus(inst)}
                           className={`p-1.5 rounded-lg transition-colors border-none bg-transparent cursor-pointer ${
                             inst.status === 'Active' ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'
@@ -249,8 +314,23 @@ export default function ManageInstitutes() {
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Stanford Academy of Tech" required />
             </div>
             <div>
-              <Label>Email Address</Label>
+              <Label>Email Address (sign-in id)</Label>
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admissions@institute.edu" required />
+            </div>
+            <div>
+              <Label>Password</Label>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                minLength={8}
+                required
+              />
+              <p className="text-[11px] text-on-surface-variant mt-1 mb-0">
+                The institute admin signs in with the email above and this password. Share it with
+                them directly — it cannot be read back here afterwards, only reset.
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -340,10 +420,83 @@ export default function ManageInstitutes() {
               >
                 {selectedInstitute.status === 'Active' ? 'Suspend Access' : 'Activate Access'}
               </Button>
-              <Button type="button" onClick={() => setSelectedInstitute(null)}>
-                Close
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button type="button" variant="outline" icon="edit" onClick={() => openEdit(selectedInstitute)}>
+                  Edit
+                </Button>
+                <Button type="button" onClick={() => setSelectedInstitute(null)}>
+                  Close
+                </Button>
+              </div>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Account & credentials editor. Email is the institute's sign-in id and
+          the password box resets it outright, so both are handled here rather
+          than in the read-only detail view. */}
+      {editing && editForm && (
+        <Modal open={!!editing} onClose={() => setEditing(null)} width={440}>
+          <div className="p-2">
+            <h2 className="text-xl font-bold text-on-surface m-0 mb-1">Edit Institute</h2>
+            <p className="text-xs text-on-surface-variant m-0 mb-6">
+              Update {editing.name}&apos;s details or reset the credentials they sign in with.
+            </p>
+            <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
+              <div>
+                <Label>Institute Name</Label>
+                <Input value={editForm.name} onChange={setEdit('name')} required />
+              </div>
+              <div>
+                <Label>Email Address (sign-in id)</Label>
+                <Input type="email" value={editForm.email} onChange={setEdit('email')} required />
+                <p className="text-[11px] text-on-surface-variant mt-1 mb-0">
+                  Changing this changes the address they log in with.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>City</Label>
+                  <Input value={editForm.city} onChange={setEdit('city')} />
+                </div>
+                <div>
+                  <Label>Phone</Label>
+                  <Input value={editForm.phone} onChange={setEdit('phone')} />
+                </div>
+              </div>
+              <div>
+                <Label>Courses Offered</Label>
+                <Input value={editForm.programs} onChange={setEdit('programs')} placeholder="Comma separated" />
+              </div>
+              <div className="pt-3 border-t border-outline-variant">
+                <Label>Reset Password</Label>
+                <Input
+                  type="password"
+                  value={editForm.password}
+                  onChange={setEdit('password')}
+                  placeholder="Leave blank to keep the current password"
+                  minLength={8}
+                />
+                <p className="text-[11px] text-on-surface-variant mt-1 mb-0">
+                  Existing passwords cannot be displayed — only replaced. Fill this in only to set a
+                  new one (at least 8 characters), then pass it on to the institute.
+                </p>
+              </div>
+
+              {editError && (
+                <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{editError}</p>
+              )}
+
+              <div className="flex justify-end gap-3 mt-4">
+                <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={editSaving}>
+                  {editSaving ? 'Saving…' : 'Save Changes'}
+                </Button>
+              </div>
+            </form>
           </div>
         </Modal>
       )}

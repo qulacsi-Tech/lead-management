@@ -131,17 +131,23 @@ export const fetchBlocks = async (state, district) =>
   apiFetch(`/geo/blocks/${encodeURIComponent(state)}/${encodeURIComponent(district)}`, { auth: false });
 
 // ----------------------------------------------------
-// Role-Specific Registration Endpoints (Admin provisions accounts)
+// Role-Specific Registration Endpoints
 // ----------------------------------------------------
 
+/** Public self-service signup — deliberately unauthenticated. */
 export const registerStudent = async (data) =>
   apiFetch('/register/student', { method: 'POST', auth: false, body: data });
 
+// Mentor and Institute accounts are PROVISIONED BY A MAIN ADMIN on someone
+// else's behalf, so the backend requires an admin session on these two (see
+// routers/register.py). They must be sent WITH the caller's token — omitting
+// it makes the server reject the request as unauthenticated before it ever
+// gets to the role check.
 export const registerMentor = async (data) =>
-  apiFetch('/register/mentor', { method: 'POST', auth: false, body: data });
+  apiFetch('/register/mentor', { method: 'POST', body: data });
 
 export const registerInstitute = async (data) =>
-  apiFetch('/register/institute', { method: 'POST', auth: false, body: data });
+  apiFetch('/register/institute', { method: 'POST', body: data });
 
 // ----------------------------------------------------
 // Admin Data Endpoints
@@ -151,6 +157,12 @@ export const fetchAdminStudents = async () => apiFetch('/admin/students');
 export const fetchAdminMentors = async () => apiFetch('/admin/mentors');
 export const fetchAdminInstitutes = async () => apiFetch('/admin/institutes');
 export const fetchAdminEnquiries = async () => apiFetch('/admin/enquiries');
+
+/** Main Admin edit of an institute account. `patch.password` resets the
+ *  institute's sign-in password; `patch.email` changes the login id. Omit
+ *  either to leave it untouched. */
+export const updateAdminInstitute = async (instituteId, patch) =>
+  apiFetch(`/admin/institutes/${instituteId}`, { method: 'PATCH', body: patch });
 
 // ----------------------------------------------------
 // Institute Page Endpoints (Main Admin console)
