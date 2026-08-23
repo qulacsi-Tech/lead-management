@@ -1,5 +1,8 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { useMyPages } from './hooks/useMyPages';
+import { LoginPromptProvider, useLoginPrompt } from './context/LoginPrompt';
 import { DataProvider } from './context/DataContext';
 import { ToastProvider } from './context/ToastContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -38,18 +41,37 @@ function RequireAdmin({ children }) {
   const { role, initializing } = useAuth();
   if (initializing) return null;
   if (!role) return <Navigate to="/" replace />;
-  if (role !== 'admin') return <Navigate to="/feed" replace />;
+  if (role !== 'admin') return <Navigate to="/" replace />;
   return children;
 }
 
-/** Any signed-in user may reach /institute; the layout itself decides whether
- * they administer a page and shows the "not assigned" state if they don't.
- * Real per-page authorization arrives with the backend in Phase 2. */
+/** Gate for member-only screens.
+ *
+ * Sends an anonymous visitor to the public feed and opens the sign-in dialog
+ * over it, rather than to a dead-end login page — the feed is public now, so
+ * there is always something to land on. */
 function RequireSignedIn({ children }) {
   const { role, initializing } = useAuth();
+  const { openLogin } = useLoginPrompt();
+
+  useEffect(() => {
+    if (!initializing && !role) openLogin('Sign in to continue.');
+  }, [initializing, role, openLogin]);
+
   if (initializing) return null;
   if (!role) return <Navigate to="/" replace />;
   return children;
+}
+
+/** `/page` used to render "my" institute page by matching the signed-in
+ *  user's email against a bundled array. It now just forwards: to the page
+ *  they administer, or to the create flow if they have none. Keeping
+ *  InstitutePage slug-only is what lets it be public and cacheable. */
+function MyPageRedirect() {
+  const { pages, loading } = useMyPages();
+  if (loading) return null;
+  if (pages.length > 0) return <Navigate to={`/${pages[0].slug}`} replace />;
+  return <Navigate to="/create-page" replace />;
 }
 
 function AppRoutes() {
@@ -57,26 +79,35 @@ function AppRoutes() {
     <Routes>
       {/* Common feed + profile experience — Professional and Student roles
           both live here (see docs/EDUCATION_NETWORK_ROADMAP.md). */}
-      <Route path="/" element={<Login />} />
+      {/* `/login` stays a real page for deep links and bookmarks; day to day
+          the same form opens as a dialog over whatever you were reading. */}
+      <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
 
       <Route path="/" element={<AppLayout />}>
-        <Route path="feed" element={<Feed />} />
-        <Route path="create-page" element={<CreateInstitutePage />} />
-        <Route path="page" element={<InstitutePage />} />
+        {/* PUBLIC. The feed is the front door: an anonymous visitor lands here
+            rather than on a login wall, and signs in from the header when they
+            want to act. /feed keeps older links working. */}
+        <Route index element={<Feed />} />
+        <Route path="feed" element={<Navigate to="/" replace />} />
+
+        {/* Member-only from here down. */}
+        <Route path="create-page" element={<RequireSignedIn><CreateInstitutePage /></RequireSignedIn>} />
+        <Route path="page" element={<RequireSignedIn><MyPageRedirect /></RequireSignedIn>} />
         {/* Institute content management moved into the Institute Console, so
             ownership of each screen is unambiguous. These keep old links and
             bookmarks working. */}
         <Route path="page/edit" element={<Navigate to="/institute/profile" replace />} />
         <Route path="page/post-admission" element={<Navigate to="/institute/notices" replace />} />
         <Route path="page/post-job" element={<Navigate to="/institute/jobs" replace />} />
-        <Route path="profile" element={<ProfessionalProfile />} />
-        <Route path="dashboard" element={<ProfessionalDashboard />} />
-        <Route path="search" element={<SearchConnections />} />
-        <Route path="purchased" element={<PurchasedHistory />} />
-        {/* Public, per-institute vanity URL — connectedus.in/<slug>. Static
-            paths above (feed, profile, search, ...) always win over this,
-            since react-router ranks literal segments above dynamic ones. */}
+        <Route path="profile" element={<RequireSignedIn><ProfessionalProfile /></RequireSignedIn>} />
+        <Route path="dashboard" element={<RequireSignedIn><ProfessionalDashboard /></RequireSignedIn>} />
+        <Route path="search" element={<RequireSignedIn><SearchConnections /></RequireSignedIn>} />
+        <Route path="purchased" element={<RequireSignedIn><PurchasedHistory /></RequireSignedIn>} />
+
+        {/* PUBLIC. Per-institute vanity URL — connectedus.in/<slug>. Last in
+            this block because react-router ranks literal segments above
+            dynamic ones, so every route above still wins. */}
         <Route path=":instituteSlug" element={<InstitutePage />} />
       </Route>
 
@@ -131,7 +162,9 @@ export default function App() {
         <DataProvider>
           <ToastProvider>
             <BrowserRouter>
-              <AppRoutes />
+              <LoginPromptProvider>
+                <AppRoutes />
+              </LoginPromptProvider>
             </BrowserRouter>
           </ToastProvider>
         </DataProvider>

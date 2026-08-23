@@ -20,7 +20,7 @@ export default function Login() {
     setIsSubmitting(true);
     try {
       const user = await login(email, password);
-      navigate(user.role === 'admin' ? '/admin' : '/feed');
+      navigate(user.role === 'admin' ? '/admin' : '/');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
     } finally {

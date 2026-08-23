@@ -177,6 +177,26 @@ async def list_my_pages(
     return await pages_administered_by(db, current_user)
 
 
+@router.get("/public", response_model=List[PageResponse])
+async def list_public_pages(
+    db: AsyncSession = Depends(get_db),
+    q: Optional[str] = Query(None),
+    limit: int = Query(50, le=200),
+):
+    """Enabled institutes, readable without a session.
+
+    The oversight list above is Main-Admin only, so the public feed had no way
+    to name the institute behind a notice or offer pages to follow. Declared
+    before /{page_id} because FastAPI matches in registration order and would
+    otherwise read "public" as an id.
+    """
+    stmt = select(Page).where(Page.is_enabled.is_(True))
+    if q:
+        stmt = stmt.where(Page.name.ilike(f"%{q}%"))
+    stmt = stmt.order_by(Page.created_at.desc()).limit(limit)
+    return list((await db.execute(stmt)).scalars().all())
+
+
 @router.get("/slug/{slug}", response_model=PageDetailResponse)
 async def get_page_by_slug(
     slug: str,

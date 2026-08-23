@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useSession } from '../context/useSession';
 import { useMyPages } from '../hooks/useMyPages';
+import { useLoginPrompt } from '../context/LoginPrompt';
 import { mockNotifications, notificationPool } from '../pages/mockData';
 import { useDesiredCriteria } from '../pages/useDesiredCriteria';
 
 const NAV_ICONS = [
-  { to: '/feed', icon: 'home', label: 'Home', end: true },
+  { to: '/', icon: 'home', label: 'Home', end: true },
   { to: '/search', icon: 'travel_explore', label: 'Search' },
   { to: '/dashboard', icon: 'space_dashboard', label: 'Dashboard' },
 ];
@@ -127,14 +128,19 @@ export default function AppLayout() {
   const { isInstituteAdmin: instituteAdmin } = useMyPages();
   const isPlatformAdmin = auth?.role === 'admin';
   const navigate = useNavigate();
+  const { openLogin } = useLoginPrompt();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Wait for the session-restore check (getMe() against the stored token)
-  // to finish before deciding there's no session — otherwise every hard
-  // refresh briefly sees auth=null and bounces straight to login before the
-  // async check even resolves.
+  // Wait for the session-restore check (getMe() against the stored token) to
+  // finish before deciding there is no session — otherwise every hard refresh
+  // briefly renders the signed-out header before the async check resolves.
   if (initializing) return null;
-  if (!auth) return <Navigate to="/" replace />;
+
+  // No redirect for anonymous visitors. This layout wraps the public feed and
+  // the institute pages as well as member screens, so the chrome adapts and
+  // the individual private routes are guarded instead (see RequireSignedIn in
+  // App.jsx). Redirecting here would make every public URL invisible to
+  // logged-out visitors and to crawlers.
 
   const doLogout = async () => {
     await logout();
@@ -145,7 +151,7 @@ export default function AppLayout() {
     <div className="min-h-screen bg-surface">
       <header className="sticky top-0 z-40 border-b border-outline-variant bg-surface-container-lowest">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center gap-4">
-          <NavLink to="/feed" className="flex items-center gap-2 shrink-0">
+          <NavLink to="/" className="flex items-center gap-2 shrink-0">
             <div className="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">E</div>
             <span className="text-lg font-bold text-on-surface hidden sm:inline">Connectedus</span>
           </NavLink>
@@ -155,6 +161,23 @@ export default function AppLayout() {
             <span className="text-sm text-on-surface-variant">Search people, pages, courses...</span>
           </div>
 
+          {!auth ? (
+            <nav className="flex items-center gap-2 ml-auto">
+              <button
+                type="button"
+                onClick={() => openLogin()}
+                className="px-4 py-2 rounded-full text-sm font-semibold text-on-surface-variant hover:bg-surface-container-low bg-transparent border-none cursor-pointer"
+              >
+                Sign in
+              </button>
+              <Link
+                to="/signup"
+                className="px-4 py-2 rounded-full text-sm font-semibold bg-primary text-on-primary hover:opacity-90 no-underline"
+              >
+                Join now
+              </Link>
+            </nav>
+          ) : (
           <nav className="flex items-center gap-1 ml-auto">
             {NAV_ICONS.map((item) => (
               <NavLink
@@ -259,6 +282,7 @@ export default function AppLayout() {
               )}
             </div>
           </nav>
+          )}
         </div>
       </header>
 

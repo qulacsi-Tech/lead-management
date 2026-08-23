@@ -1,11 +1,13 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from core.database import engine
+from core.database import engine, get_db
 from models import ALL_MODEL_MODULES  # noqa: F401  (registers every model on Base)
 from routers import auth
 from routers.register import router as register_router
@@ -19,6 +21,7 @@ from routers.opportunities import router as opportunities_router, public_router 
 from routers.page_enquiries import router as page_enquiries_router, admin_router as enquiries_admin_router
 from routers.social import follow_router, notification_router
 from routers.credits import router as credits_router
+from routers.seo import router as seo_router, render_public_html
 
 UPLOAD_ROOT = os.path.join(os.path.dirname(__file__), "uploads")
 
@@ -95,3 +98,49 @@ async def ping():
 @app.get("/health")
 def health():
     return {"status": "working"}
+
+
+# ---------------------------------------------------------------------------
+# Public site
+#
+# robots.txt and sitemap.xml are unprefixed because crawlers only ever look for
+# them at the origin root. Registered AFTER every /api route so nothing here
+# can shadow the API.
+# ---------------------------------------------------------------------------
+
+app.include_router(seo_router)
+
+if settings.FRONTEND_DIST and os.path.isdir(settings.FRONTEND_DIST):
+    # Serve the built SPA. Hashed build assets are served straight from disk;
+    # every other path falls through to the catch-all below, which returns
+    # index.html with that URL's metadata injected.
+    _assets_dir = os.path.join(settings.FRONTEND_DIST, "assets")
+    if os.path.isdir(_assets_dir):
+        app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_shell(full_path: str, db: AsyncSession = Depends(get_db)):
+        """Client-side routing fallback with server-rendered <head>.
+
+        Declared last so it is only reached when no API route, upload or build
+        asset matched. An unknown /api/* path must still 404 as JSON rather
+        than quietly returning HTML, which would turn a typo in a fetch call
+        into a confusing parse error.
+        """
+        if full_path.startswith(("api/", "uploads/")):
+            raise HTTPException(status_code=404, detail="Not found")
+
+        # A real file in the build (favicon.svg, icons.svg, _redirects, ...)
+        # wins over the SPA shell.
+        candidate = os.path.normpath(os.path.join(settings.FRONTEND_DIST, full_path))
+        if (
+            full_path
+            and candidate.startswith(os.path.abspath(settings.FRONTEND_DIST))
+            and os.path.isfile(candidate)
+        ):
+            return FileResponse(candidate)
+
+        rendered = await render_public_html(full_path, db)
+        if rendered is None:
+            raise HTTPException(status_code=404, detail="Frontend build not found")
+        return rendered

@@ -182,6 +182,23 @@ export const fetchPages = async (q) =>
 
 export const fetchPage = async (pageId) => apiFetch(`/pages/${pageId}`);
 
+/** Enabled institutes, readable without a session — backs the public feed's
+ *  suggestions rail and names the institute behind each notice. */
+export const fetchPublicPages = async (q) =>
+  apiFetch(`/pages/public${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+
+/** Published admission notices and job vacancies across every enabled
+ *  institute. Public: the feed is readable without an account. */
+export const fetchPublicOpportunities = async ({ type, limit = 30 } = {}) => {
+  const params = new URLSearchParams();
+  if (type) params.set('type', type);
+  params.set('limit', String(limit));
+  return apiFetch(`/opportunities?${params}`);
+};
+
+/** Pages the signed-in user follows. Requires a session. */
+export const fetchMyFollows = async () => apiFetch('/follows');
+
 /** The institute pages the signed-in user administers — the real answer to
  *  "do I have an Institute Console?", from the page_admins table. */
 export const fetchMyPages = async () => apiFetch('/pages/mine');
@@ -212,6 +229,24 @@ export const uploadPageMedia = async (pageId, kind, file, caption = '') => {
   formData.append('file', file);
   return apiUpload(`/pages/${pageId}/media`, formData);
 };
+
+/** Public institute page by its vanity slug.
+ *
+ *  Anonymous-safe: the endpoint uses `get_optional_user`, and `apiFetch` simply
+ *  omits the Authorization header when nobody is signed in. Signed-in callers
+ *  additionally get `is_page_admin` / `is_following` resolved for them. */
+export const fetchPageBySlug = async (slug) =>
+  apiFetch(`/pages/slug/${encodeURIComponent(slug)}`);
+
+/** Enquiry from an institute's public page. Works for anonymous visitors. */
+export const submitPageEnquiry = async (pageId, payload) =>
+  apiFetch(`/pages/${pageId}/enquiries`, { method: 'POST', body: payload });
+
+export const followPage = async (pageId) =>
+  apiFetch(`/follows/${pageId}`, { method: 'POST' });
+
+export const unfollowPage = async (pageId) =>
+  apiFetch(`/follows/${pageId}`, { method: 'DELETE' });
 
 export const fetchPageCourses = async (pageId) => apiFetch(`/pages/${pageId}/courses`);
 

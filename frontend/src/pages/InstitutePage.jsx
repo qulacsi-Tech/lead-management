@@ -1,23 +1,24 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import { Input, FormGroup, Select } from '../components/ui/Field';
-import {
-  findPageBySlug,
-  findPageByAdminEmail,
-  COURSE_SPECIALIZATIONS,
-  EXISTING_ENQUIRY_USER,
-  publicCourses,
-  publicOpportunities,
-  addEnquiry,
-} from './mockData';
+import { COURSE_SPECIALIZATIONS } from './mockData';
 import { KEY_HIGHLIGHTS_OPTIONS, FACILITIES_OPTIONS, buildAboutParagraph } from './pageBuilderContent';
-import { useFollows } from './useFollows';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from './PageHeader';
+import {
+  ApiError,
+  resolveAssetUrl,
+  fetchPageBySlug,
+  fetchPageCourses,
+  fetchPageOpportunities,
+  submitPageEnquiry,
+  followPage,
+  unfollowPage,
+} from '../Api/Api';
 
 function statCardsFrom(options, selected) {
   return selected
@@ -25,9 +26,26 @@ function statCardsFrom(options, selected) {
     .filter((s) => s.label);
 }
 
-// Public, read-only. Editing an opportunity now belongs to the Institute
-// Console (/institute/notices, /institute/jobs) so that the public page has a
-// single job: showing published content to visitors.
+/** Two-letter monogram, shown when an institute has not uploaded a logo. */
+function initials(name) {
+  return (name || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+}
+
+/** Backend dates arrive as ISO strings (or null) rather than pre-formatted. */
+function formatDate(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
+}
+
+// Public, read-only. Editing an opportunity belongs to the Institute Console
+// (/institute/notices, /institute/jobs) so that the public page has a single
+// job: showing published content to visitors.
 function OpportunityCard({ op }) {
   const isAdmission = op.type === 'admission';
 
@@ -37,36 +55,31 @@ function OpportunityCard({ op }) {
         <Badge tone={isAdmission ? 'success' : 'tertiary'}>
           {isAdmission ? 'Admission Open Notice' : 'Job Vacancy'}
         </Badge>
-        <span className="text-xs text-on-surface-variant">Ranking #{op.ranking}</span>
       </div>
       <h4 className="text-sm font-bold text-on-surface mb-1">
-        {isAdmission ? op.course : op.position}
+        {isAdmission ? op.title : op.position || op.title}
       </h4>
-      <p className="text-xs text-on-surface-variant mb-3">{op.description}</p>
+      {op.description && <p className="text-xs text-on-surface-variant mb-3">{op.description}</p>}
       <div className="grid grid-cols-2 gap-y-1 text-xs text-on-surface-variant mb-3">
         {isAdmission ? (
           <>
-            <span>Session: {op.session}</span>
-            <span>Eligibility: {op.eligibility}</span>
-            <span>Starts: {op.startDate}</span>
-            <span>Ends: {op.endDate}</span>
+            <span>Session: {op.session || '—'}</span>
+            <span>Eligibility: {op.eligibility || '—'}</span>
+            <span>Starts: {formatDate(op.start_date)}</span>
+            <span>Ends: {formatDate(op.end_date)}</span>
           </>
         ) : (
           <>
-            <span>Subject: {op.subject}</span>
-            <span>Experience: {op.experience}</span>
-            <span>Qualification: {op.qualification}</span>
-            <span>Apply before: {op.applyBefore}</span>
+            <span>Subject: {op.subject || '—'}</span>
+            <span>Experience: {op.experience || '—'}</span>
+            <span>Qualification: {op.qualification || '—'}</span>
+            <span>Apply before: {formatDate(op.apply_before)}</span>
           </>
         )}
       </div>
-      {op.applyUrl && (
-        <p className="text-xs text-primary mb-3">Apply: {op.applyUrl}</p>
+      {op.apply_url && (
+        <p className="text-xs text-primary mb-0">Apply: {op.apply_url}</p>
       )}
-      <div className="flex items-center gap-4 text-xs text-on-surface-variant border-t border-outline-variant pt-2">
-        <span>Reach {op.reach}</span>
-        <span>Views {op.views}</span>
-      </div>
     </Card>
   );
 }
@@ -74,18 +87,18 @@ function OpportunityCard({ op }) {
 // The enquiry funnel that connects an Institute's public landing page to the
 // marketplace behind it — deliberately shows only the institute's own name,
 // never the platform's, per docs/CLIENT_FEEDBACK_2026-08-12.md Section 6.
-function EnquiryModal({ open, onClose, page, course, setCourse, specialization, setSpecialization }) {
-  const [mode, setMode] = useState('new'); // 'new' | 'existing'
-  const [newUser, setNewUser] = useState({ name: '', email: '', mobile: '', otp: '', state: '', city: '' });
-  const [otpSent, setOtpSent] = useState(false);
-  const [existingPhone, setExistingPhone] = useState('');
-  const [existingMatch, setExistingMatch] = useState(null); // null | user object | false (not found)
+//
+// Anonymous visitors may submit: POST /pages/{id}/enquiries takes an optional
+// user, and records who submitted only when somebody is signed in.
+function EnquiryModal({ open, onClose, page, courses, course, setCourse, specialization, setSpecialization }) {
+  const [form, setForm] = useState({ name: '', email: '', phone: '', state: '', city: '' });
   const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const courses = publicCourses(page);
-  // Specializations come from the institute's own course record when it has
-  // them, falling back to the platform's demo map for legacy string courses.
   const selectedCourse = courses.find((c) => c.name === course);
+  // Specializations come from the institute's own course record when it has
+  // them, falling back to the platform's map for courses that carry none.
   const specializations = selectedCourse?.specializations?.length
     ? selectedCourse.specializations
     : COURSE_SPECIALIZATIONS[course] || [];
@@ -94,50 +107,38 @@ function EnquiryModal({ open, onClose, page, course, setCourse, specialization, 
     onClose();
     // Reset after the close animation would run, so a reopen starts fresh.
     setTimeout(() => {
-      setMode('new');
-      setNewUser({ name: '', email: '', mobile: '', otp: '', state: '', city: '' });
-      setOtpSent(false);
-      setExistingPhone('');
-      setExistingMatch(null);
+      setForm({ name: '', email: '', phone: '', state: '', city: '' });
       setSubmitted(false);
+      setError('');
     }, 200);
   };
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   // The enquiry is recorded against this institute so it appears in that
   // institute's console (/institute/enquiries) — enquiries belong to the
   // institute they were addressed to, not to the platform.
-  const submitNewUser = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    addEnquiry({
-      pageSlug: page.slug,
-      name: newUser.name,
-      email: newUser.email,
-      phone: newUser.mobile,
-      city: newUser.city,
-      state: newUser.state,
-      course,
-      specialization,
-    });
-    setSubmitted(true);
-  };
-
-  const lookupExisting = (e) => {
-    e.preventDefault();
-    setExistingMatch(existingPhone.trim() === EXISTING_ENQUIRY_USER.phone ? EXISTING_ENQUIRY_USER : false);
-  };
-
-  const submitExisting = () => {
-    addEnquiry({
-      pageSlug: page.slug,
-      name: existingMatch.name,
-      email: `${existingMatch.name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-      phone: existingMatch.phone,
-      city: '',
-      state: '',
-      course,
-      specialization,
-    });
-    setSubmitted(true);
+    setSaving(true);
+    setError('');
+    try {
+      await submitPageEnquiry(page.id, {
+        name: form.name,
+        email: form.email,
+        phone: form.phone || undefined,
+        city: form.city || undefined,
+        state: form.state || undefined,
+        course_id: selectedCourse?.id,
+        course_name: course || undefined,
+        specialization: specialization || undefined,
+      });
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not submit your enquiry.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -155,7 +156,9 @@ function EnquiryModal({ open, onClose, page, course, setCourse, specialization, 
         <>
           <div className="flex items-center gap-2 mb-1">
             <div className="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center text-sm font-bold text-primary shrink-0 overflow-hidden">
-              {page.logoUrl ? <img src={page.logoUrl} alt={page.name} className="w-full h-full object-cover" /> : page.logo}
+              {page.logo_url
+                ? <img src={resolveAssetUrl(page.logo_url)} alt={page.name} className="w-full h-full object-cover" />
+                : initials(page.name)}
             </div>
             <div>
               <h3 className="text-base font-bold text-on-surface mb-0">{page.name}</h3>
@@ -178,87 +181,21 @@ function EnquiryModal({ open, onClose, page, course, setCourse, specialization, 
             </FormGroup>
           </div>
 
-          <div className="flex gap-2 mb-4 border-b border-outline-variant">
-            {[{ key: 'new', label: 'New User' }, { key: 'existing', label: 'Existing User' }].map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setMode(t.key)}
-                className={`px-3 py-2 text-sm font-semibold cursor-pointer border-b-2 -mb-px transition-colors ${
-                  mode === t.key ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {mode === 'new' ? (
-            <form onSubmit={submitNewUser} className="space-y-3">
-              <Input
-                required placeholder="Full Name"
-                value={newUser.name}
-                onChange={(e) => setNewUser((f) => ({ ...f, name: e.target.value }))}
-              />
-              <Input
-                required type="email" placeholder="Email Address"
-                value={newUser.email}
-                onChange={(e) => setNewUser((f) => ({ ...f, email: e.target.value }))}
-              />
-              <div className="flex gap-2">
-                <Input
-                  required placeholder="Mobile Number"
-                  value={newUser.mobile}
-                  onChange={(e) => setNewUser((f) => ({ ...f, mobile: e.target.value }))}
-                />
-                <Button type="button" variant="outline" size="sm" onClick={() => setOtpSent(true)} disabled={!newUser.mobile || otpSent}>
-                  {otpSent ? 'Sent' : 'Send OTP'}
-                </Button>
-              </div>
-              {otpSent && (
-                <Input
-                  required placeholder="Enter OTP"
-                  value={newUser.otp}
-                  onChange={(e) => setNewUser((f) => ({ ...f, otp: e.target.value }))}
-                />
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="State" value={newUser.state} onChange={(e) => setNewUser((f) => ({ ...f, state: e.target.value }))} />
-                <Input placeholder="City" value={newUser.city} onChange={(e) => setNewUser((f) => ({ ...f, city: e.target.value }))} />
-              </div>
-              <Button type="submit" className="w-full" disabled={!course || (otpSent && !newUser.otp)}>
-                Submit Enquiry
-              </Button>
-            </form>
-          ) : (
-            <div className="space-y-3">
-              {existingMatch === null && (
-                <form onSubmit={lookupExisting} className="space-y-3">
-                  <Input
-                    required placeholder="Registered mobile number"
-                    value={existingPhone}
-                    onChange={(e) => setExistingPhone(e.target.value)}
-                  />
-                  <Button type="submit" className="w-full">Find My Account</Button>
-                </form>
-              )}
-              {existingMatch === false && (
-                <p className="text-sm text-error mb-0">
-                  No account found with that number. Try "New User" instead.
-                </p>
-              )}
-              {existingMatch && (
-                <div>
-                  <p className="text-sm text-on-surface mb-3">
-                    Welcome back, <strong>{existingMatch.name}</strong>.
-                  </p>
-                  <Button className="w-full" disabled={!course} onClick={submitExisting}>
-                    Submit my application
-                  </Button>
-                </div>
-              )}
+          <form onSubmit={submit} className="space-y-3">
+            <Input required placeholder="Full Name" value={form.name} onChange={set('name')} />
+            <Input required type="email" placeholder="Email Address" value={form.email} onChange={set('email')} />
+            <Input placeholder="Mobile Number" value={form.phone} onChange={set('phone')} />
+            <div className="grid grid-cols-2 gap-3">
+              <Input placeholder="State" value={form.state} onChange={set('state')} />
+              <Input placeholder="City" value={form.city} onChange={set('city')} />
             </div>
-          )}
+            {error && (
+              <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{error}</p>
+            )}
+            <Button type="submit" className="w-full" disabled={!course || saving}>
+              {saving ? 'Submitting…' : 'Submit Enquiry'}
+            </Button>
+          </form>
         </>
       )}
     </Modal>
@@ -278,37 +215,90 @@ function FloatingEnquiryButton({ onClick }) {
   );
 }
 
+/**
+ * An institute's public page, at connectedus.in/<slug>.
+ *
+ * PUBLIC and slug-driven: it reads GET /pages/slug/{slug}, which serves
+ * anonymous callers and hides disabled pages from everyone but their admins.
+ * Ownership is decided by `is_page_admin` on that response — resolved server
+ * side from the page_admins table, never by comparing the URL slug or an email
+ * in the browser.
+ */
 export default function InstitutePage() {
   const { instituteSlug: slug } = useParams();
   const { user } = useAuth();
-  // Ownership is decided by admin membership on the page itself, never by
-  // which slug is in the URL — a slug matching *someone else's* page must
-  // never grant Edit Page / Add Admin / Post Notice controls.
-  const page = slug ? findPageBySlug(slug) : findPageByAdminEmail(user?.email);
-  const isMyPage = !!page && !!user && page.admins?.some((a) => a.email?.toLowerCase() === user.email?.toLowerCase());
-  const { isFollowing, toggleFollow } = useFollows();
+
+  const [page, setPage] = useState(null);
+  const [courses, setCourses] = useState([]);
+  const [opportunities, setOpportunities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState('');
+
+  const [following, setFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
 
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const [course, setCourse] = useState('');
   const [specialization, setSpecialization] = useState('');
   const [courseDetail, setCourseDetail] = useState(null);
 
-  if (!page) {
+  const load = useCallback(async () => {
+    setLoading(true);
+    setNotFound(false);
+    setError('');
+    try {
+      const detail = await fetchPageBySlug(slug);
+      setPage(detail);
+      setFollowing(!!detail.is_following);
+
+      // Courses and opportunities are page-scoped resources, so they can only
+      // be fetched once the slug has resolved to an id. Both endpoints return
+      // published items only to non-admins, enforced server side.
+      const [c, o] = await Promise.allSettled([
+        fetchPageCourses(detail.id),
+        fetchPageOpportunities(detail.id),
+      ]);
+      setCourses(c.status === 'fulfilled' ? c.value : []);
+      setOpportunities(o.status === 'fulfilled' ? o.value : []);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) setNotFound(true);
+      else setError(err instanceof ApiError ? err.message : 'Could not load this institute page.');
+      setPage(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const toggleFollow = async () => {
+    if (!page) return;
+    setFollowBusy(true);
+    try {
+      if (following) await unfollowPage(page.id);
+      else await followPage(page.id);
+      setFollowing((f) => !f);
+    } catch {
+      // A failed follow is not worth interrupting a public page for.
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
+  if (loading) {
+    return <p className="text-sm text-on-surface-variant py-12 text-center m-0">Loading…</p>;
+  }
+
+  if (notFound || !page) {
     return (
       <div>
         <PageHeader
-          title={slug ? 'Page not found' : "You don't have an Institute Page yet"}
-          subtitle={
-            slug
-              ? "This Institute Page doesn't exist or hasn't been published yet."
-              : 'Create one to start posting Admission Notices and Job Vacancies.'
-          }
+          title="Page not found"
+          subtitle={error || "This Institute Page doesn't exist or hasn't been published yet."}
         />
-        {!slug && (
-          <Link to="/create-page">
-            <Button icon="add_business">Create Institute Page</Button>
-          </Link>
-        )}
       </div>
     );
   }
@@ -318,11 +308,11 @@ export default function InstitutePage() {
     setEnquiryOpen(true);
   };
 
-  const content = page.content;
-  const courses = publicCourses(page);
-  const opportunities = publicOpportunities(page);
+  const isMyPage = !!page.is_page_admin;
+  const content = page.content || {};
   const gallery = page.gallery || [];
-  const socials = Object.entries(page.socialLinks || {}).filter(([, v]) => v);
+  const banners = page.banners || [];
+  const socials = Object.entries(page.social_links || {}).filter(([, v]) => v);
   const quickSelected = courses.find((c) => c.name === course);
   const quickSpecializations = quickSelected?.specializations?.length
     ? quickSelected.specializations
@@ -338,25 +328,29 @@ export default function InstitutePage() {
       {/* Cover + logo */}
       <Card className="overflow-hidden mb-5">
         <div className="h-28 md:h-36 bg-gradient-to-r from-primary to-tertiary" />
-        {page.banners?.length > 0 && (
+        {banners.length > 0 && (
           <div className="grid grid-cols-3 gap-1 px-5 -mt-1">
-            {page.banners.map((src, i) => (
-              <img key={i} src={src} alt={`Banner ${i + 1}`} className="w-full h-16 md:h-20 object-cover rounded" />
+            {banners.map((src, i) => (
+              <img key={src} src={resolveAssetUrl(src)} alt={`${page.name} banner ${i + 1}`} className="w-full h-16 md:h-20 object-cover rounded" />
             ))}
           </div>
         )}
         <div className="p-5 pt-0">
           <div className="w-20 h-20 -mt-10 mb-3 rounded-2xl border-4 border-surface-container-lowest shadow-sm flex items-center justify-center text-xl font-bold text-primary bg-surface-container-high overflow-hidden">
-            {page.logoUrl ? <img src={page.logoUrl} alt={page.name} className="w-full h-full object-cover" /> : page.logo}
+            {page.logo_url
+              ? <img src={resolveAssetUrl(page.logo_url)} alt={page.name} className="w-full h-full object-cover" />
+              : initials(page.name)}
           </div>
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-on-surface">{page.name}</h3>
+                <h1 className="text-lg font-bold text-on-surface m-0">{page.name}</h1>
                 <Badge tone="primary">{page.type}</Badge>
               </div>
               {page.tagline && <p className="text-sm text-on-surface-variant italic mb-0.5">{page.tagline}</p>}
-              <p className="text-xs text-on-surface-variant mb-0">{page.followers.toLocaleString()} followers</p>
+              <p className="text-xs text-on-surface-variant mb-0">
+                {(page.followers_count || 0).toLocaleString()} followers
+              </p>
             </div>
             <div className="flex gap-2">
               {isMyPage ? (
@@ -365,15 +359,22 @@ export default function InstitutePage() {
                 <Link to="/institute">
                   <Button variant="outline" size="sm" icon="tune">Manage this page</Button>
                 </Link>
-              ) : (
+              ) : user ? (
                 <Button
                   size="sm"
-                  variant={isFollowing(page.slug) ? 'outline' : 'primary'}
-                  icon={isFollowing(page.slug) ? 'check' : 'add'}
-                  onClick={() => toggleFollow(page.slug)}
+                  variant={following ? 'outline' : 'primary'}
+                  icon={following ? 'check' : 'add'}
+                  disabled={followBusy}
+                  onClick={toggleFollow}
                 >
-                  {isFollowing(page.slug) ? 'Following' : 'Follow'}
+                  {following ? 'Following' : 'Follow'}
                 </Button>
+              ) : (
+                /* Following needs an account, so an anonymous visitor is sent
+                   to sign in rather than shown a button that cannot work. */
+                <Link to="/">
+                  <Button size="sm" icon="add">Sign in to follow</Button>
+                </Link>
               )}
             </div>
           </div>
@@ -383,7 +384,7 @@ export default function InstitutePage() {
       <div className="grid md:grid-cols-3 gap-5">
         <div className="md:col-span-2 space-y-5">
           <Card className="p-5">
-            <h4 className="text-sm font-bold text-on-surface mb-2">About</h4>
+            <h2 className="text-sm font-bold text-on-surface mb-2">About</h2>
             <p className="text-sm text-on-surface-variant mb-0">
               {buildAboutParagraph(page.name, content.aboutStats) || page.about || 'No description added yet.'}
             </p>
@@ -391,7 +392,7 @@ export default function InstitutePage() {
 
           {content.whyChooseUs?.length > 0 && (
             <Card className="p-5">
-              <h4 className="text-sm font-bold text-on-surface mb-3">Why Choose Us</h4>
+              <h2 className="text-sm font-bold text-on-surface mb-3">Why Choose Us</h2>
               <div className="grid sm:grid-cols-2 gap-2">
                 {content.whyChooseUs.map((point) => (
                   <div key={point} className="flex items-center gap-2 text-sm text-on-surface">
@@ -405,7 +406,7 @@ export default function InstitutePage() {
 
           {content.keyHighlights?.length > 0 && (
             <Card className="p-5">
-              <h4 className="text-sm font-bold text-on-surface mb-3">Key Highlights</h4>
+              <h2 className="text-sm font-bold text-on-surface mb-3">Key Highlights</h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {statCardsFrom(KEY_HIGHLIGHTS_OPTIONS, content.keyHighlights).map((h) => (
                   <div key={h.key} className="p-3 rounded-xl bg-surface-container-low text-center">
@@ -419,7 +420,7 @@ export default function InstitutePage() {
 
           {content.facilities?.length > 0 && (
             <Card className="p-5">
-              <h4 className="text-sm font-bold text-on-surface mb-3">Facilities</h4>
+              <h2 className="text-sm font-bold text-on-surface mb-3">Facilities</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {statCardsFrom(FACILITIES_OPTIONS, content.facilities).map((f) => (
                   <div key={f.key} className="p-3 rounded-xl border border-outline-variant">
@@ -433,7 +434,7 @@ export default function InstitutePage() {
 
           {content.campusLife?.length > 0 && (
             <Card className="p-5">
-              <h4 className="text-sm font-bold text-on-surface mb-3">Campus Life</h4>
+              <h2 className="text-sm font-bold text-on-surface mb-3">Campus Life</h2>
               <div className="flex flex-wrap gap-1.5">
                 {content.campusLife.map((c) => <Badge key={c} tone="tertiary">{c}</Badge>)}
               </div>
@@ -442,7 +443,7 @@ export default function InstitutePage() {
 
           {content.achievements && Object.values(content.achievements).some(Boolean) && (
             <Card className="p-5">
-              <h4 className="text-sm font-bold text-on-surface mb-3">Achievements & Placement</h4>
+              <h2 className="text-sm font-bold text-on-surface mb-3">Achievements &amp; Placement</h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3 rounded-xl bg-primary-container/30 text-center">
                   <p className="text-lg font-bold text-primary mb-0">₹{content.achievements.highestPlacement || '—'} LPA</p>
@@ -467,7 +468,7 @@ export default function InstitutePage() {
           {/* Courses — INSTITUTE-OWNED, managed at /institute/courses */}
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold text-on-surface">Courses Offered</h4>
+              <h2 className="text-sm font-bold text-on-surface">Courses Offered</h2>
               {isMyPage && (
                 <Link to="/institute/courses">
                   <Button size="sm" variant="ghost" icon="tune">Manage</Button>
@@ -485,10 +486,10 @@ export default function InstitutePage() {
                   >
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <p className="text-sm font-bold text-on-surface m-0">{c.name}</p>
-                      {c.admissionOpen && <Badge tone="success">Open</Badge>}
+                      {c.admission_open && <Badge tone="success">Open</Badge>}
                     </div>
                     <p className="text-[11px] text-on-surface-variant m-0 mb-2">
-                      {c.category} · {c.level}
+                      {[c.category, c.level].filter(Boolean).join(' · ')}
                     </p>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-on-surface-variant">
                       {c.duration && <span><strong className="text-on-surface">{c.duration}</strong> duration</span>}
@@ -505,7 +506,7 @@ export default function InstitutePage() {
 
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold text-on-surface">Opportunities</h4>
+              <h2 className="text-sm font-bold text-on-surface">Opportunities</h2>
               {isMyPage && (
                 <div className="flex gap-2">
                   <Link to="/institute/notices">
@@ -529,12 +530,12 @@ export default function InstitutePage() {
           {/* Gallery — INSTITUTE-OWNED, managed at /institute/profile */}
           {gallery.length > 0 && (
             <Card className="p-5">
-              <h4 className="text-sm font-bold text-on-surface mb-3">Gallery</h4>
+              <h2 className="text-sm font-bold text-on-surface mb-3">Gallery</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {gallery.map((img) => (
-                  <figure key={img.id} className="m-0">
+                  <figure key={img.id || img.url} className="m-0">
                     <img
-                      src={img.url}
+                      src={resolveAssetUrl(img.url)}
                       alt={img.caption || page.name}
                       className="w-full h-28 object-cover rounded-xl border border-outline-variant"
                     />
@@ -550,12 +551,12 @@ export default function InstitutePage() {
 
         <div className="space-y-5">
           <Card className="p-5">
-            <h4 className="text-sm font-bold text-on-surface mb-3">Details</h4>
+            <h2 className="text-sm font-bold text-on-surface mb-3">Details</h2>
             <ul className="space-y-2 text-sm text-on-surface-variant">
-              {page.address && (
+              {(page.address || page.city || page.state) && (
                 <li className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[18px]">location_on</span>
-                  {page.address}
+                  {[page.address, page.city, page.state].filter(Boolean).join(', ')}
                 </li>
               )}
               {page.website && (
@@ -593,7 +594,7 @@ export default function InstitutePage() {
                 ))}
               </div>
             )}
-            <h4 className="text-sm font-bold text-on-surface mt-4 mb-2">Courses</h4>
+            <h3 className="text-sm font-bold text-on-surface mt-4 mb-2">Courses</h3>
             <div className="flex flex-wrap gap-1.5">
               {courses.map((c) => (
                 <button key={c.id} type="button" onClick={() => openEnquiry(c.name)} className="cursor-pointer bg-transparent border-none p-0">
@@ -607,9 +608,9 @@ export default function InstitutePage() {
           </Card>
 
           <Card className="p-5">
-            <h4 className="text-sm font-bold text-on-surface mb-1">Quick Enquiry</h4>
+            <h2 className="text-sm font-bold text-on-surface mb-1">Quick Enquiry</h2>
             <p className="text-xs text-on-surface-variant mb-3">
-              Pick a course and specialization — we'll take it from there.
+              Pick a course and specialization — we&apos;ll take it from there.
             </p>
             <div className="space-y-3">
               <Select value={course} onChange={(e) => { setCourse(e.target.value); setSpecialization(''); }}>
@@ -640,10 +641,10 @@ export default function InstitutePage() {
               <div>
                 <h3 className="text-base font-bold text-on-surface m-0">{courseDetail.name}</h3>
                 <p className="text-xs text-on-surface-variant m-0 mt-0.5">
-                  {courseDetail.category} · {courseDetail.level}
+                  {[courseDetail.category, courseDetail.level].filter(Boolean).join(' · ')}
                 </p>
               </div>
-              {courseDetail.admissionOpen && <Badge tone="success">Admissions Open</Badge>}
+              {courseDetail.admission_open && <Badge tone="success">Admissions Open</Badge>}
             </div>
 
             <div className="bg-surface-container-low rounded-2xl p-4 grid grid-cols-2 gap-3 mb-4 border border-outline-variant text-xs">
@@ -685,6 +686,7 @@ export default function InstitutePage() {
         open={enquiryOpen}
         onClose={() => setEnquiryOpen(false)}
         page={page}
+        courses={courses}
         course={course}
         setCourse={setCourse}
         specialization={specialization}
