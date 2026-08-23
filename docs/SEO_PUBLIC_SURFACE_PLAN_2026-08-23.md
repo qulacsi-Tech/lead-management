@@ -418,6 +418,44 @@ name the institute behind a notice. Registered before `/{page_id}`, since
 FastAPI matches in registration order and would otherwise read `public` as an
 id.
 
+### Step 3e — likes and notifications ✅
+
+Two things in the feed were still fake after 3b.
+
+**Likes had no backend at all.** `opportunity_likes` (migration 0004) plus
+`POST` / `DELETE /opportunities/{id}/like`. Scoped to opportunities, which
+exist, rather than to posts, which do not.
+
+- **Idempotent both ways.** A unique constraint on `(user_id,
+  opportunity_id)` makes a double-tap or a retried request a no-op, so the
+  count cannot be inflated by the client.
+- **Counted, not stored.** `likes_count` is a grouped `COUNT` and
+  `liked_by_me` a membership check, both resolved per request. A denormalised
+  counter needs every like to update two rows in step and drifts the moment
+  one fails; at feed scale the query is cheap and always correct.
+- Two queries per page of results, not two per row.
+- Only published opportunities on enabled pages are likeable — 404 otherwise,
+  401 anonymous.
+
+**Notifications existed server-side and were ignored.** The bell invented one
+every four seconds from a fixture pool — always full, never true. It now reads
+`/api/notifications`, polls once a minute (delivery by push/websocket is
+explicitly out of Phase 2 scope), and opening the panel persists the read
+state via `read-all` instead of forgetting it on reload. Hidden entirely for
+signed-out visitors, since notifications are per account.
+
+Verified end to end: follow a page → it publishes a notice → `unread` goes
+0 → 1 with the real row `[page_opportunity] genx institute of technology
+posted a new Admission Notice` → `read-all` returns it to 0.
+
+**Share** uses the Web Share API where available and falls back to copying the
+link. It shares the *institute page*, because a notice has no URL of its own —
+the direct consequence of the deferred vacancy/notice URL decision.
+
+Nothing in the feed or header reads `mockData` any more. The fixture exports
+(`mockFeedPosts`, `notificationPool`, `TRENDING_TOPICS`, …) are now
+unreferenced and can be deleted once the remaining screens are migrated.
+
 ### Step 3c — dev parity ✅
 
 The SEO output never appeared on Vite's dev server, because Vite serves
@@ -485,16 +523,34 @@ FRONTEND_DIST="<abs path>/frontend/dist" PUBLIC_BASE_URL="http://localhost:8000"
 
 ## Where this stands
 
-Steps 1, 2, 2b, 3, 3b, 3c and 3d are done. The public surface is real: an
+Steps 1, 2, 2b, 3, 3b, 3c, 3d and 3e are done. The public surface is real: an
 anonymous visitor can browse the feed and every institute page, both carry
 per-URL metadata and server-rendered content, and `robots.txt` / `sitemap.xml`
-are live.
+are live. Every interactive feature the feed offers — follow, like, share,
+notifications — is backed by a real endpoint.
 
 **The feed will read "Nothing posted yet" until institutes publish.** The dev
 database has 4 institutes, 1 course and 0 opportunities — that is accurate, not
 broken. Post an admission notice or vacancy from the Institute Console
 (`/institute/notices`, `/institute/jobs`) and it appears in both the app and
 the page source immediately.
+
+### Feed data sources — what is real, what is not
+
+| Feature | Source | Status |
+|---|---|---|
+| Institute pages | `GET /pages/public` | ✅ real |
+| Notices & vacancies | `GET /opportunities` | ✅ real |
+| Follow / unfollow | `POST`/`DELETE /follows/{id}` | ✅ real |
+| Like / unlike | `POST`/`DELETE /opportunities/{id}/like` | ✅ real |
+| Notifications | `GET /notifications` + `read-all` | ✅ real |
+| Admissions closing soon | real notices by `end_date` | ✅ real |
+| Who's hiring | institutes with published vacancies | ✅ real |
+| Share | Web Share API / clipboard | ✅ real |
+| **Comments** | — | ❌ no backend; needs a table, threading and moderation |
+| **Member posts** | — | ❌ no Post entity (step 4) |
+| **Notice / vacancy detail pages** | — | ❌ deferred by decision |
+| `views` / `reach` counters | columns exist, never incremented | ❌ not wired |
 
 ## Next — tomorrow
 

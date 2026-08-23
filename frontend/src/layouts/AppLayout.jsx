@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useSession } from '../context/useSession';
 import { useMyPages } from '../hooks/useMyPages';
 import { useLoginPrompt } from '../context/LoginPrompt';
-import { mockNotifications, notificationPool } from '../pages/mockData';
-import { useDesiredCriteria } from '../pages/useDesiredCriteria';
+import {
+  fetchNotifications,
+  fetchUnreadCount,
+  markAllNotificationsRead,
+} from '../Api/Api';
 
 const NAV_ICONS = [
   { to: '/', icon: 'home', label: 'Home', end: true },
@@ -12,58 +15,91 @@ const NAV_ICONS = [
   { to: '/dashboard', icon: 'space_dashboard', label: 'Dashboard' },
 ];
 
-const NEW_NOTIFICATION_SECONDS = 4;
-let notifIdCounter = 100;
+// How often the bell re-checks for new notifications. A poll rather than a
+// push because delivery (websocket/push) is explicitly out of scope for
+// Phase 2 — see the Notification model docstring.
+const NOTIFICATION_POLL_MS = 60000;
 
+// Notification `type` -> icon. Types come from NOTIFICATION_TYPES in
+// backend/models/social.py; anything unrecognised falls back to a bell.
+const NOTIFICATION_ICONS = {
+  opportunity_match: 'work',
+  page_opportunity: 'campaign',
+  enquiry_received: 'contact_mail',
+  profile_unlocked: 'lock_open',
+  page_admin_assigned: 'shield_person',
+  system: 'notifications',
+};
+
+function timeAgo(value) {
+  if (!value) return '';
+  const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return '';
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 60) return 'Just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+/**
+ * Real notifications, from /api/notifications.
+ *
+ * This used to invent one every four seconds from a fixture pool — a bell that
+ * always had something in it and never anything true. Rows are now written by
+ * the services that cause them (an enquiry arriving, a page admin being
+ * assigned) and read back by the recipient.
+ */
 function NotificationBell() {
-  const [notifications, setNotifications] = useState(
-    mockNotifications.map((n, i) => ({ ...n, id: i, read: false }))
-  );
+  const { auth } = useSession();
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
-  const [toast, setToast] = useState(null);
-  const poolIndex = useRef(0);
-  const toastTimer = useRef(null);
-  const { desiredJob } = useDesiredCriteria();
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const load = useCallback(async () => {
+    if (!auth) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+    try {
+      const [rows, count] = await Promise.all([
+        fetchNotifications({ limit: 20 }),
+        fetchUnreadCount(),
+      ]);
+      setNotifications(Array.isArray(rows) ? rows : []);
+      setUnreadCount(count?.unread ?? count?.count ?? 0);
+    } catch {
+      // A failing bell must not break the header.
+    }
+  }, [auth]);
 
   useEffect(() => {
-    const tick = setInterval(() => {
-      // Every 4th notification is a real match against the user's saved
-      // desired criteria (matrimony-style "your saved search matched a new
-      // lead"), instead of a random pool item — see
-      // docs/CLIENT_FEEDBACK_2026-08-16.md, Section 4.
-      const isMatch = poolIndex.current > 0 && poolIndex.current % 4 === 0;
-      const template = isMatch
-        ? {
-            icon: 'work',
-            title: `New Job Vacancy matches your saved search: ${desiredJob.role} in ${desiredJob.preferredLocation}`,
-          }
-        : notificationPool[poolIndex.current % notificationPool.length];
-      poolIndex.current += 1;
-      notifIdCounter += 1;
-      const fresh = { ...template, id: notifIdCounter, time: 'Just now', read: false };
+    load();
+    if (!auth) return undefined;
+    const tick = setInterval(load, NOTIFICATION_POLL_MS);
+    return () => clearInterval(tick);
+  }, [auth, load]);
 
-      setNotifications((prev) => [fresh, ...prev].slice(0, 12));
-      setToast(fresh);
-
-      clearTimeout(toastTimer.current);
-      toastTimer.current = setTimeout(() => setToast(null), 5000);
-    }, NEW_NOTIFICATION_SECONDS * 1000);
-
-    return () => {
-      clearInterval(tick);
-      clearTimeout(toastTimer.current);
-    };
-  }, [desiredJob]);
-
-  const toggleOpen = () => {
-    setOpen((o) => {
-      const next = !o;
-      if (next) setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      return next;
-    });
+  // Opening the panel is the read receipt, as before — but it now persists.
+  const toggleOpen = async () => {
+    const next = !open;
+    setOpen(next);
+    if (next && unreadCount > 0) {
+      setUnreadCount(0);
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      try {
+        await markAllNotificationsRead();
+      } catch {
+        load();
+      }
+    }
   };
+
+  // Nothing to show a signed-out visitor: notifications are per account.
+  if (!auth) return null;
 
   return (
     <div className="relative" onMouseLeave={() => setOpen(false)}>
@@ -83,36 +119,39 @@ function NotificationBell() {
         <span className="hidden sm:inline">Alerts</span>
       </button>
 
-      {/* Transient live-notification toast — auto-collapses after 2s */}
-      {toast && !open && (
-        <div className="absolute right-0 mt-2 w-72 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-3 flex items-start gap-2.5 animate-pulse">
-          <span className="w-8 h-8 rounded-full bg-error-container text-error flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-[18px]">{toast.icon}</span>
-          </span>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-on-surface mb-0">{toast.title}</p>
-            <p className="text-[11px] text-on-surface-variant mb-0">Just now</p>
-          </div>
-        </div>
-      )}
-
       {open && (
         <div className="absolute right-0 mt-2 w-80 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-outline-variant">
             <p className="text-sm font-bold text-on-surface mb-0">Notifications</p>
           </div>
           <div className="max-h-80 overflow-y-auto">
-            {notifications.map((n) => (
-              <div key={n.id} className="flex items-start gap-2.5 px-4 py-3 border-b border-outline-variant last:border-0 hover:bg-surface-container-low">
-                <span className="w-8 h-8 rounded-full bg-surface-container-high text-primary flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-[18px]">{n.icon}</span>
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-on-surface mb-0">{n.title}</p>
-                  <p className="text-[11px] text-on-surface-variant mb-0">{n.time}</p>
+            {notifications.length === 0 ? (
+              <p className="px-4 py-6 text-xs text-on-surface-variant text-center m-0">
+                Nothing yet.
+              </p>
+            ) : (
+              notifications.map((n) => (
+                <div
+                  key={n.id}
+                  className={`flex items-start gap-2.5 px-4 py-3 border-b border-outline-variant last:border-0 hover:bg-surface-container-low ${
+                    n.is_read ? '' : 'bg-primary-fixed/30'
+                  }`}
+                >
+                  <span className="w-8 h-8 rounded-full bg-surface-container-high text-primary flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">
+                      {NOTIFICATION_ICONS[n.type] || 'notifications'}
+                    </span>
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-on-surface mb-0">{n.title}</p>
+                    {n.message && (
+                      <p className="text-[11px] text-on-surface-variant mb-0">{n.message}</p>
+                    )}
+                    <p className="text-[11px] text-on-surface-variant mb-0">{timeAgo(n.created_at)}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}

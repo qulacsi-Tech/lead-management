@@ -196,6 +196,34 @@ export const fetchPublicOpportunities = async ({ type, limit = 30 } = {}) => {
   return apiFetch(`/opportunities?${params}`);
 };
 
+/** Like / unlike a published notice or vacancy. Both are idempotent server
+ *  side and return { liked, likes_count }, so the button renders from the
+ *  server's answer rather than from a guess. Requires a session. */
+export const likeOpportunity = async (opportunityId) =>
+  apiFetch(`/opportunities/${opportunityId}/like`, { method: 'POST' });
+
+export const unlikeOpportunity = async (opportunityId) =>
+  apiFetch(`/opportunities/${opportunityId}/like`, { method: 'DELETE' });
+
+// ----------------------------------------------------
+// Notifications
+// ----------------------------------------------------
+
+export const fetchNotifications = async ({ unreadOnly = false, limit = 30 } = {}) => {
+  const params = new URLSearchParams();
+  if (unreadOnly) params.set('unread_only', 'true');
+  params.set('limit', String(limit));
+  return apiFetch(`/notifications?${params}`);
+};
+
+export const fetchUnreadCount = async () => apiFetch('/notifications/unread-count');
+
+export const markNotificationRead = async (id) =>
+  apiFetch(`/notifications/${id}/read`, { method: 'POST' });
+
+export const markAllNotificationsRead = async () =>
+  apiFetch('/notifications/read-all', { method: 'POST' });
+
 /** Pages the signed-in user follows. Requires a session. */
 export const fetchMyFollows = async () => apiFetch('/follows');
 

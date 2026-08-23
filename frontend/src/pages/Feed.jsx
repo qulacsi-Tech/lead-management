@@ -14,6 +14,8 @@ import {
   fetchMyFollows,
   followPage,
   unfollowPage,
+  likeOpportunity,
+  unlikeOpportunity,
 } from '../Api/Api';
 
 const TYPE_BADGE = {
@@ -184,8 +186,49 @@ function Composer() {
 
 /** One published admission notice or job vacancy, from /api/opportunities. */
 function OpportunityCard({ opportunity: o, page }) {
+  const { auth } = useSession();
+  const { openLogin } = useLoginPrompt();
   const badge = TYPE_BADGE[o.type] || TYPE_BADGE.admission;
   const posted = formatDate(o.published_at || o.created_at);
+
+  // Seeded from the server's answer, then replaced by it again on every
+  // toggle — the count is never guessed client-side.
+  const [liked, setLiked] = useState(!!o.liked_by_me);
+  const [likes, setLikes] = useState(o.likes_count || 0);
+  const [busy, setBusy] = useState(false);
+  const [shared, setShared] = useState(false);
+
+  const toggleLike = async () => {
+    if (!auth) return openLogin('Sign in to like this.');
+    setBusy(true);
+    try {
+      const res = liked ? await unlikeOpportunity(o.id) : await likeOpportunity(o.id);
+      setLiked(res.liked);
+      setLikes(res.likes_count);
+    } catch {
+      // Leave the button as it was; a failed like is not worth an alert.
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Share the institute page, since a notice has no URL of its own yet —
+  // see docs/SEO_PUBLIC_SURFACE_PLAN_2026-08-23.md.
+  const share = async () => {
+    if (!page) return;
+    const url = `${window.location.origin}/${page.slug}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: o.title, text: o.description || '', url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
+    } catch {
+      // User dismissed the share sheet, or the clipboard was refused.
+    }
+  };
 
   return (
     <Card className="p-4">
@@ -230,15 +273,32 @@ function OpportunityCard({ opportunity: o, page }) {
         )}
       </div>
 
-      {page && (
-        <div className="flex items-center justify-end border-t border-outline-variant pt-2">
+      <div className="flex items-center justify-between border-t border-outline-variant pt-2">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={liked ? 'thumb_up' : 'thumb_up_off_alt'}
+            className={liked ? 'text-primary' : ''}
+            disabled={busy}
+            onClick={toggleLike}
+          >
+            {likes > 0 ? likes : 'Like'}
+          </Button>
+          {page && (
+            <Button variant="ghost" size="sm" icon={shared ? 'check' : 'share'} onClick={share}>
+              {shared ? 'Link copied' : 'Share'}
+            </Button>
+          )}
+        </div>
+        {page && (
           <Link to={`/${page.slug}`}>
             <Button size="sm" variant="soft">
               {o.type === 'admission' ? 'View Notice' : 'View Vacancy'}
             </Button>
           </Link>
-        </div>
-      )}
+        )}
+      </div>
     </Card>
   );
 }

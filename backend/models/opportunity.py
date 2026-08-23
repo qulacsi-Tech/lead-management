@@ -152,5 +152,11 @@ class OpportunityResponse(BaseModel):
     published_at: Optional[Any] = None
     created_at: Optional[Any] = None
 
+    # Engagement, resolved per request rather than stored on the row:
+    # `likes_count` is a COUNT over opportunity_likes and `liked_by_me` is
+    # whether the caller appears in it. Anonymous callers always get False.
+    likes_count: int = 0
+    liked_by_me: bool = False
+
     class Config:
         from_attributes = True

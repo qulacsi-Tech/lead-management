@@ -28,7 +28,7 @@ from models.opportunity import (
     OPPORTUNITY_TYPES,
     OPPORTUNITY_STATUSES,
 )
-from models.social import Follow, Notification
+from models.social import Follow, Notification, OpportunityLike, LikeResponse
 
 router = APIRouter(prefix="/pages/{page_id}/opportunities", tags=["Opportunities"])
 public_router = APIRouter(prefix="/opportunities", tags=["Opportunities"])
@@ -87,7 +87,10 @@ async def list_opportunities(
     elif status_filter:
         stmt = stmt.where(Opportunity.status == status_filter)
 
-    return list((await db.execute(stmt.order_by(Opportunity.ranking, Opportunity.created_at.desc()))).scalars().all())
+    rows = list(
+        (await db.execute(stmt.order_by(Opportunity.ranking, Opportunity.created_at.desc()))).scalars().all()
+    )
+    return await decorate_with_likes(db, rows, current_user)
 
 
 @router.post("", response_model=OpportunityResponse, status_code=status.HTTP_201_CREATED)
@@ -231,4 +234,145 @@ async def list_public_opportunities(
         stmt = stmt.join(Follow, Follow.page_id == Page.id).where(Follow.user_id == current_user.id)
 
     stmt = stmt.order_by(Opportunity.published_at.desc().nullslast()).limit(limit).offset(offset)
-    return list((await db.execute(stmt)).scalars().all())
+    rows = list((await db.execute(stmt)).scalars().all())
+    return await decorate_with_likes(db, rows, current_user)
+
+
+# ---------------------------------------------------------------------------
+# Likes
+#
+# Counts are computed per request from opportunity_likes rather than kept as a
+# column on the opportunity. A denormalised counter would need every like and
+# unlike to update two rows in step, and drifts the moment one of those fails;
+# at feed scale a grouped COUNT is cheap and always correct.
+# ---------------------------------------------------------------------------
+
+
+async def decorate_with_likes(
+    db: AsyncSession, rows: List[Opportunity], current_user: Optional[User]
+) -> List[OpportunityResponse]:
+    """Attach likes_count / liked_by_me to a page of opportunities.
+
+    Two queries for the whole batch, not two per row.
+    """
+    out = [OpportunityResponse.model_validate(r) for r in rows]
+    if not out:
+        return out
+
+    ids = [r.id for r in rows]
+
+    counts = dict(
+        (
+            await db.execute(
+                select(OpportunityLike.opportunity_id, func.count())
+                .where(OpportunityLike.opportunity_id.in_(ids))
+                .group_by(OpportunityLike.opportunity_id)
+            )
+        ).all()
+    )
+
+    mine = set()
+    if current_user is not None:
+        mine = set(
+            (
+                await db.execute(
+                    select(OpportunityLike.opportunity_id).where(
+                        OpportunityLike.opportunity_id.in_(ids),
+                        OpportunityLike.user_id == current_user.id,
+                    )
+                )
+            ).scalars().all()
+        )
+
+    for item in out:
+        item.likes_count = counts.get(item.id, 0)
+        item.liked_by_me = item.id in mine
+    return out
+
+
+async def _visible_opportunity(db: AsyncSession, opportunity_id: str) -> Opportunity:
+    """A published opportunity on an enabled page — the only kind anyone may
+    like. Drafts and disabled institutes are not likeable."""
+    row = (
+        await db.execute(
+            select(Opportunity)
+            .join(Page, Page.id == Opportunity.page_id)
+            .where(
+                Opportunity.id == opportunity_id,
+                Opportunity.status == "Published",
+                Page.is_enabled.is_(True),
+            )
+        )
+    ).scalars().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    return row
+
+
+async def _like_count(db: AsyncSession, opportunity_id: str) -> int:
+    return (
+        await db.execute(
+            select(func.count())
+            .select_from(OpportunityLike)
+            .where(OpportunityLike.opportunity_id == opportunity_id)
+        )
+    ).scalar_one()
+
+
+@public_router.post("/{opportunity_id}/like", response_model=LikeResponse)
+async def like_opportunity(
+    opportunity_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Idempotent: liking twice leaves one row and returns the same state,
+    so a double-tap or a retried request cannot inflate the count."""
+    await _visible_opportunity(db, opportunity_id)
+
+    existing = (
+        await db.execute(
+            select(OpportunityLike).where(
+                OpportunityLike.opportunity_id == opportunity_id,
+                OpportunityLike.user_id == current_user.id,
+            )
+        )
+    ).scalars().first()
+
+    if existing is None:
+        db.add(OpportunityLike(opportunity_id=opportunity_id, user_id=current_user.id))
+        await db.commit()
+
+    return LikeResponse(
+        opportunity_id=opportunity_id,
+        liked=True,
+        likes_count=await _like_count(db, opportunity_id),
+    )
+
+
+@public_router.delete("/{opportunity_id}/like", response_model=LikeResponse)
+async def unlike_opportunity(
+    opportunity_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Also idempotent — unliking something you never liked is a no-op."""
+    await _visible_opportunity(db, opportunity_id)
+
+    existing = (
+        await db.execute(
+            select(OpportunityLike).where(
+                OpportunityLike.opportunity_id == opportunity_id,
+                OpportunityLike.user_id == current_user.id,
+            )
+        )
+    ).scalars().first()
+
+    if existing is not None:
+        await db.delete(existing)
+        await db.commit()
+
+    return LikeResponse(
+        opportunity_id=opportunity_id,
+        liked=False,
+        likes_count=await _like_count(db, opportunity_id),
+    )

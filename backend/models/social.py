@@ -34,6 +34,30 @@ class Follow(Base):
     )
 
 
+class OpportunityLike(Base):
+    """A user likes a published admission notice or job vacancy.
+
+    Same rule as Follow: the liker is taken from the authenticated session and
+    never from the request body, so nobody can like on someone else's behalf.
+    The unique constraint makes a double-tap idempotent at the database level
+    rather than relying on the client to keep count.
+    """
+
+    __tablename__ = "opportunity_likes"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    opportunity_id = Column(
+        String, ForeignKey("opportunities.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "opportunity_id", name="uq_like_user_opportunity"),
+        Index("ix_opportunity_likes_opp_user", "opportunity_id", "user_id"),
+    )
+
+
 NOTIFICATION_TYPES = [
     "opportunity_match",   # a Sell Lead matched the user's desired criteria
     "page_opportunity",    # a page the user follows published something
@@ -102,3 +126,11 @@ class NotificationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class LikeResponse(BaseModel):
+    """What the client needs to render the button after a toggle: whether this
+    user likes it now, and the new total."""
+    opportunity_id: str
+    liked: bool
+    likes_count: int
