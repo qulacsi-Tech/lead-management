@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -6,6 +6,8 @@ import Modal from '../components/ui/Modal';
 import { Select, FormGroup } from '../components/ui/Field';
 import { mockSearchResults } from './mockData';
 import PageHeader from './PageHeader';
+import { fetchMyCredits } from '../Api/Api';
+import { useAuth } from '../context/AuthContext';
 
 const FILTERS = ['Job', 'Admission', 'Subject', 'Location', 'Preferred Location', 'Experience'];
 
@@ -44,13 +46,29 @@ function ProfileCard({ r, onUnlock, unlocked }) {
 }
 
 export default function SearchConnections() {
+  const { user } = useAuth();
   const [filters, setFilters] = useState({});
   const [unlockedIds, setUnlockedIds] = useState([]);
   const [pendingUnlock, setPendingUnlock] = useState(null);
-  const credits = 1240 - unlockedIds.reduce((sum, id) => {
+  const [apiBalance, setApiBalance] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchMyCredits()
+      .then((res) => {
+        if (typeof res?.balance === 'number') {
+          setApiBalance(res.balance);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const baseBalance = apiBalance !== null ? apiBalance : 1240;
+  const credits = baseBalance - unlockedIds.reduce((sum, id) => {
     const r = mockSearchResults.find((x) => x.id === id);
     return sum + (r ? r.credits : 0);
   }, 0);
+
 
   const results = useMemo(() => mockSearchResults, []);
 

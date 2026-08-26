@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -8,6 +8,12 @@ import EmptyState from '../../components/ui/EmptyState';
 import DataTable, { RowAction } from '../../components/ui/DataTable';
 import { Input, Textarea, Select, Label, FormGroup } from '../../components/ui/Field';
 import { useInstitute } from '../../context/InstituteContext';
+import {
+  fetchPageCourses,
+  createCourse,
+  updateCourse,
+  deleteCourse,
+} from '../../Api/Api';
 import {
   COURSE_CATEGORIES,
   COURSE_LEVELS,
@@ -23,27 +29,41 @@ const emptyCourse = {
 
 const TABS = ['All', 'Published', 'Draft'];
 
-/**
- * INSTITUTE-OWNED. Courses are managed by the Institute Admin only — Main Admin
- * creates the institute, the institute fills in its own academic catalogue.
- * See docs/CONNECTEDUS_INTEGRATION_AUDIT_2026-08-20.md §Ownership.
- */
 export default function ManageCourses() {
   const { page, commit } = useInstitute();
   const [tab, setTab] = useState('All');
   const [search, setSearch] = useState('');
-  const [editing, setEditing] = useState(null); // course draft being edited/created
+  const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [specInput, setSpecInput] = useState('');
+  const [courses, setCourses] = useState([]);
+
+  const loadCourses = useCallback(async () => {
+    if (!page?.id) return;
+    try {
+      const res = await fetchPageCourses(page.id);
+      if (Array.isArray(res)) setCourses(res);
+      else setCourses(page?.courses || []);
+    } catch (err) {
+      console.warn('Failed to fetch courses:', err);
+      setCourses(page?.courses || []);
+    }
+  }, [page?.id, page?.courses]);
+
+
+  useEffect(() => {
+    loadCourses();
+  }, [loadCourses]);
 
   if (!page) return null;
-  const courses = page.courses || [];
 
-  const filtered = courses.filter((c) => {
+  const displayCourses = courses.length > 0 ? courses : (page.courses || []);
+
+  const filtered = displayCourses.filter((c) => {
     const matchesTab = tab === 'All' || c.status === tab;
     const q = search.trim().toLowerCase();
     const matchesSearch =
-      !q || c.name.toLowerCase().includes(q) || (c.category || '').toLowerCase().includes(q);
+      !q || (c.name || '').toLowerCase().includes(q) || (c.category || '').toLowerCase().includes(q);
     return matchesTab && matchesSearch;
   });
 
@@ -57,37 +77,105 @@ export default function ManageCourses() {
     if (!value) return;
     setEditing((f) => ({
       ...f,
-      specializations: f.specializations.includes(value) ? f.specializations : [...f.specializations, value],
+      specializations: f.specializations?.includes(value) ? f.specializations : [...(f.specializations || []), value],
     }));
     setSpecInput('');
   };
 
-  const save = (e) => {
-    e.preventDefault();
+  const save = async (e) => {
+    e?.preventDefault();
+    if (page?.id) {
+      try {
+        const payload = {
+          name: editing.name,
+          category: editing.category,
+          level: editing.level,
+          duration: editing.duration,
+          fees: editing.fees,
+          intake: editing.intake,
+          eligibility: editing.eligibility,
+          description: editing.description,
+          specializations: editing.specializations || [],
+          status: editing.status || 'Draft',
+          admission_open: !!editing.admissionOpen,
+        };
+        if (editing.id) {
+          await updateCourse(page.id, editing.id, payload);
+        } else {
+          await createCourse(page.id, payload);
+        }
+        await loadCourses();
+      } catch (err) {
+        console.warn('Failed to save course to server:', err);
+      }
+    }
     commit(() => upsertCourse(page, { ...editing, updatedAt: new Date().toISOString().slice(0, 10) }));
     setEditing(null);
   };
 
-  const saveAndPublish = () => {
+  const saveAndPublish = async () => {
+    if (page?.id) {
+      try {
+        const payload = {
+          name: editing.name,
+          category: editing.category,
+          level: editing.level,
+          duration: editing.duration,
+          fees: editing.fees,
+          intake: editing.intake,
+          eligibility: editing.eligibility,
+          description: editing.description,
+          specializations: editing.specializations || [],
+          status: 'Published',
+          admission_open: !!editing.admissionOpen,
+        };
+        if (editing.id) {
+          await updateCourse(page.id, editing.id, payload);
+        } else {
+          await createCourse(page.id, payload);
+        }
+        await loadCourses();
+      } catch (err) {
+        console.warn('Failed to save & publish course:', err);
+      }
+    }
     commit(() => upsertCourse(page, {
       ...editing, status: 'Published', updatedAt: new Date().toISOString().slice(0, 10),
     }));
     setEditing(null);
   };
 
-  const toggleStatus = (course) => {
+  const toggleStatus = async (course) => {
+    const newStatus = course.status === 'Published' ? 'Draft' : 'Published';
+    if (page?.id && course.id) {
+      try {
+        await updateCourse(page.id, course.id, { status: newStatus });
+        await loadCourses();
+      } catch (err) {
+        console.warn('Failed to toggle course status:', err);
+      }
+    }
     commit(() => upsertCourse(page, {
       ...course,
-      status: course.status === 'Published' ? 'Draft' : 'Published',
+      status: newStatus,
       updatedAt: new Date().toISOString().slice(0, 10),
     }));
   };
 
-  const remove = (course) => {
+  const remove = async (course) => {
     if (window.confirm(`Remove "${course.name}" from this institute's courses?`)) {
+      if (page?.id && course.id) {
+        try {
+          await deleteCourse(page.id, course.id);
+          await loadCourses();
+        } catch (err) {
+          console.warn('Failed to delete course from server:', err);
+        }
+      }
       commit(() => removeCourse(page, course.id));
     }
   };
+
 
   const columns = [
     {

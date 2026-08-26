@@ -14,6 +14,8 @@ import {
   buildAboutParagraph,
 } from './pageBuilderContent';
 import { useInstitute } from '../context/InstituteContext';
+import { updatePage, uploadPageMedia } from '../Api/Api';
+
 
 const TABS = [
   { key: 'main', label: 'Main', icon: 'storefront' },
@@ -148,33 +150,81 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
   const setStat = (key) => (e) => setAboutStats((s) => ({ ...s, [key]: e.target.value }));
   const setAchievement = (key) => (e) => setAchievements((a) => ({ ...a, [key]: e.target.value }));
 
-  const addBanner = (e) => {
+  const addBanner = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (page?.id) {
+      try {
+        const uploaded = await uploadPageMedia(page.id, 'banner', file);
+        if (uploaded?.url) {
+          setMain((m) => ({ ...m, banners: [...m.banners, uploaded.url].slice(0, 3) }));
+          return;
+        }
+      } catch (err) {
+        console.warn('Upload banner error:', err);
+      }
+    }
     const url = URL.createObjectURL(file);
     setMain((m) => ({ ...m, banners: [...m.banners, url].slice(0, 3) }));
   };
 
-  const setLogo = (e) => {
+  const setLogo = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (page?.id) {
+      try {
+        const uploaded = await uploadPageMedia(page.id, 'logo', file);
+        if (uploaded?.url) {
+          setMain((m) => ({ ...m, logoUrl: uploaded.url }));
+          return;
+        }
+      } catch (err) {
+        console.warn('Upload logo error:', err);
+      }
+    }
     setMain((m) => ({ ...m, logoUrl: URL.createObjectURL(file) }));
   };
 
-  const addGalleryImage = (e) => {
+  const addGalleryImage = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (page?.id) {
+      try {
+        const uploaded = await uploadPageMedia(page.id, 'gallery', file);
+        if (uploaded?.url) {
+          setGallery((g) => [...g, { id: `img-${Date.now()}`, url: uploaded.url, caption: '' }]);
+          return;
+        }
+      } catch (err) {
+        console.warn('Upload gallery error:', err);
+      }
+    }
     setGallery((g) => [...g, { id: `img-${Date.now()}`, url: URL.createObjectURL(file), caption: '' }]);
   };
 
-  const save = () => {
-    // Mock/local only — the Institute Page has no backend yet (see
-    // docs/EDUCATION_NETWORK_ROADMAP.md Phase 3). Mutating the shared mock
-    // page object in place is enough to make the change visible on the public
-    // page for this session.
+  const save = async () => {
+    if (page?.id) {
+      try {
+        await updatePage(page.id, {
+          name: main.name,
+          tagline: main.tagline,
+          banners: main.banners,
+          logo_url: main.logoUrl,
+          address: contact.address,
+          website: contact.website,
+          contact: contact.contact,
+          about: contact.about,
+          social_links: socialLinks,
+          gallery: gallery,
+          content: { aboutStats, whyChooseUs, keyHighlights, facilities, campusLife, achievements },
+        });
+      } catch (err) {
+        console.warn('Failed to update page on server:', err);
+      }
+    }
     commit(() => {
       Object.assign(page, {
         name: main.name, tagline: main.tagline, banners: main.banners, logoUrl: main.logoUrl,
@@ -185,6 +235,7 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
     });
     setSavedAt(Date.now());
   };
+
 
   const SaveBar = (
     <div className="flex items-center gap-3 mt-5">

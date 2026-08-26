@@ -1,18 +1,72 @@
+import { useCallback, useEffect, useState } from 'react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import { fetchMyFollows, followPage, unfollowPage } from '../Api/Api';
+import { useAuth } from '../context/AuthContext';
 
-// Which Institute Pages (by slug) the current session follows — drives the
-// free "Sell Lead" visibility in the Marketplace tab on Profile. See
-// docs/CLIENT_FEEDBACK_2026-08-16.md, Section 3.
 export function useFollows() {
+  const { user } = useAuth();
   const [followedSlugs, setFollowedSlugs] = useLocalStorageState('followedPages', []);
+  const [followedPageIds, setFollowedPageIds] = useState([]);
 
-  const isFollowing = (slug) => followedSlugs.includes(slug);
+  useEffect(() => {
+    if (!user) return;
+    fetchMyFollows()
+      .then((pages) => {
+        if (Array.isArray(pages)) {
+          const slugs = pages.map((p) => p.slug).filter(Boolean);
+          const ids = pages.map((p) => p.id).filter(Boolean);
+          setFollowedSlugs(slugs);
+          setFollowedPageIds(ids);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
-  const follow = (slug) => setFollowedSlugs((prev) => (prev.includes(slug) ? prev : [...prev, slug]));
+  const isFollowing = useCallback(
+    (identifier) => followedSlugs.includes(identifier) || followedPageIds.includes(identifier),
+    [followedSlugs, followedPageIds]
+  );
 
-  const unfollow = (slug) => setFollowedSlugs((prev) => prev.filter((s) => s !== slug));
+  const follow = useCallback(
+    async (pageIdOrSlug) => {
+      setFollowedSlugs((prev) => (prev.includes(pageIdOrSlug) ? prev : [...prev, pageIdOrSlug]));
+      if (user) {
+        try {
+          await followPage(pageIdOrSlug);
+        } catch (e) {
+          console.warn('API follow error:', e);
+        }
+      }
+    },
+    [user, setFollowedSlugs]
+  );
 
-  const toggleFollow = (slug) => setFollowedSlugs((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]));
+  const unfollow = useCallback(
+    async (pageIdOrSlug) => {
+      setFollowedSlugs((prev) => prev.filter((s) => s !== pageIdOrSlug));
+      setFollowedPageIds((prev) => prev.filter((id) => id !== pageIdOrSlug));
+      if (user) {
+        try {
+          await unfollowPage(pageIdOrSlug);
+        } catch (e) {
+          console.warn('API unfollow error:', e);
+        }
+      }
+    },
+    [user, setFollowedSlugs]
+  );
+
+  const toggleFollow = useCallback(
+    (pageIdOrSlug) => {
+      if (isFollowing(pageIdOrSlug)) {
+        unfollow(pageIdOrSlug);
+      } else {
+        follow(pageIdOrSlug);
+      }
+    },
+    [isFollowing, follow, unfollow]
+  );
 
   return { followedSlugs, isFollowing, follow, unfollow, toggleFollow };
 }
+

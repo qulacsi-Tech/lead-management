@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -8,15 +8,17 @@ import EmptyState from '../../components/ui/EmptyState';
 import DataTable, { RowAction } from '../../components/ui/DataTable';
 import { Input, Textarea, Select, Label, FormGroup } from '../../components/ui/Field';
 import { useInstitute } from '../../context/InstituteContext';
+import {
+  fetchPageOpportunities,
+  createOpportunity,
+  updateOpportunity,
+  deleteOpportunity,
+  pushToTopOpportunity,
+} from '../../Api/Api';
 import { EMPLOYMENT_TYPES, upsertOpportunity, removeOpportunity } from '../mockData';
 
 const TABS = ['All', 'Draft', 'Published', 'Expired', 'Closed'];
 
-/**
- * INSTITUTE-OWNED Sell Leads. Admission Notices and Job Vacancies share one
- * lifecycle (Draft → Published → Expired/Closed) and one management surface;
- * only their field sets differ, so they are configured rather than duplicated.
- */
 const CONFIG = {
   admission: {
     title: 'Admission Notices',
@@ -26,7 +28,7 @@ const CONFIG = {
     icon: 'campaign',
     emptyTitle: 'No admission notices yet',
     emptyBody: 'Announce an open admission cycle — it becomes a Sell Lead visible to students following your page.',
-    titleOf: (o) => o.course,
+    titleOf: (o) => o.course || o.title,
     blank: {
       type: 'admission', course: '', courseId: '', session: '', startDate: '', endDate: '',
       eligibility: '', description: '', applyUrl: '', status: 'Draft',
@@ -40,7 +42,7 @@ const CONFIG = {
     icon: 'work',
     emptyTitle: 'No job vacancies yet',
     emptyBody: 'Post an opening — it becomes a Sell Lead visible to professionals on Connectedus.',
-    titleOf: (o) => o.position,
+    titleOf: (o) => o.position || o.title,
     blank: {
       type: 'job', position: '', subject: '', department: '', employmentType: EMPLOYMENT_TYPES[0],
       location: '', experience: '', qualification: '', salary: '', skills: [], applyBefore: '',
@@ -57,10 +59,29 @@ export default function ManageOpportunities({ type }) {
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [skillInput, setSkillInput] = useState('');
+  const [opportunities, setOpportunities] = useState([]);
+
+  const loadOpps = useCallback(async () => {
+    if (!page?.id) return;
+    try {
+      const res = await fetchPageOpportunities(page.id);
+      if (Array.isArray(res)) setOpportunities(res);
+      else setOpportunities(page?.opportunities || []);
+    } catch (err) {
+      console.warn('Failed to fetch opportunities:', err);
+      setOpportunities(page?.opportunities || []);
+    }
+  }, [page?.id, page?.opportunities]);
+
+
+  useEffect(() => {
+    loadOpps();
+  }, [loadOpps]);
 
   if (!page) return null;
 
-  const all = (page.opportunities || []).filter((o) => o.type === type);
+  const sourceOpps = opportunities.length > 0 ? opportunities : (page.opportunities || []);
+  const all = sourceOpps.filter((o) => o.type === type);
   const filtered = all.filter((o) => {
     const status = o.status || 'Published';
     const matchesTab = tab === 'All' || status === tab;
@@ -73,7 +94,40 @@ export default function ManageOpportunities({ type }) {
   const openCreate = () => { setEditing({ ...cfg.blank }); setSkillInput(''); };
   const openEdit = (op) => { setEditing({ ...cfg.blank, ...op }); setSkillInput(''); };
 
-  const persist = (draft) => {
+  const persist = async (draft) => {
+    if (page?.id) {
+      try {
+        const payload = {
+          type: draft.type,
+          title: draft.type === 'admission' ? (draft.course || draft.title || 'Admission Notice') : (draft.position || draft.title || 'Job Opening'),
+          description: draft.description,
+          status: draft.status || 'Draft',
+          session: draft.session || undefined,
+          start_date: draft.startDate || undefined,
+          end_date: draft.endDate || undefined,
+          eligibility: draft.eligibility || undefined,
+          position: draft.position || undefined,
+          subject: draft.subject || undefined,
+          department: draft.department || undefined,
+          employment_type: draft.employmentType || undefined,
+          location: draft.location || undefined,
+          experience: draft.experience || undefined,
+          qualification: draft.qualification || undefined,
+          salary: draft.salary || undefined,
+          skills: draft.skills || [],
+          apply_before: draft.applyBefore || undefined,
+          apply_url: draft.applyUrl || undefined,
+        };
+        if (draft.id) {
+          await updateOpportunity(page.id, draft.id, payload);
+        } else {
+          await createOpportunity(page.id, payload);
+        }
+        await loadOpps();
+      } catch (err) {
+        console.warn('Failed to save opportunity to server:', err);
+      }
+    }
     commit(() => upsertOpportunity(page, {
       ...draft,
       reach: draft.reach ?? 0,
@@ -91,23 +145,44 @@ export default function ManageOpportunities({ type }) {
     publishedAt: editing.publishedAt || new Date().toISOString().slice(0, 10),
   });
 
-  const setStatus = (op, status) => commit(() => upsertOpportunity(page, { ...op, status }));
+  const setStatus = async (op, status) => {
+    if (page?.id && op.id) {
+      try {
+        await updateOpportunity(page.id, op.id, { status });
+        await loadOpps();
+      } catch (err) {
+        console.warn('Failed to update opportunity status:', err);
+      }
+    }
+    commit(() => upsertOpportunity(page, { ...op, status }));
+  };
 
-  const remove = (op) => {
+  const pushToTop = async (op) => {
+    if (page?.id && op.id) {
+      try {
+        await pushToTopOpportunity(page.id, op.id);
+        await loadOpps();
+      } catch (err) {
+        console.warn('Failed to push opportunity to top:', err);
+      }
+    }
+  };
+
+  const remove = async (op) => {
     if (window.confirm(`Delete "${cfg.titleOf(op)}"?`)) {
+      if (page?.id && op.id) {
+        try {
+          await deleteOpportunity(page.id, op.id);
+          await loadOpps();
+        } catch (err) {
+          console.warn('Failed to delete opportunity:', err);
+        }
+      }
       commit(() => removeOpportunity(page, op.id));
     }
   };
 
-  const pushToTop = (op) => {
-    commit(() => {
-      page.opportunities = page.opportunities.map((x) => {
-        if (x.id === op.id) return { ...x, ranking: 1 };
-        if (x.ranking <= op.ranking) return { ...x, ranking: x.ranking + 1 };
-        return x;
-      });
-    });
-  };
+
 
   const addSkill = () => {
     const value = skillInput.trim();

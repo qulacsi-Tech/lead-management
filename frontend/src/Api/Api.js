@@ -278,4 +278,34 @@ export const unfollowPage = async (pageId) =>
 
 export const fetchPageCourses = async (pageId) => apiFetch(`/pages/${pageId}/courses`);
 
+export const createCourse = async (pageId, payload) =>
+  apiFetch(`/pages/${pageId}/courses`, { method: 'POST', body: payload });
+
+export const updateCourse = async (pageId, courseId, patch) =>
+  apiFetch(`/pages/${pageId}/courses/${courseId}`, { method: 'PATCH', body: patch });
+
+export const deleteCourse = async (pageId, courseId) =>
+  apiFetch(`/pages/${pageId}/courses/${courseId}`, { method: 'DELETE' });
+
 export const fetchPageOpportunities = async (pageId) => apiFetch(`/pages/${pageId}/opportunities`);
+
+export const createOpportunity = async (pageId, payload) =>
+  apiFetch(`/pages/${pageId}/opportunities`, { method: 'POST', body: payload });
+
+export const updateOpportunity = async (pageId, oppId, patch) =>
+  apiFetch(`/pages/${pageId}/opportunities/${oppId}`, { method: 'PATCH', body: patch });
+
+export const deleteOpportunity = async (pageId, oppId) =>
+  apiFetch(`/pages/${pageId}/opportunities/${oppId}`, { method: 'DELETE' });
+
+export const pushToTopOpportunity = async (pageId, oppId) =>
+  apiFetch(`/pages/${pageId}/opportunities/${oppId}/push-to-top`, { method: 'POST' });
+
+export const fetchPageEnquiries = async (pageId) =>
+  apiFetch(`/pages/${pageId}/enquiries`);
+
+export const updatePageEnquiry = async (pageId, enquiryId, patch) =>
+  apiFetch(`/pages/${pageId}/enquiries/${enquiryId}`, { method: 'PATCH', body: patch });
+
+export const fetchMyCredits = async () => apiFetch('/credits/me');
+

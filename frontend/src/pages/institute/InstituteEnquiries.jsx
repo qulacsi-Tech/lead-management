@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -8,50 +8,85 @@ import EmptyState from '../../components/ui/EmptyState';
 import DataTable, { RowAction } from '../../components/ui/DataTable';
 import { Textarea, Select, Label, FormGroup } from '../../components/ui/Field';
 import { useInstitute } from '../../context/InstituteContext';
+import { fetchPageEnquiries, updatePageEnquiry } from '../../Api/Api';
 import { enquiriesForPage, updateEnquiry, ENQUIRY_STATUSES } from '../mockData';
 
 const TABS = ['All', ...ENQUIRY_STATUSES];
 
-/**
- * INSTITUTE-OWNED. Enquiries raised on this institute's public page. The Main
- * Admin's /admin/enquiries screen is a platform-wide read-only view; responding
- * to an enquiry belongs to the institute it was addressed to.
- */
 export default function InstituteEnquiries() {
-  const { page, commit, revision } = useInstitute();
+  const { page, commit } = useInstitute();
   const [tab, setTab] = useState('All');
   const [search, setSearch] = useState('');
   const [viewing, setViewing] = useState(null);
   const [draftNote, setDraftNote] = useState('');
   const [draftStatus, setDraftStatus] = useState('New');
+  const [enquiries, setEnquiries] = useState([]);
+
+  const loadEnquiries = useCallback(async () => {
+    if (!page?.id) return;
+    try {
+      const res = await fetchPageEnquiries(page.id);
+      if (Array.isArray(res)) setEnquiries(res);
+      else setEnquiries(enquiriesForPage(page.slug));
+    } catch (err) {
+      console.warn('Failed to fetch page enquiries:', err);
+      setEnquiries(enquiriesForPage(page.slug));
+    }
+  }, [page?.id, page?.slug]);
+
+
+  useEffect(() => {
+    loadEnquiries();
+  }, [loadEnquiries]);
 
   if (!page) return null;
 
-  // eslint-disable-next-line no-unused-expressions
-  revision; // re-read the mock list after each commit
-  const all = enquiriesForPage(page.slug);
+  const sourceEnquiries = enquiries.length > 0 ? enquiries : enquiriesForPage(page.slug);
 
-  const filtered = all.filter((e) => {
+  const filtered = sourceEnquiries.filter((e) => {
     const matchesTab = tab === 'All' || e.status === tab;
     const q = search.trim().toLowerCase();
+    const courseName = e.course_name || e.course || '';
     const matchesSearch =
-      !q || e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q) ||
-      (e.course || '').toLowerCase().includes(q);
+      !q || (e.name || '').toLowerCase().includes(q) || (e.email || '').toLowerCase().includes(q) ||
+      courseName.toLowerCase().includes(q);
     return matchesTab && matchesSearch;
   });
 
   const openEnquiry = (e) => {
     setViewing(e);
-    setDraftNote(e.note || '');
-    setDraftStatus(e.status);
+    setDraftNote(e.note || e.notes || '');
+    setDraftStatus(e.status || 'New');
   };
 
-  const saveResponse = () => {
+  const saveResponse = async () => {
+    if (page?.id && viewing?.id) {
+      try {
+        await updatePageEnquiry(page.id, viewing.id, {
+          notes: draftNote,
+          status: draftStatus,
+        });
+        await loadEnquiries();
+      } catch (err) {
+        console.warn('Failed to update enquiry on server:', err);
+      }
+    }
     commit(() => updateEnquiry(viewing.id, { note: draftNote, status: draftStatus }));
     setViewing(null);
   };
 
-  const quickStatus = (enquiry, status) => commit(() => updateEnquiry(enquiry.id, { status }));
+  const quickStatus = async (enquiry, status) => {
+    if (page?.id && enquiry.id) {
+      try {
+        await updatePageEnquiry(page.id, enquiry.id, { status });
+        await loadEnquiries();
+      } catch (err) {
+        console.warn('Failed to update enquiry status:', err);
+      }
+    }
+    commit(() => updateEnquiry(enquiry.id, { status }));
+  };
+
 
   const columns = [
     {

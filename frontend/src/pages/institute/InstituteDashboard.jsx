@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -5,6 +6,7 @@ import Badge from '../../components/ui/Badge';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import { useInstitute } from '../../context/InstituteContext';
+import { fetchPageCourses, fetchPageOpportunities } from '../../Api/Api';
 
 function Stat({ icon, label, value, to }) {
   const body = (
@@ -23,14 +25,12 @@ function Stat({ icon, label, value, to }) {
   return to ? <Link to={to} className="no-underline">{body}</Link> : body;
 }
 
-/** Flags the page sections an Institute Admin still needs to fill in — the
- * console's job is to make incomplete institute content obvious. */
 function completeness(page) {
   const c = page.content || {};
   return [
     { label: 'Tagline', done: !!page.tagline, to: '/institute/profile' },
     { label: 'About / stats', done: Object.values(c.aboutStats || {}).some(Boolean), to: '/institute/profile' },
-    { label: 'Logo', done: !!page.logoUrl, to: '/institute/profile' },
+    { label: 'Logo', done: !!page.logoUrl || !!page.logo_url, to: '/institute/profile' },
     { label: 'Banner images', done: (page.banners || []).length > 0, to: '/institute/profile' },
     { label: 'Gallery', done: (page.gallery || []).length > 0, to: '/institute/profile' },
     { label: 'Courses', done: (page.courses || []).length > 0, to: '/institute/courses' },
@@ -41,10 +41,19 @@ function completeness(page) {
 
 export default function InstituteDashboard() {
   const { page } = useInstitute();
+  const [apiCourses, setApiCourses] = useState([]);
+  const [apiOpps, setApiOpps] = useState([]);
+
+  useEffect(() => {
+    if (!page?.id) return;
+    fetchPageCourses(page.id).then((r) => Array.isArray(r) && setApiCourses(r)).catch(() => {});
+    fetchPageOpportunities(page.id).then((r) => Array.isArray(r) && setApiOpps(r)).catch(() => {});
+  }, [page?.id]);
+
   if (!page) return null;
 
-  const courses = page.courses || [];
-  const opportunities = page.opportunities || [];
+  const courses = apiCourses.length > 0 ? apiCourses : (page.courses || []);
+  const opportunities = apiOpps.length > 0 ? apiOpps : (page.opportunities || []);
   const notices = opportunities.filter((o) => o.type === 'admission');
   const jobs = opportunities.filter((o) => o.type === 'job');
   const published = opportunities.filter((o) => (o.status || 'Published') === 'Published');
@@ -53,6 +62,7 @@ export default function InstituteDashboard() {
   const checks = completeness(page);
   const doneCount = checks.filter((c) => c.done).length;
   const pct = Math.round((doneCount / checks.length) * 100);
+
 
   return (
     <div className="p-8 max-w-7xl mx-auto flex-1 w-full box-border">

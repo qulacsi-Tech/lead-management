@@ -1,48 +1,58 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
+import { fetchMyPages } from '../Api/Api';
 import { pagesAdministeredBy, findPageBySlug } from '../pages/mockData';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 
 const InstituteContext = createContext(null);
 
-/**
- * Institute Admin context — answers "which Institute/Page am I managing right
- * now?" for every screen under /institute.
- *
- * Ownership model (docs/CONNECTEDUS_INTEGRATION_AUDIT_2026-08-20.md §Ownership):
- *   Main Admin  → creates the Page and assigns its admins
- *   Institute Admin → manages that Page's operational content
- * A user is an Institute Admin purely by virtue of appearing in some page's
- * `admins` list — there is no separate role flag, exactly as the future
- * PageAdmin table will work.
- *
- * NOTE: this is the client-side stand-in for that table. It decides what the UI
- * offers, not what the server permits — real enforcement lands in Phase 2.
- */
 export function InstituteProvider({ children }) {
   const { user } = useAuth();
   const [activeSlug, setActiveSlug] = useLocalStorageState('institute.activeSlug', null);
-  // Bumped on every write so screens re-render off the mutated mock objects.
+  const [apiPages, setApiPages] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [revision, setRevision] = useState(0);
 
-  const myPages = useMemo(
+  const loadPages = useCallback(async () => {
+    if (!user) {
+      setApiPages([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetchMyPages();
+      setApiPages(Array.isArray(res) ? res : []);
+    } catch (err) {
+      console.warn('Failed to fetch /pages/mine, falling back to mock data', err);
+      setApiPages([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadPages();
+  }, [loadPages, revision]);
+
+  const mockFallbackPages = useMemo(
     () => pagesAdministeredBy(user?.email),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user?.email, revision],
+    [user?.email, revision]
   );
 
-  // Fall back to the first page this user administers when nothing is pinned,
-  // or when the pinned page is one they no longer administer.
+  const myPages = useMemo(() => {
+    return apiPages.length > 0 ? apiPages : mockFallbackPages;
+  }, [apiPages, mockFallbackPages]);
+
   const page = useMemo(() => {
-    const pinned = activeSlug ? findPageBySlug(activeSlug) : null;
+    const pinned = activeSlug
+      ? myPages.find((p) => p.slug === activeSlug) || findPageBySlug(activeSlug)
+      : null;
     const stillMine = pinned && myPages.some((p) => p.slug === pinned.slug);
     return stillMine ? pinned : myPages[0] || null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSlug, myPages, revision]);
+  }, [activeSlug, myPages]);
 
   const switchPage = useCallback((slug) => setActiveSlug(slug), [setActiveSlug]);
 
-  /** Wrap any mutation of the mock page object so dependent screens refresh. */
   const commit = useCallback((mutate) => {
     mutate?.();
     setRevision((r) => r + 1);
@@ -52,8 +62,10 @@ export function InstituteProvider({ children }) {
     page,
     myPages,
     isInstituteAdmin: myPages.length > 0,
+    loading,
     switchPage,
     commit,
+    refresh: loadPages,
     revision,
   };
 
@@ -66,11 +78,24 @@ export function useInstitute() {
   return ctx;
 }
 
-/** Superseded by `useMyPages` (hooks/useMyPages.js), which asks the backend's
- * /pages/mine — i.e. the page_admins table — instead of matching the user's
- * email against a bundled array. Kept only so the Institute Console below
- * still resolves; screens outside the console should use `useMyPages`. */
 export function useIsInstituteAdmin() {
   const { user } = useAuth();
-  return pagesAdministeredBy(user?.email).length > 0;
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    fetchMyPages()
+      .then((res) => {
+        setIsAdmin(Array.isArray(res) && res.length > 0);
+      })
+      .catch(() => {
+        setIsAdmin(pagesAdministeredBy(user?.email).length > 0);
+      });
+  }, [user]);
+
+  return isAdmin;
 }
+
