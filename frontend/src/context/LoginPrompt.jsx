@@ -36,9 +36,10 @@ function LoginDialog({ open, onClose, reason }) {
       setEmail('');
       setPassword('');
       onClose();
-      // An admin's destination is the portal; everyone else stays exactly
-      // where they were, which is the whole point of an in-page sign-in.
-      if (user.role === 'admin') navigate('/admin');
+      const role = (user?.role || '').toLowerCase();
+      if (role === 'admin') navigate('/admin');
+      else if (role === 'institute') navigate('/institute');
+
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
     } finally {

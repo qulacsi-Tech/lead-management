@@ -6,6 +6,7 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { Input, Label } from '../../components/ui/Field';
+import InstituteFullDetailsModal from '../../components/InstituteFullDetailsModal';
 
 export default function ManageInstitutes() {
   const { institutes, loading, error, updateEntityStatus, deleteEntity, refreshAdminData } = useData();
@@ -15,7 +16,9 @@ export default function ManageInstitutes() {
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedInstitute, setSelectedInstitute] = useState(null);
+  const [fullDetailsInst, setFullDetailsInst] = useState(null);
   const [editing, setEditing] = useState(null); // institute whose account is being edited
+
 
   // Form states for adding new institute
   const [name, setName] = useState('');
@@ -260,12 +263,13 @@ export default function ManageInstitutes() {
                     <td className="py-4 px-5 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => setSelectedInstitute(inst)}
+                          onClick={() => setFullDetailsInst(inst)}
                           className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container-high rounded-lg transition-colors border-none bg-transparent cursor-pointer"
-                          title="View Details"
+                          title="View & Edit Full Institute Info"
                         >
                           <span className="material-symbols-outlined text-base">visibility</span>
                         </button>
+
                         <button
                           onClick={() => openEdit(inst)}
                           className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container-high rounded-lg transition-colors border-none bg-transparent cursor-pointer"
@@ -500,6 +504,18 @@ export default function ManageInstitutes() {
           </div>
         </Modal>
       )}
+
+      {/* Full 90%x90% Tabbed Institute Details Modal */}
+      {fullDetailsInst && (
+        <InstituteFullDetailsModal
+          open={!!fullDetailsInst}
+          onClose={() => setFullDetailsInst(null)}
+          institute={fullDetailsInst}
+          onSaveSuccess={() => refreshAdminData()}
+        />
+      )}
     </div>
   );
 }
+
+

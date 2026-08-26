@@ -62,7 +62,7 @@ async def user_administers_page(db: AsyncSession, user: User, page_id: str) -> b
         return True
     result = await db.execute(
         select(PageAdmin.id).where(
-            PageAdmin.page_id == page_id,
+            (PageAdmin.page_id == page_id),
             PageAdmin.user_id == user.id,
         )
     )
@@ -71,6 +71,38 @@ async def user_administers_page(db: AsyncSession, user: User, page_id: str) -> b
 
 async def load_page_or_404(db: AsyncSession, page_id: str) -> Page:
     page = (await db.execute(select(Page).where(Page.id == page_id))).scalars().first()
+    if page is None:
+        page = (await db.execute(select(Page).where(Page.slug == page_id))).scalars().first()
+    if page is None:
+        from models.institute import Institute
+        inst = (await db.execute(select(Institute).where(Institute.id == page_id))).scalars().first()
+        if inst:
+            page_admin = (await db.execute(select(PageAdmin).where(PageAdmin.user_id == inst.user_id))).scalars().first()
+            if page_admin:
+                page = (await db.execute(select(Page).where(Page.id == page_admin.page_id))).scalars().first()
+            if page is None:
+                page = (await db.execute(select(Page).where(func.lower(Page.name) == inst.name.lower()))).scalars().first()
+            if page is None:
+                import re
+                base_slug = re.sub(r"[^a-z0-9]+", "-", inst.name.lower()).strip("-") or f"inst-{inst.id[:6]}"
+                page = Page(
+                    id=inst.id,
+                    name=inst.name,
+                    slug=base_slug,
+                    type="Coaching",
+                    address=getattr(inst, "address", None),
+                    city=inst.city,
+                    state=inst.state,
+                    website=inst.website,
+                    contact=inst.phone,
+                    about=inst.about,
+                    banners=[], gallery=[], social_links={}, content={},
+                )
+                db.add(page)
+                db.add(PageAdmin(page_id=page.id, user_id=inst.user_id, role="OWNER"))
+                await db.commit()
+                await db.refresh(page)
+
     if page is None:
         raise HTTPException(status_code=404, detail="Page not found")
     return page
@@ -81,20 +113,15 @@ async def require_page_admin(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> Page:
-    """Guard for every write to page-owned content.
-
-    Returns the Page so handlers don't re-query it. Raises 404 if the page does
-    not exist and 403 if the caller does not administer it — deliberately in
-    that order, since a page's existence is public information anyway (its
-    slug resolves publicly).
-    """
+    """Guard for every write to page-owned content."""
     page = await load_page_or_404(db, page_id)
-    if not await user_administers_page(db, current_user, page_id):
+    if not await user_administers_page(db, current_user, page.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not administer this institute",
         )
     return page
+
 
 
 async def require_page_owner(

@@ -15,10 +15,7 @@ const NAV_ICONS = [
   { to: '/dashboard', icon: 'space_dashboard', label: 'Dashboard' },
 ];
 
-// How often the bell re-checks for new notifications. A poll rather than a
-// push because delivery (websocket/push) is explicitly out of scope for
-// Phase 2 — see the Notification model docstring.
-const NOTIFICATION_POLL_MS = 60000;
+
 
 // Notification `type` -> icon. Types come from NOTIFICATION_TYPES in
 // backend/models/social.py; anything unrecognised falls back to a bell.
@@ -58,8 +55,10 @@ function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
 
+  const authId = auth?.id || auth?.email;
+
   const load = useCallback(async () => {
-    if (!auth) {
+    if (!authId) {
       setNotifications([]);
       setUnreadCount(0);
       return;
@@ -74,14 +73,51 @@ function NotificationBell() {
     } catch {
       // A failing bell must not break the header.
     }
-  }, [auth]);
+  }, [authId]);
 
+  // Initial load & WebSocket event subscription (No continuous polling!)
   useEffect(() => {
+    if (!authId) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return undefined;
+    }
+
     load();
-    if (!auth) return undefined;
-    const tick = setInterval(load, NOTIFICATION_POLL_MS);
-    return () => clearInterval(tick);
-  }, [auth, load]);
+
+    const userId = authId;
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = window.location.host.includes('localhost:5173')
+      ? 'localhost:8000'
+      : window.location.host;
+    const wsUrl = `${wsProtocol}//${wsHost}/api/notifications/ws/${userId}`;
+
+    let socket = null;
+    try {
+      socket = new WebSocket(wsUrl);
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'notification_update' || data.type === 'notification_new') {
+            load();
+          }
+        } catch {
+          // ignore non-json
+        }
+      };
+    } catch (err) {
+      console.warn('WebSocket notification error:', err);
+    }
+
+    return () => {
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+        socket.close();
+      }
+    };
+  }, [authId, load]);
+
+
 
   // Opening the panel is the read receipt, as before — but it now persists.
   const toggleOpen = async () => {
@@ -133,9 +169,8 @@ function NotificationBell() {
               notifications.map((n) => (
                 <div
                   key={n.id}
-                  className={`flex items-start gap-2.5 px-4 py-3 border-b border-outline-variant last:border-0 hover:bg-surface-container-low ${
-                    n.is_read ? '' : 'bg-primary-fixed/30'
-                  }`}
+                  className={`flex items-start gap-2.5 px-4 py-3 border-b border-outline-variant last:border-0 hover:bg-surface-container-low ${n.is_read ? '' : 'bg-primary-fixed/30'
+                    }`}
                 >
                   <span className="w-8 h-8 rounded-full bg-surface-container-high text-primary flex items-center justify-center shrink-0">
                     <span className="material-symbols-outlined text-[18px]">
@@ -217,110 +252,109 @@ export default function AppLayout() {
               </Link>
             </nav>
           ) : (
-          <nav className="flex items-center gap-1 ml-auto">
-            {NAV_ICONS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `flex flex-col items-center px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
-                    isActive ? 'text-primary' : 'text-on-surface-variant hover:bg-surface-container-low'
-                  }`
-                }
-              >
-                <span className="material-symbols-outlined text-[22px]">{item.icon}</span>
-                <span className="hidden sm:inline">{item.label}</span>
-              </NavLink>
-            ))}
-
-            <NotificationBell />
-
-            <div className="relative ml-2">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((o) => !o)}
-                className="flex flex-col items-center px-3 py-1.5 rounded-lg text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container-low cursor-pointer"
-              >
-                <div className="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center text-[11px] font-bold text-primary">
-                  {(name || 'U')[0]}
-                </div>
-                <span className="hidden sm:inline">Me</span>
-              </button>
-              {menuOpen && (
-                <div
-                  className="absolute right-0 mt-2 w-56 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-2"
-                  onMouseLeave={() => setMenuOpen(false)}
+            <nav className="flex items-center gap-1 ml-auto">
+              {NAV_ICONS.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    `flex flex-col items-center px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${isActive ? 'text-primary' : 'text-on-surface-variant hover:bg-surface-container-low'
+                    }`
+                  }
                 >
-                  <p className="px-3 py-2 text-xs text-on-surface-variant">
-                    Signed in as <strong className="text-on-surface">{name}</strong>
-                  </p>
-                  <NavLink
-                    to="/profile"
-                    onClick={() => setMenuOpen(false)}
-                    className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
+                  <span className="material-symbols-outlined text-[22px]">{item.icon}</span>
+                  <span className="hidden sm:inline">{item.label}</span>
+                </NavLink>
+              ))}
+
+              <NotificationBell />
+
+              <div className="relative ml-2">
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((o) => !o)}
+                  className="flex flex-col items-center px-3 py-1.5 rounded-lg text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container-low cursor-pointer"
+                >
+                  <div className="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center text-[11px] font-bold text-primary">
+                    {(name || 'U')[0]}
+                  </div>
+                  <span className="hidden sm:inline">Me</span>
+                </button>
+                {menuOpen && (
+                  <div
+                    className="absolute right-0 mt-2 w-56 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-2"
+                    onMouseLeave={() => setMenuOpen(false)}
                   >
-                    View Profile
-                  </NavLink>
-                  {/* User-side entries only. A Main Admin creates institutes in
+                    <p className="px-3 py-2 text-xs text-on-surface-variant">
+                      Signed in as <strong className="text-on-surface">{name}</strong>
+                    </p>
+                    <NavLink
+                      to="/profile"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
+                    >
+                      View Profile
+                    </NavLink>
+                    {/* User-side entries only. A Main Admin creates institutes in
                       the Admin portal and has no marketplace credits of their
                       own, so neither belongs in their menu. */}
-                  {!isPlatformAdmin && (
-                    <>
-                      {instituteAdmin ? (
+                    {!isPlatformAdmin && (
+                      <>
+                        {instituteAdmin ? (
+                          <NavLink
+                            to="/institute"
+                            onClick={() => setMenuOpen(false)}
+                            className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
+                          >
+                            Institute Console
+                          </NavLink>
+                        ) : (
+                          <NavLink
+                            to="/create-page"
+                            onClick={() => setMenuOpen(false)}
+                            className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
+                          >
+                            Create Institute Page
+                          </NavLink>
+                        )}
                         <NavLink
-                          to="/institute"
+                          to="/purchased"
                           onClick={() => setMenuOpen(false)}
                           className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
                         >
-                          Institute Console
+                          Purchased History
                         </NavLink>
-                      ) : (
-                        <NavLink
-                          to="/create-page"
-                          onClick={() => setMenuOpen(false)}
-                          className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
-                        >
-                          Create Institute Page
-                        </NavLink>
-                      )}
-                      <NavLink
-                        to="/purchased"
-                        onClick={() => setMenuOpen(false)}
-                        className="block px-3 py-2 rounded-lg text-sm text-on-surface hover:bg-surface-container-low"
-                      >
-                        Purchased History
-                      </NavLink>
-                    </>
-                  )}
-                  {/* A Main Admin browsing Connectedus as a normal user needs a
+                      </>
+                    )}
+                    {/* A Main Admin browsing Connectedus as a normal user needs a
                       way back to the platform portal — otherwise "Back to
                       Connectedus" in the admin sidebar is a one-way door. */}
-                  {isPlatformAdmin && (
-                    <>
-                      <div className="border-t border-outline-variant my-1" />
-                      <NavLink
-                        to="/admin"
-                        onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-primary font-semibold hover:bg-surface-container-low"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">shield_person</span>
-                        Back to Admin Dashboard
-                      </NavLink>
-                    </>
-                  )}
-                  <div className="border-t border-outline-variant my-1" />
-                  <button
-                    type="button"
-                    onClick={doLogout}
-                    className="w-full text-left px-3 py-2 rounded-lg text-sm text-error hover:bg-error-container cursor-pointer"
-                  >
-                    Switch role / Log out
-                  </button>
-                </div>
-              )}
-            </div>
-          </nav>
+                    {isPlatformAdmin && (
+                      <>
+                        <div className="border-t border-outline-variant my-1" />
+                        <NavLink
+                          to="/admin"
+                          onClick={() => setMenuOpen(false)}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-primary font-semibold hover:bg-surface-container-low"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">shield_person</span>
+                          Back to Admin Dashboard
+                        </NavLink>
+                      </>
+                    )}
+                    <div className="border-t border-outline-variant my-1" />
+                    <button
+                      type="button"
+                      onClick={doLogout}
+                      className="w-full text-left px-3 py-2 rounded-lg text-sm text-error hover:bg-error-container cursor-pointer"
+                    >
+                      Switch role / Log out
+                    </button>
+                  </div>
+                )}
+              </div>
+            </nav>
           )}
         </div>
       </header>

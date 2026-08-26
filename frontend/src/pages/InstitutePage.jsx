@@ -20,11 +20,55 @@ import {
   unfollowPage,
 } from '../Api/Api';
 
-function statCardsFrom(options, selected) {
-  return selected
-    .map((s) => ({ ...options.find((o) => o.key === s.key), value: s.value }))
-    .filter((s) => s.label);
+function normalizeHighlights(options, items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => {
+      if (typeof item === 'string') return { title: item, value: '✓', fieldLabel: '' };
+      const matchedOpt = options.find((o) => o.key === item.key || o.id === item.id);
+      return {
+        title: item.title || item.label || matchedOpt?.label || matchedOpt?.title || 'Highlight',
+        fieldLabel: item.fieldLabel || item.field || matchedOpt?.field || '',
+        value: item.value || '',
+      };
+    })
+    .filter((h) => h.value);
 }
+
+function normalizeFacilities(options, items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => {
+      if (typeof item === 'string') return { name: item, value: 'Available', fieldLabel: '' };
+      const matchedOpt = options.find((o) => o.key === item.key || o.id === item.id);
+      return {
+        name: item.name || item.label || matchedOpt?.label || 'Facility',
+        fieldLabel: item.fieldLabel || item.field || matchedOpt?.field || 'Capacity',
+        value: item.value || '',
+        icon: item.icon || 'domain',
+      };
+    })
+    .filter((f) => f.value);
+}
+
+function normalizeAchievements(ach) {
+  if (!ach) return [];
+  if (Array.isArray(ach)) {
+    return ach
+      .map((a) => ({
+        title: a.title || a.label || 'Achievement',
+        displayValue: `${a.prefix || ''}${a.value || ''}${a.suffix || ''}`,
+      }))
+      .filter((a) => a.displayValue.trim());
+  }
+  const list = [];
+  if (ach.highestPlacement) list.push({ title: 'Highest Placement', displayValue: `₹${ach.highestPlacement} LPA` });
+  if (ach.averagePlacement) list.push({ title: 'Average Placement', displayValue: `₹${ach.averagePlacement} LPA` });
+  if (ach.placementRate) list.push({ title: 'Placement Rate', displayValue: `${ach.placementRate}%` });
+  if (ach.recruiters) list.push({ title: 'Recruiters', displayValue: `${ach.recruiters}` });
+  return list;
+}
+
 
 /** Two-letter monogram, shown when an institute has not uploaded a logo. */
 function initials(name) {
@@ -408,10 +452,11 @@ export default function InstitutePage() {
             <Card className="p-5">
               <h2 className="text-sm font-bold text-on-surface mb-3">Key Highlights</h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {statCardsFrom(KEY_HIGHLIGHTS_OPTIONS, content.keyHighlights).map((h) => (
-                  <div key={h.key} className="p-3 rounded-xl bg-surface-container-low text-center">
+                {normalizeHighlights(KEY_HIGHLIGHTS_OPTIONS, content.keyHighlights).map((h, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-surface-container-low text-center">
                     <p className="text-lg font-bold text-primary mb-0">{h.value}</p>
-                    <p className="text-[11px] text-on-surface-variant mb-0">{h.field}</p>
+                    <p className="text-xs font-semibold text-on-surface mb-0">{h.title}</p>
+                    {h.fieldLabel && <p className="text-[11px] text-on-surface-variant mb-0">{h.fieldLabel}</p>}
                   </div>
                 ))}
               </div>
@@ -422,10 +467,13 @@ export default function InstitutePage() {
             <Card className="p-5">
               <h2 className="text-sm font-bold text-on-surface mb-3">Facilities</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {statCardsFrom(FACILITIES_OPTIONS, content.facilities).map((f) => (
-                  <div key={f.key} className="p-3 rounded-xl border border-outline-variant">
-                    <p className="text-sm font-bold text-on-surface mb-0.5">{f.label}</p>
-                    <p className="text-xs text-on-surface-variant mb-0">{f.field}: {f.value}</p>
+                {normalizeFacilities(FACILITIES_OPTIONS, content.facilities).map((f, idx) => (
+                  <div key={idx} className="p-3 rounded-xl border border-outline-variant flex items-start gap-2.5">
+                    <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">{f.icon || 'domain'}</span>
+                    <div>
+                      <p className="text-sm font-bold text-on-surface mb-0.5">{f.name}</p>
+                      <p className="text-xs text-on-surface-variant mb-0">{f.fieldLabel}: {f.value}</p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -441,29 +489,20 @@ export default function InstitutePage() {
             </Card>
           )}
 
-          {content.achievements && Object.values(content.achievements).some(Boolean) && (
+          {normalizeAchievements(content.achievements).length > 0 && (
             <Card className="p-5">
               <h2 className="text-sm font-bold text-on-surface mb-3">Achievements &amp; Placement</h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-primary-container/30 text-center">
-                  <p className="text-lg font-bold text-primary mb-0">₹{content.achievements.highestPlacement || '—'} LPA</p>
-                  <p className="text-[11px] text-on-surface-variant mb-0">Highest Placement</p>
-                </div>
-                <div className="p-3 rounded-xl bg-primary-container/30 text-center">
-                  <p className="text-lg font-bold text-primary mb-0">₹{content.achievements.averagePlacement || '—'} LPA</p>
-                  <p className="text-[11px] text-on-surface-variant mb-0">Average Placement</p>
-                </div>
-                <div className="p-3 rounded-xl bg-primary-container/30 text-center">
-                  <p className="text-lg font-bold text-primary mb-0">{content.achievements.placementRate || '—'}%</p>
-                  <p className="text-[11px] text-on-surface-variant mb-0">Placement Rate</p>
-                </div>
-                <div className="p-3 rounded-xl bg-primary-container/30 text-center">
-                  <p className="text-lg font-bold text-primary mb-0">{content.achievements.recruiters || '—'}</p>
-                  <p className="text-[11px] text-on-surface-variant mb-0">Recruiters</p>
-                </div>
+                {normalizeAchievements(content.achievements).map((a, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-primary-container/30 text-center">
+                    <p className="text-lg font-bold text-primary mb-0">{a.displayValue}</p>
+                    <p className="text-[11px] text-on-surface-variant mb-0">{a.title}</p>
+                  </div>
+                ))}
               </div>
             </Card>
           )}
+
 
           {/* Courses — INSTITUTE-OWNED, managed at /institute/courses */}
           <Card className="p-5">

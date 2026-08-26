@@ -13,8 +13,9 @@ export function InstituteProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [revision, setRevision] = useState(0);
 
+  const userId = user?.id || user?.email;
   const loadPages = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       setApiPages([]);
       return;
     }
@@ -28,7 +29,8 @@ export function InstituteProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [userId]);
+
 
   useEffect(() => {
     loadPages();

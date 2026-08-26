@@ -114,14 +114,23 @@ export default function InstituteEnquiries() {
       label: 'Interested In',
       render: (e) => (
         <div>
-          <p className="text-xs font-medium text-on-surface m-0">{e.course}</p>
+          <p className="text-xs font-medium text-on-surface m-0">{e.course || e.course_name || e.subject || 'General Enquiry'}</p>
           {e.specialization && (
             <p className="text-[11px] text-on-surface-variant m-0">{e.specialization}</p>
           )}
         </div>
       ),
     },
-    { key: 'date', label: 'Received', render: (e) => <span className="text-xs text-on-surface-variant">{e.submittedAt}</span> },
+    {
+      key: 'date',
+      label: 'Received',
+      render: (e) => (
+        <span className="text-xs text-on-surface-variant">
+          {e.submittedAt || (e.created_at ? new Date(e.created_at).toLocaleDateString() : 'Recent')}
+        </span>
+      ),
+    },
+
     { key: 'status', label: 'Status', render: (e) => <StatusBadge status={e.status} /> },
     {
       key: 'actions',
@@ -141,7 +150,7 @@ export default function InstituteEnquiries() {
     },
   ];
 
-  const newCount = all.filter((e) => e.status === 'New').length;
+  const newCount = sourceEnquiries.filter((e) => e.status === 'New').length;
 
   return (
     <div className="p-8 max-w-7xl mx-auto flex-1 w-full box-border">
@@ -177,7 +186,7 @@ export default function InstituteEnquiries() {
               }`}
             >
               {t}
-              {t !== 'All' && <span className="ml-1 opacity-60">{all.filter((e) => e.status === t).length}</span>}
+              {t !== 'All' && <span className="ml-1 opacity-60">{sourceEnquiries.filter((e) => e.status === t).length}</span>}
             </button>
           ))}
         </div>
@@ -187,7 +196,7 @@ export default function InstituteEnquiries() {
         columns={columns}
         rows={filtered}
         empty={
-          all.length === 0 ? (
+          sourceEnquiries.length === 0 ? (
             <EmptyState
               icon="forum"
               title="No enquiries yet"
@@ -198,6 +207,7 @@ export default function InstituteEnquiries() {
           )
         }
       />
+
 
       <Modal open={!!viewing} onClose={() => setViewing(null)} width={480}>
         {viewing && (

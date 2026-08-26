@@ -15,6 +15,8 @@ import {
 } from './pageBuilderContent';
 import { useInstitute } from '../context/InstituteContext';
 import { updatePage, uploadPageMedia } from '../Api/Api';
+import InstituteFullDetailsModal from '../components/InstituteFullDetailsModal';
+
 
 
 const TABS = [
@@ -237,10 +239,16 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
   };
 
 
+  const [fullModalOpen, setFullModalOpen] = useState(false);
+
+
   const SaveBar = (
     <div className="flex items-center gap-3 mt-5">
       <Button size="sm" onClick={save}>Save Changes</Button>
       <Button size="sm" variant="outline" onClick={() => navigate(`/${page.slug}`)}>Preview Page</Button>
+      <Button size="sm" variant="soft" icon="open_in_full" onClick={() => setFullModalOpen(true)}>
+        Full CMS Manager (90%×90%)
+      </Button>
       {savedAt > 0 && (
         <span className="text-xs text-secondary font-semibold flex items-center gap-1">
           <span className="material-symbols-outlined text-[16px]">check_circle</span> Saved
@@ -251,13 +259,19 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
 
   return (
     <div className="p-8 max-w-7xl mx-auto flex-1 w-full box-border">
-      <div className="mb-8">
-        <h1 className="font-display text-2xl font-bold text-on-surface m-0">Profile &amp; Branding</h1>
-        <p className="text-xs text-on-surface-variant m-0 mt-1 max-w-2xl">
-          Your institute's public content. Select &amp; Fill — pick from predefined options and we
-          build the page layout for you.
-        </p>
+      <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-on-surface m-0">Profile &amp; Branding</h1>
+          <p className="text-xs text-on-surface-variant m-0 mt-1 max-w-2xl">
+            Your institute's public content. Select &amp; Fill — pick from predefined options and we
+            build the page layout for you.
+          </p>
+        </div>
+        <Button size="sm" variant="primary" icon="open_in_full" onClick={() => setFullModalOpen(true)}>
+          Open Full CMS Editor (90%×90%)
+        </Button>
       </div>
+
 
       <div className="flex gap-2 mb-5 flex-wrap">
         {TABS.map((t) => (
@@ -527,6 +541,16 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
       <div className="mt-4">
         <Badge tone="neutral">Institute type: {page.type} — content options adjust by type in a later pass</Badge>
       </div>
+
+      {fullModalOpen && (
+        <InstituteFullDetailsModal
+          open={fullModalOpen}
+          onClose={() => setFullModalOpen(false)}
+          institute={page}
+          onSaveSuccess={() => commit()}
+        />
+      )}
     </div>
   );
 }
+

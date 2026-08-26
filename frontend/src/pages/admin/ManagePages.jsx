@@ -8,12 +8,13 @@ import EmptyState from '../../components/ui/EmptyState';
 import DataTable, { RowAction } from '../../components/ui/DataTable';
 import { Input, Label, FormGroup } from '../../components/ui/Field';
 import { INSTITUTE_TYPES, AFFILIATION_OPTIONS, slugify } from '../../constants/taxonomy';
+import InstituteFullDetailsModal from '../../components/InstituteFullDetailsModal';
 import {
   ApiError,
   resolveAssetUrl,
   fetchPages,
   createPage,
-  updatePage,
+  togglePageStatus,
   fetchPageAdmins,
   assignPageAdmin,
   revokePageAdmin,
@@ -21,6 +22,9 @@ import {
   fetchPageCourses,
   fetchPageOpportunities,
 } from '../../Api/Api';
+
+
+
 
 function affiliationConfig(type) {
   if (type === 'School') return { mode: 'select', label: 'Board' };
@@ -66,7 +70,9 @@ export default function ManagePages() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [adminsFor, setAdminsFor] = useState(null); // page whose admins are being managed
+  const [fullDetailsPage, setFullDetailsPage] = useState(null);
   const [newAdmin, setNewAdmin] = useState({ email: '', role: 'ADMIN' });
+
   const [adminError, setAdminError] = useState('');
   const logoInputRef = useRef(null);
   const bannerInputRef = useRef(null);
@@ -121,12 +127,13 @@ export default function ManagePages() {
   // PLATFORM-OWNED action: enabling/disabling an institute's public page.
   const toggleEnabled = async (page) => {
     try {
-      const updated = await updatePage(page.id, { is_enabled: !page.is_enabled });
+      const updated = await togglePageStatus(page.id, !page.is_enabled);
       setPages((prev) => prev.map((p) => (p.id === page.id ? { ...p, ...updated } : p)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update the page.');
     }
   };
+
 
   const addAdmin = async (e) => {
     e.preventDefault();
@@ -298,6 +305,11 @@ export default function ManagePages() {
             align: 'right',
             render: (p) => (
               <div className="flex items-center justify-end gap-1">
+                <RowAction
+                  icon="visibility"
+                  title="View & Edit Full Institute Info"
+                  onClick={() => setFullDetailsPage(p)}
+                />
                 <Link to={`/${p.slug}`} title="Open public page">
                   <RowAction icon="open_in_new" title="Open public page" />
                 </Link>
@@ -313,6 +325,7 @@ export default function ManagePages() {
                   onClick={() => toggleEnabled(p)}
                 />
               </div>
+
             ),
           },
         ]}
@@ -565,6 +578,17 @@ export default function ManagePages() {
           </>
         )}
       </Modal>
+
+      {/* Full 90%x90% Tabbed Institute Details Modal */}
+      {fullDetailsPage && (
+        <InstituteFullDetailsModal
+          open={!!fullDetailsPage}
+          onClose={() => setFullDetailsPage(null)}
+          institute={fullDetailsPage}
+          onSaveSuccess={() => load()}
+        />
+      )}
     </div>
   );
 }
+

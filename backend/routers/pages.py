@@ -17,9 +17,11 @@ Ownership split enforced here:
 
 import re
 import uuid
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -390,3 +392,140 @@ async def revoke_page_admin(
     await db.delete(membership)
     await db.commit()
     return await _admin_rows(db, page_id)
+
+
+# ---------------------------------------------------------------------------
+# Section Item Operations (Add, Edit, Delete, Disable/Enable)
+# ---------------------------------------------------------------------------
+
+class SectionItemRequest(BaseModel):
+    item: Dict[str, Any]
+
+
+class ToggleStatusRequest(BaseModel):
+    is_enabled: bool
+
+
+@router.patch("/{page_id}/status", response_model=PageResponse)
+async def toggle_page_status(
+    payload: ToggleStatusRequest,
+    page_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Enable or disable an Institute Page."""
+    page = (await db.execute(select(Page).where(Page.id == page_id))).scalars().first()
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+    
+    is_admin = await user_administers_page(db, current_user, page.id)
+    if not is_admin and not is_main_admin(current_user):
+        raise HTTPException(status_code=403, detail="Not authorized to change status of this page")
+
+    page.is_enabled = payload.is_enabled
+    await db.commit()
+    await db.refresh(page)
+    return page
+
+
+@router.post("/{page_id}/sections/{section_name}/items", response_model=PageResponse)
+async def add_section_item(
+    page_id: str,
+    section_name: str,
+    payload: SectionItemRequest,
+    page: Page = Depends(require_page_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add an item to a specific section inside content or gallery."""
+    item = payload.item or {}
+    if not item.get("id"):
+        item["id"] = f"item_{uuid.uuid4().hex[:8]}"
+
+    content_data = dict(page.content or {})
+
+    if section_name == "gallery":
+        gallery_list = list(page.gallery or [])
+        gallery_list.append(item)
+        page.gallery = gallery_list
+    elif section_name in ["whyChooseUs", "why_choose_us"]:
+        current_list = list(content_data.get("whyChooseUs") or [])
+        val = item.get("value") or item.get("text") or item.get("title") or str(item)
+        current_list.append(val)
+        content_data["whyChooseUs"] = current_list
+        page.content = content_data
+    else:
+        current_list = list(content_data.get(section_name) or [])
+        current_list.append(item)
+        content_data[section_name] = current_list
+        page.content = content_data
+
+    await db.commit()
+    await db.refresh(page)
+    return page
+
+
+@router.patch("/{page_id}/sections/{section_name}/items/{item_id}", response_model=PageResponse)
+async def update_section_item(
+    page_id: str,
+    section_name: str,
+    item_id: str,
+    payload: SectionItemRequest,
+    page: Page = Depends(require_page_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Edit an item within a section by item_id."""
+    updated_item = payload.item or {}
+    content_data = dict(page.content or {})
+
+    if section_name == "gallery":
+        gallery_list = list(page.gallery or [])
+        for idx, g in enumerate(gallery_list):
+            if isinstance(g, dict) and g.get("id") == item_id:
+                gallery_list[idx] = {**g, **updated_item}
+                break
+        page.gallery = gallery_list
+    else:
+        current_list = list(content_data.get(section_name) or [])
+        for idx, it in enumerate(current_list):
+            if isinstance(it, dict) and it.get("id") == item_id:
+                current_list[idx] = {**it, **updated_item}
+                break
+        content_data[section_name] = current_list
+        page.content = content_data
+
+    await db.commit()
+    await db.refresh(page)
+    return page
+
+
+@router.delete("/{page_id}/sections/{section_name}/items/{item_id}", response_model=PageResponse)
+async def delete_section_item(
+    page_id: str,
+    section_name: str,
+    item_id: str,
+    page: Page = Depends(require_page_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an item from a section by item_id (or string match)."""
+    content_data = dict(page.content or {})
+
+    if section_name == "gallery":
+        page.gallery = [g for g in (page.gallery or []) if isinstance(g, dict) and g.get("id") != item_id]
+    elif section_name in ["whyChooseUs", "why_choose_us"]:
+        content_data["whyChooseUs"] = [
+            w for w in (content_data.get("whyChooseUs") or [])
+            if (isinstance(w, dict) and w.get("id") != item_id) and w != item_id
+        ]
+        page.content = content_data
+    else:
+        current_list = list(content_data.get(section_name) or [])
+        content_data[section_name] = [
+            it for it in current_list
+            if not (isinstance(it, dict) and (it.get("id") == item_id or it.get("key") == item_id))
+        ]
+        page.content = content_data
+
+    await db.commit()
+    await db.refresh(page)
+    return page
+

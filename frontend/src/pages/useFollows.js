@@ -8,8 +8,9 @@ export function useFollows() {
   const [followedSlugs, setFollowedSlugs] = useLocalStorageState('followedPages', []);
   const [followedPageIds, setFollowedPageIds] = useState([]);
 
+  const userId = user?.id || user?.email;
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     fetchMyFollows()
       .then((pages) => {
         if (Array.isArray(pages)) {
@@ -20,7 +21,8 @@ export function useFollows() {
         }
       })
       .catch(() => {});
-  }, [user]);
+  }, [userId, setFollowedSlugs]);
+
 
   const isFollowing = useCallback(
     (identifier) => followedSlugs.includes(identifier) || followedPageIds.includes(identifier),

@@ -46,8 +46,8 @@ export default function InstituteDashboard() {
 
   useEffect(() => {
     if (!page?.id) return;
-    fetchPageCourses(page.id).then((r) => Array.isArray(r) && setApiCourses(r)).catch(() => {});
-    fetchPageOpportunities(page.id).then((r) => Array.isArray(r) && setApiOpps(r)).catch(() => {});
+    fetchPageCourses(page.id).then((r) => Array.isArray(r) && setApiCourses(r)).catch(() => { });
+    fetchPageOpportunities(page.id).then((r) => Array.isArray(r) && setApiOpps(r)).catch(() => { });
   }, [page?.id]);
 
   if (!page) return null;
@@ -83,7 +83,8 @@ export default function InstituteDashboard() {
         <Stat icon="menu_book" label="Courses" value={courses.length} to="/institute/courses" />
         <Stat icon="campaign" label="Admission Notices" value={notices.length} to="/institute/notices" />
         <Stat icon="work" label="Job Vacancies" value={jobs.length} to="/institute/jobs" />
-        <Stat icon="group" label="Followers" value={page.followers.toLocaleString()} />
+        <Stat icon="group" label="Followers" value={(Number(page.followers_count || page.followers) || 0).toLocaleString()} />
+
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
@@ -111,8 +112,9 @@ export default function InstituteDashboard() {
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-on-surface m-0 truncate">
-                        {op.type === 'admission' ? op.course : op.position}
+                        {op.course || op.title || op.position || 'Opportunity'}
                       </p>
+
                       <p className="text-[11px] text-on-surface-variant m-0">
                         Reach {op.reach?.toLocaleString() ?? 0} · Views {op.views?.toLocaleString() ?? 0}
                       </p>
@@ -170,9 +172,8 @@ export default function InstituteDashboard() {
               {checks.map((c) => (
                 <li key={c.label} className="flex items-center gap-2 text-xs">
                   <span
-                    className={`material-symbols-outlined text-[16px] ${
-                      c.done ? 'text-secondary' : 'text-on-surface-variant/50'
-                    }`}
+                    className={`material-symbols-outlined text-[16px] ${c.done ? 'text-secondary' : 'text-on-surface-variant/50'
+                      }`}
                   >
                     {c.done ? 'check_circle' : 'radio_button_unchecked'}
                   </span>
@@ -194,16 +195,17 @@ export default function InstituteDashboard() {
               Assigned by the Connectedus platform team.
             </p>
             <ul className="space-y-2 list-none p-0 m-0">
-              {page.admins.map((a) => (
-                <li key={a.email} className="flex items-center justify-between gap-2">
+              {(page.admins || []).map((a) => (
+                <li key={a.email || a.user_id} className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-on-surface m-0 truncate">{a.name}</p>
+                    <p className="text-xs font-semibold text-on-surface m-0 truncate">{a.name || a.email}</p>
                     <p className="text-[10px] text-on-surface-variant m-0 truncate">{a.email}</p>
                   </div>
-                  <Badge tone="neutral">{a.role.includes('Owner') ? 'Owner' : 'Admin'}</Badge>
+                  <Badge tone="neutral">{(a.role || 'Admin').includes('Owner') || a.role === 'OWNER' ? 'Owner' : 'Admin'}</Badge>
                 </li>
               ))}
             </ul>
+
           </Card>
         </div>
       </div>

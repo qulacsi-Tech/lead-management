@@ -307,9 +307,11 @@ function SuggestionsRail({ pages, myPageIds, followedIds, onToggleFollow, busyId
   const { auth } = useSession();
   const { openLogin } = useLoginPrompt();
 
-  // You don't follow a page you administer.
-  const suggestions = pages.filter((p) => !myPageIds.has(p.id)).slice(0, 6);
+  // Filter out pages administered by the user, or fall back to showing all public pages
+  const unowned = pages.filter((p) => !myPageIds.has(p.id));
+  const suggestions = (unowned.length > 0 ? unowned : pages).slice(0, 6);
   if (suggestions.length === 0) return null;
+
 
   return (
     <Card className="p-4">
@@ -406,8 +408,9 @@ export default function Feed() {
   }, []);
 
   // Which pages this account already follows — only meaningful when signed in.
+  const authId = auth?.id || auth?.email;
   useEffect(() => {
-    if (!auth) {
+    if (!authId) {
       setFollowedIds(new Set());
       return undefined;
     }
@@ -416,7 +419,8 @@ export default function Feed() {
       .then((rows) => !cancelled && setFollowedIds(new Set(rows.map((p) => p.id))))
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [auth]);
+  }, [authId]);
+
 
   const pageById = useMemo(
     () => Object.fromEntries(pages.map((p) => [p.id, p])),

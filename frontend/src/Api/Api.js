@@ -309,3 +309,16 @@ export const updatePageEnquiry = async (pageId, enquiryId, patch) =>
 
 export const fetchMyCredits = async () => apiFetch('/credits/me');
 
+export const togglePageStatus = async (pageId, isEnabled) =>
+  apiFetch(`/pages/${pageId}/status`, { method: 'PATCH', body: { is_enabled: isEnabled } });
+
+export const addSectionItem = async (pageId, sectionName, item) =>
+  apiFetch(`/pages/${pageId}/sections/${sectionName}/items`, { method: 'POST', body: { item } });
+
+export const updateSectionItem = async (pageId, sectionName, itemId, item) =>
+  apiFetch(`/pages/${pageId}/sections/${sectionName}/items/${itemId}`, { method: 'PATCH', body: { item } });
+
+export const deleteSectionItem = async (pageId, sectionName, itemId) =>
+  apiFetch(`/pages/${pageId}/sections/${sectionName}/items/${itemId}`, { method: 'DELETE' });
+
+

@@ -6,9 +6,8 @@ no endpoint here that accepts a user_id in the body, so nobody can follow a
 page on someone else's behalf or read another person's notifications.
 """
 
-from typing import List
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import List, Dict
+from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +20,52 @@ from models.social import Follow, Notification, FollowResponse, NotificationResp
 
 follow_router = APIRouter(prefix="/follows", tags=["Network"])
 notification_router = APIRouter(prefix="/notifications", tags=["Notifications"])
+
+
+# ---------------------------------------------------------------------------
+# WebSocket Notification Connection Manager
+# ---------------------------------------------------------------------------
+
+class NotificationConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, List[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+        self.active_connections[user_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, user_id: str):
+        if user_id in self.active_connections:
+            if websocket in self.active_connections[user_id]:
+                self.active_connections[user_id].remove(websocket)
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+
+    async def notify_user(self, user_id: str, message: dict):
+        if user_id in self.active_connections:
+            for connection in list(self.active_connections[user_id]):
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    pass
+
+ws_manager = NotificationConnectionManager()
+
+
+@notification_router.websocket("/ws/{user_id}")
+async def notification_websocket(websocket: WebSocket, user_id: str):
+    await ws_manager.connect(websocket, user_id)
+    try:
+        await websocket.send_json({"type": "connected", "user_id": user_id})
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_json({"type": "pong"})
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket, user_id)
+
 
 
 # ---------------------------------------------------------------------------
