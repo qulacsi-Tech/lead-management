@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSession } from '../context/useSession';
 import { useMyPages } from '../hooks/useMyPages';
+import { isInstitutePath } from '../utils/pageUrl';
 import { useLoginPrompt } from '../context/LoginPrompt';
 import {
   fetchNotifications,
@@ -204,6 +205,21 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const { openLogin } = useLoginPrompt();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  // A public institute page is a landing page for outsiders, not a screen
+  // inside the product. Client feedback, 01–02 Sep 2026: the app's navigation
+  // "nahi dikhna chahiye varna bachee enquiry post nahi karte" — a parent or
+  // student arriving from Google or a shared link reads our nav as "this is
+  // somebody else's app, I need an account" and leaves without enquiring.
+  //
+  // The brand stays (it is what the page is published under, and it carries
+  // the platform's SEO value) and so does Sign in / Join now for anonymous
+  // visitors, since converting them is the point. What goes is the member
+  // navigation, which competes with the enquiry CTA.
+  //
+  // See docs/CLIENT_FEEDBACK_2026-09-01.md, Section 5.
+  const bareHeader = isInstitutePath(pathname);
 
   // Wait for the session-restore check (getMe() against the stored token) to
   // finish before deciding there is no session — otherwise every hard refresh
@@ -230,7 +246,9 @@ export default function AppLayout() {
             <span className="text-lg font-bold text-on-surface hidden sm:inline">Connectedus</span>
           </NavLink>
 
-          <div className="flex-1 max-w-sm hidden md:flex items-center gap-2 bg-surface-container-low border border-outline-variant rounded-full px-4 py-2">
+          <div
+            className={`flex-1 max-w-sm ${bareHeader ? 'hidden' : 'hidden md:flex'} items-center gap-2 bg-surface-container-low border border-outline-variant rounded-full px-4 py-2`}
+          >
             <span className="material-symbols-outlined text-on-surface-variant text-[18px]">search</span>
             <span className="text-sm text-on-surface-variant">Search people, pages, courses...</span>
           </div>
@@ -251,7 +269,7 @@ export default function AppLayout() {
                 Join now
               </Link>
             </nav>
-          ) : (
+          ) : bareHeader ? null : (
             <nav className="flex items-center gap-1 ml-auto">
               {NAV_ICONS.map((item) => (
                 <NavLink

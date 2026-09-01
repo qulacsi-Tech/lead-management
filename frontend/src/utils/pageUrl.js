@@ -54,3 +54,20 @@ export function pageDisplayUrl(page, host = 'connectedus.in') {
   const path = pagePath(page);
   return path === '#' ? host : `${host}${path}`;
 }
+
+/**
+ * Whether `pathname` is a public institute page.
+ *
+ * Mirrors the backend's `parse_public_path` (core/urls.py): two or three
+ * segments, led by a known institute type. Used to strip the app's own
+ * navigation from these pages — see AppLayout.
+ *
+ * Deliberately not a string sniff on "/college/": a path is an institute page
+ * only if its leading segment is one of the types we actually publish, which is
+ * what keeps `/profile` and `/admin/pages` out.
+ */
+export function isInstitutePath(pathname) {
+  const segments = (pathname || '').split('/').filter(Boolean);
+  if (segments.length < 2 || segments.length > 3) return false;
+  return Object.values(TYPE_SEGMENTS).includes(segments[0].toLowerCase());
+}

@@ -1,6 +1,6 @@
 # Client Feedback Analysis — WhatsApp thread (11:53am – 7:07pm)
 
-Status: **Analysed. Points 1 and 9, plus the Section 12 follow-up, are built. Points 2–8 are not.** Source is four WhatsApp screenshots from Avdhesh Tiwari (+91 97130 36505), captured against the live deployment at `lead.qulacsi.com`. The screenshots do not carry a date; recorded 01 Sep 2026.
+Status: **Analysed. Points 1, 5 and 9, plus the Section 12 follow-up, are built. Points 2, 3, 4, 6, 7 and 8 are not.** Source is four WhatsApp screenshots from Avdhesh Tiwari (+91 97130 36505), captured against the live deployment at `lead.qulacsi.com`. The screenshots do not carry a date; recorded 01 Sep 2026.
 
 This document is for **discussion first** — most points need a decision from the client before they should be built (see [Section 11](#11-open-questions--needs-a-decision)). Only point 1 has been implemented so far.
 
@@ -16,7 +16,7 @@ Nine points, in four messages. Grouped by what they actually are:
 | 2 | Remove Logo/Banner from the Create Page form | Deletion | S |
 | 3 | *(truncated)* "…do popup mat rakho" | **Unreadable — needs clarification** | ? |
 | 4 | Page content options must vary by institute type | **Real design gap — the biggest item here** | L |
-| 5 | App header must not show on a public Institute Page | Layout split | M |
+| 5 | App header must not show on a public Institute Page | ✅ **Done** — see Section 5 | M |
 | 6 | Public page should open in a new tab | Small behaviour change | S |
 | 7 | Floating enquiry tab missing | **Likely a real bug — cause identified** | S |
 | 8 | Course *stream* — assign 8 from a master list of 100 | **New feature — needs a decision** | L |
@@ -155,7 +155,7 @@ There is a **second-order defect** too: `buildAboutParagraph()` (`pageBuilderCon
 
 ---
 
-## 5. The app header must not appear on a public Institute Page
+## 5. The app header must not appear on a public Institute Page — ✅ **IMPLEMENTED**
 
 > "Page baanne ke baad jo ye header aa raha hai apna, ye nahi dikhna chahiye varna bachee enquiry post nahi karte"
 > *(after the page is created, our header shouldn't show — otherwise kids don't post an enquiry)*
@@ -175,9 +175,30 @@ He circled the Connectedus nav bar (Home / Search / Dashboard / Alerts / Me) on 
 
 **The reasoning behind his complaint is sound and worth stating plainly:** the institute page is a **landing page for outsiders**, not a screen inside our product. A parent or student arriving from Google or a WhatsApp share sees our navigation, reads it as "this is somebody else's app, I need an account," and leaves without enquiring. The header competes with the enquiry CTA.
 
-**To build:** move `:instituteSlug` out of `AppLayout` into its own bare layout. Open question: should the page carry *any* Connectedus identity? Recommend a minimal footer-level "Powered by Connectedus" plus a small sign-in link — it keeps the platform's SEO and brand value without the app chrome — but this is his call.
+### What was built
 
-**Interaction with point 9:** if URLs become `/college/sait/indore`, this route moves anyway. Doing 5 and 9 in one pass is meaningfully cheaper than doing them separately.
+Confirmed on 02 Sep with a second screenshot, circling the nav cluster directly: *"now after opening the institute page dont show these header items in institute page."*
+
+`AppLayout` now renders reduced chrome on institute routes rather than the route being moved to a separate layout. That keeps **one** header definition — two would drift, and this route has already moved once for point 9.
+
+| Element | On an institute page |
+|---|---|
+| Home / Search / Dashboard / Alerts / Me | **Hidden** — the circled cluster |
+| Global "Search people, pages, courses…" bar | **Hidden** — see note below |
+| Connectedus logo | Kept |
+| Sign in / Join now (anonymous visitors) | Kept |
+
+**What decides it:** `isInstitutePath()` in `frontend/src/utils/pageUrl.js`, which mirrors the backend's `parse_public_path` — two or three segments led by a known institute type. Deliberately not a string sniff: a false positive would strip the navigation off a real app screen, so there is a test asserting `/`, `/profile`, `/dashboard`, `/search`, `/admin/pages` and `/page/edit` are all unaffected.
+
+**Why the brand and sign-in stayed.** The client's stated reason for the ask is conversion — *"varna bachee enquiry post nahi karte"*. The nav competes with the enquiry CTA and reads as "this is somebody else's app, I need an account". The logo does not: it is what the page is published under, and it carries the platform's SEO value. Sign in / Join now stays for the same reason — converting an anonymous visitor is the point of the page.
+
+**Judgement call, easily reversed:** the global search bar was hidden too, though it was not in the circle. It is app chrome sitting immediately beside what was, and it is not even functional today — a `<span>`, not an input. To put it back, drop `bareHeader` from its className in `AppLayout.jsx`.
+
+**Known trade-off:** a signed-in user viewing an institute page now has no header route to their profile or to log out. The logo returns them to the feed in one click, which is normal for a landing page, but it is a real change for admins who sit on their own page — they still have "Manage this page" on the page itself.
+
+### Still open
+
+- The in-page `PageHeader` still prints `connectedus.in/training-institute/herald/gwalior` above the fold, to a visitor who is by definition already at that URL. Not part of the circle, so left alone — but it is the next thing I would cut. (An admin viewing their own page sees the title "Institute Page"; a visitor sees the institute's name, so only the URL line is redundant.)
 
 ---
 
@@ -316,7 +337,7 @@ Previously *any* single-segment path that was not in `NOINDEX_PREFIXES` was assu
 
 **Batch A — do now, roughly half a day.** ~~Point 1~~ ✅ done. Points 2, 6, 7 remain. Independently useful, no decisions needed.
 
-**Batch B.** ~~Point 9~~ ✅ done (old URLs 301 rather than break). Point 5 remains and will move the institute route again.
+**Batch B.** ~~Points 5 and 9~~ ✅ both done. Old URLs 301 rather than break; institute pages no longer carry the app's navigation.
 
 **Batch C — content restructure.** Point 4. Needs the client's team to supply per-type option lists; we draft, he edits.
 
@@ -330,7 +351,7 @@ Previously *any* single-segment path that was not in `NOINDEX_PREFIXES` was assu
 
 1. **Point 3:** what did the 11:55am message say in full?
 2. **Point 2:** confirm that removing Logo/Banner from the create form deliberately reverses the 16 Aug request.
-3. **Point 5:** should a public institute page carry *any* Connectedus branding, or none at all?
+3. ~~**Point 5:** should a public institute page carry *any* Connectedus branding?~~ Built keeping the logo and Sign in / Join now, dropping the member nav and the search bar. Confirm the search bar should stay gone.
 4. ~~**Point 9:** keep old single-segment URLs as permanent redirects?~~ Built as 301s. **Still open:** which city for a multi-branch institute?
 5. **Point 8:** master course list — strict or admin-approved? Is "stream" a new level above category? Who writes the ~100 rows?
 6. **Point 4:** can his team supply the per-type option lists, working from a draft we provide?
@@ -345,7 +366,8 @@ Previously *any* single-segment path that was not in `NOINDEX_PREFIXES` was assu
 | 1 | ✅ `data/indiaGeo.json`, `data/indiaGeo.js`, `components/ui/StateCitySelect.jsx`, `scripts/build-india-geo.mjs`; wired into `pages/admin/ManagePages.jsx` + `components/InstituteFullDetailsModal.jsx` |
 | 2 | `ManagePages.jsx:397-442`, `CreateInstitutePage.jsx:132-170` |
 | 4 | `frontend/src/pages/pageBuilderContent.js`, `pages/InstitutePageEditor.jsx:365`, `pages/InstitutePage.jsx` |
-| 5, 6 | `frontend/src/App.jsx`, `layouts/AppLayout.jsx` |
+| 5 | ✅ `frontend/src/layouts/AppLayout.jsx`, `utils/pageUrl.js` (`isInstitutePath`) |
+| 6 | `frontend/src/App.jsx`, feed/search/admin link sites |
 | 7 | `frontend/src/pages/InstitutePage.jsx:249-257` |
 | 8 | new `backend/models/platform_course.py` + migration, `models/course.py`, `constants/taxonomy.js`, `pages/admin/PlatformTaxonomy.jsx`, `pages/institute/ManageCourses.jsx` |
 | 9 | ✅ `backend/core/urls.py`, `alembic/versions/0005_scoped_page_slug.py`, `routers/pages.py`, `routers/seo.py`, `main.py`, `models/page.py`; `frontend/src/utils/pageUrl.js`, `pages/LegacySlugRedirect.jsx`, `App.jsx` + 8 link sites |

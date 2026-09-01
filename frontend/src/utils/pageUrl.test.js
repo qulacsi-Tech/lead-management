@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { pagePath, pageDisplayUrl, typeSegment, slugifySegment } from './pageUrl';
+import {
+  pagePath,
+  pageDisplayUrl,
+  typeSegment,
+  slugifySegment,
+  isInstitutePath,
+} from './pageUrl';
 
 describe('pagePath', () => {
   it('builds the three-segment URL the client asked for', () => {
@@ -60,5 +66,28 @@ describe('pageDisplayUrl', () => {
     expect(pageDisplayUrl({ type: 'Coaching', slug: 'paras', city: 'Bhopal' })).toBe(
       'connectedus.in/coaching/paras/bhopal',
     );
+  });
+});
+
+describe('isInstitutePath', () => {
+  it('recognises institute pages in both forms', () => {
+    expect(isInstitutePath('/college/sait/indore')).toBe(true);
+    expect(isInstitutePath('/coaching/paras/bhopal')).toBe(true);
+    expect(isInstitutePath('/training-institute/herald/gwalior')).toBe(true);
+    expect(isInstitutePath('/school/st-marys')).toBe(true);
+  });
+
+  it('leaves app routes alone, so their chrome is untouched', () => {
+    // This is what decides whether the member navigation renders, so a false
+    // positive here would strip the nav off a real app screen.
+    for (const path of ['/', '/profile', '/dashboard', '/search', '/admin/pages', '/page/edit']) {
+      expect(isInstitutePath(path)).toBe(false);
+    }
+  });
+
+  it('ignores paths with the wrong shape', () => {
+    expect(isInstitutePath('/college')).toBe(false);
+    expect(isInstitutePath('/college/sait/indore/extra')).toBe(false);
+    expect(isInstitutePath('')).toBe(false);
   });
 });
