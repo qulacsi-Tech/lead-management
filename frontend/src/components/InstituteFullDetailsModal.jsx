@@ -3,6 +3,8 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import { Input, FormGroup, Select } from './ui/Field';
+import StateCitySelect from './ui/StateCitySelect';
+import { pageDisplayUrl } from '../utils/pageUrl';
 import {
   fetchPage,
   updatePage,
@@ -144,7 +146,29 @@ function generateAboutParagraph(state, allFieldDefs, name = 'Our institute') {
   return parts.join(' ');
 }
 
-export default function InstituteFullDetailsModal({ open, onClose, institute, onSaveSuccess }) {
+/**
+ * The full institute CMS editor.
+ *
+ * Renders in one of two shells:
+ *   variant="modal" (default) — a 90vw overlay, used from the Institute Console.
+ *   variant="page"            — plain in-flow content filling its route, used by
+ *                               the Main Admin's /admin/pages/:pageId screen.
+ *
+ * Client feedback, 01 Sep 2026: "the eye button for extra info change it to a
+ * separate page for adding extra info instead of a modal." The form has seven
+ * tabs and a live preview — more than an overlay should carry, and a modal has
+ * no URL, so an admin could not link to or reload an institute mid-edit.
+ *
+ * In page mode `onClose` is a Back action rather than a dismiss, so the header
+ * shows an arrow instead of an ×.
+ */
+export default function InstituteFullDetailsModal({
+  open,
+  onClose,
+  institute,
+  onSaveSuccess,
+  variant = 'modal',
+}) {
   const [tab, setTab] = useState('main');
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -608,9 +632,19 @@ export default function InstituteFullDetailsModal({ open, onClose, institute, on
 
   const affiliationChoices = AFFILIATION_OPTIONS[type] || [];
 
-  return (
-    <Modal open={open} onClose={onClose} width="90vw" height="90vh" className="p-0 flex flex-col">
-      <div className="flex flex-col h-full bg-surface-container-lowest overflow-hidden rounded-2xl">
+  const asPage = variant === 'page';
+
+  if (!open) return null;
+
+  // Built as an element, not a wrapper component: a component defined inline
+  // here would be a fresh type on every render, remounting the whole form and
+  // dropping focus on each keystroke.
+  const body = (
+      <div
+        className={`flex flex-col bg-surface-container-lowest overflow-hidden ${
+          asPage ? 'flex-1 min-h-0' : 'h-full rounded-2xl'
+        }`}
+      >
         {/* Header Bar */}
         <div className="px-6 py-4 bg-surface-container border-b border-outline-variant flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -620,7 +654,7 @@ export default function InstituteFullDetailsModal({ open, onClose, institute, on
             <div>
               <h2 className="text-lg font-bold text-on-surface m-0 leading-tight">{name || 'Institute Information Manager'}</h2>
               <p className="text-xs text-on-surface-variant m-0">
-                {slug ? `connectedus.in/${slug}` : 'Manage complete institute CMS profile'} · <Badge tone="primary" className="ml-1">{type}</Badge>
+                {slug ? pageDisplayUrl({ slug, type, city }) : 'Manage complete institute CMS profile'} · <Badge tone="primary" className="ml-1">{type}</Badge>
               </p>
             </div>
           </div>
@@ -638,9 +672,12 @@ export default function InstituteFullDetailsModal({ open, onClose, institute, on
             </Button>
             <button
               onClick={onClose}
+              title={asPage ? 'Back to Institute Pages' : 'Close'}
               className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer border-none bg-transparent"
             >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <span className="material-symbols-outlined text-[20px]">
+                {asPage ? 'arrow_back' : 'close'}
+              </span>
             </button>
           </div>
         </div>
@@ -760,14 +797,15 @@ export default function InstituteFullDetailsModal({ open, onClose, institute, on
                   <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full campus address" />
                 </FormGroup>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormGroup label="City">
-                    <Input value={city} onChange={(e) => setCity(e.target.value)} />
-                  </FormGroup>
-                  <FormGroup label="State">
-                    <Input value={stateName} onChange={(e) => setStateName(e.target.value)} />
-                  </FormGroup>
-                </div>
+                <StateCitySelect
+                  className="grid grid-cols-2 gap-4"
+                  state={stateName}
+                  city={city}
+                  onChange={({ state: nextState, city: nextCity }) => {
+                    setStateName(nextState);
+                    setCity(nextCity);
+                  }}
+                />
 
                 <div className="grid grid-cols-3 gap-4">
                   <FormGroup label="Phone / Contact">
@@ -1246,6 +1284,13 @@ export default function InstituteFullDetailsModal({ open, onClose, institute, on
           )}
         </div>
       </div>
+  );
+
+  if (asPage) return <div className="flex-1 w-full min-h-0 flex flex-col">{body}</div>;
+
+  return (
+    <Modal open={open} onClose={onClose} width="90vw" height="90vh" className="p-0 flex flex-col">
+      {body}
     </Modal>
   );
 }

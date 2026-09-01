@@ -7,6 +7,7 @@ import { Input, Textarea, FormGroup } from '../components/ui/Field';
 import { INSTITUTE_TYPES, addPage } from './mockData';
 import PageHeader from './PageHeader';
 import { useAuth } from '../context/AuthContext';
+import { pagePath, pageDisplayUrl } from '../utils/pageUrl';
 
 const BOARD_OPTIONS = ['CBSE', 'ICSE', 'State Board', 'IB', 'Other'];
 
@@ -51,14 +52,14 @@ export default function CreateInstitutePage() {
         <Card className="p-6 text-center">
           <span className="material-symbols-outlined text-secondary text-[48px]">check_circle</span>
           <h3 className="text-lg font-bold text-on-surface mt-2">"{created.name}" page is live</h3>
-          <p className="text-xs text-on-surface-variant mb-1">connectedus.in/{created.slug}</p>
+          <p className="text-xs text-on-surface-variant mb-1">{pageDisplayUrl(created)}</p>
           <p className="text-sm text-on-surface-variant mb-4">
             You are now the Institute Admin for this page. Manage its courses, admission notices, job
             vacancies and enquiries from your Institute Console.
           </p>
           <div className="flex gap-2 justify-center">
             <Button onClick={() => navigate('/institute')} icon="tune">Open Institute Console</Button>
-            <Button variant="outline" onClick={() => navigate(`/${created.slug}`)}>View public page</Button>
+            <Button variant="outline" onClick={() => navigate(pagePath(created))}>View public page</Button>
           </div>
         </Card>
       </div>

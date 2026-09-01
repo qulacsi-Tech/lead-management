@@ -2,7 +2,8 @@
 Institute Page endpoints.
 
 Ownership split enforced here:
-  POST   /pages                    Main Admin only  — create the institute
+  POST   /pages                    Main Admin only  — create the institute,
+                                                      and its first admin login
   GET    /pages                    Main Admin       — platform-wide list
   GET    /pages/mine               Any user         — pages I administer
   GET    /pages/slug/{slug}        Public           — public page view
@@ -11,11 +12,11 @@ Ownership split enforced here:
                                                       fields rejected
   DELETE /pages/{page_id}          Main Admin       — remove institute
   GET    /pages/{page_id}/admins   Page Admin
-  POST   /pages/{page_id}/admins   Main Admin       — assign an admin
+  POST   /pages/{page_id}/admins   Main Admin       — assign an admin,
+                                                      creating the login if new
   DELETE /pages/{page_id}/admins/{user_id}   Main Admin
 """
 
-import re
 import uuid
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
@@ -26,6 +27,8 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
+from core.security import get_password_hash
+from core.urls import slugify, parse_public_path, matches_city
 from core.deps import get_current_active_user, get_optional_user
 from core.authz import (
     require_main_admin,
@@ -36,6 +39,7 @@ from core.authz import (
     is_main_admin,
 )
 from models.user import User
+from models.enums import UserRole
 from models.page import (
     Page,
     PageAdmin,
@@ -53,12 +57,6 @@ from models.social import Follow, Notification
 router = APIRouter(prefix="/pages", tags=["Institute Pages"])
 
 
-def slugify(value: str) -> str:
-    value = (value or "").lower().strip()
-    value = re.sub(r"[^a-z0-9]+", "-", value)
-    return re.sub(r"(^-|-$)", "", value)
-
-
 # Reserved because the frontend router serves these as literal paths; an
 # institute claiming one would shadow a real screen.
 RESERVED_SLUGS = {
@@ -67,14 +65,44 @@ RESERVED_SLUGS = {
 }
 
 
-async def _unique_slug(db: AsyncSession, desired: str, fallback: str) -> str:
+async def _unique_slug(
+    db: AsyncSession,
+    desired: str,
+    fallback: str,
+    *,
+    page_type: str,
+    city: Optional[str],
+    exclude_id: Optional[str] = None,
+) -> str:
+    """A name segment unique *within its type and city*.
+
+    Uniqueness is scoped rather than global because the public URL is
+    `/{type}/{name}/{city}` — two "paras" coaching centres in different cities
+    are two distinct URLs and may both keep the natural slug. Only a genuine
+    collision (same type, same city) gets the `-2` suffix, so the ugly case is
+    now rare instead of routine.
+
+    This is a relaxation of the previous global rule, so every existing slug
+    remains valid.
+    """
     base = slugify(desired or fallback) or f"institute-{uuid.uuid4().hex[:6]}"
     if base in RESERVED_SLUGS:
         base = f"{base}-institute"
+
+    # City is compared as a slug, so "Indore" and "indore" collide as they
+    # should. Cheap to do in Python: a slug matches very few rows.
+    city_slug = slugify(city or "")
     candidate, n = base, 2
     while True:
-        exists = (await db.execute(select(Page.id).where(Page.slug == candidate))).scalars().first()
-        if not exists:
+        rows = (
+            await db.execute(
+                select(Page).where(Page.slug == candidate, Page.type == page_type)
+            )
+        ).scalars().all()
+        clash = any(
+            row.id != exclude_id and slugify(row.city or "") == city_slug for row in rows
+        )
+        if not clash:
             return candidate
         candidate = f"{base}-{n}"
         n += 1
@@ -93,6 +121,54 @@ async def _admin_rows(db: AsyncSession, page_id: str) -> List[PageAdminResponse]
     ]
 
 
+async def _resolve_or_create_admin(
+    db: AsyncSession,
+    email: str,
+    name: Optional[str],
+    password: Optional[str],
+) -> User:
+    """The user who will administer a page, creating their login if needed.
+
+    The Main Admin's console establishes an institute and its first login in
+    one step (there is no separate "institute accounts" screen), so this has to
+    cover both cases:
+
+      - the email already has an account -> link it, untouched. Never rewrite
+        an existing user's name or password from a page form; that would let
+        page creation silently take over somebody's account.
+      - no account -> mint one, which requires a password from the caller.
+
+    Role is PROFESSIONAL, not the legacy INSTITUTE role: administering a page
+    is a relationship recorded in `page_admins`, not a role. See models/page.py
+    on PageAdmin and docs/EDUCATION_NETWORK_ROADMAP.md 2.2.
+    """
+    existing = (
+        await db.execute(select(User).where(func.lower(User.email) == email.lower()))
+    ).scalars().first()
+    if existing is not None:
+        return existing
+
+    if not password:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No account exists for {email}. "
+                "Provide a name and password to create the institute admin login."
+            ),
+        )
+
+    user = User(
+        email=email,
+        name=(name or "").strip() or email.split("@")[0],
+        hashed_password=get_password_hash(password),
+        role=UserRole.PROFESSIONAL,
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
 # ---------------------------------------------------------------------------
 # Create / list
 # ---------------------------------------------------------------------------
@@ -108,7 +184,9 @@ async def create_page(
     if payload.type not in INSTITUTE_TYPES:
         raise HTTPException(status_code=422, detail=f"type must be one of {INSTITUTE_TYPES}")
 
-    slug = await _unique_slug(db, payload.slug, payload.name)
+    slug = await _unique_slug(
+        db, payload.slug, payload.name, page_type=payload.type, city=payload.city
+    )
 
     page = Page(
         name=payload.name,
@@ -129,14 +207,9 @@ async def create_page(
     await db.flush()
 
     if payload.admin_email:
-        target = (
-            await db.execute(select(User).where(func.lower(User.email) == payload.admin_email.lower()))
-        ).scalars().first()
-        if target is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No user account exists for {payload.admin_email}. Create the account first.",
-            )
+        target = await _resolve_or_create_admin(
+            db, payload.admin_email, payload.admin_name, payload.admin_password
+        )
         db.add(PageAdmin(page_id=page.id, user_id=target.id, role="OWNER", assigned_by=admin.id))
         db.add(Notification(
             user_id=target.id,
@@ -199,15 +272,15 @@ async def list_public_pages(
     return list((await db.execute(stmt)).scalars().all())
 
 
-@router.get("/slug/{slug}", response_model=PageDetailResponse)
-async def get_page_by_slug(
-    slug: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user),
-):
-    """Public institute page — readable without a session. A disabled page
-    404s for everyone except the people who administer it."""
-    page = (await db.execute(select(Page).where(Page.slug == slug))).scalars().first()
+async def _public_page_response(
+    db: AsyncSession, page: Optional[Page], current_user: Optional[User]
+) -> PageDetailResponse:
+    """The public view of one page, with the caller's own relationship to it.
+
+    Shared by both public lookups — by legacy slug and by canonical path — so
+    the visibility rule (a disabled page 404s for everyone but its admins) has
+    exactly one implementation.
+    """
     if page is None:
         raise HTTPException(status_code=404, detail="Institute page not found")
 
@@ -232,6 +305,54 @@ async def get_page_by_slug(
         is_following=following,
         followers_count=await follower_count(db, page.id),
     )
+
+
+async def find_page_by_public_path(db: AsyncSession, path: str) -> Optional[Page]:
+    """The page living at `/college/sait/indore`, or None.
+
+    The name segment is matched in SQL; type and city are then verified in
+    Python, because the city segment is a slug of `Page.city` rather than the
+    stored text. Slugs select very few rows, so the check is cheap.
+    """
+    parsed = parse_public_path(path)
+    if parsed is None:
+        return None
+    page_type, name_slug, city_slug = parsed
+
+    rows = (
+        await db.execute(select(Page).where(Page.slug == name_slug, Page.type == page_type))
+    ).scalars().all()
+    for row in rows:
+        if matches_city(row, city_slug):
+            return row
+    return None
+
+
+@router.get("/resolve", response_model=PageDetailResponse)
+async def resolve_page_by_path(
+    path: str = Query(..., description="Canonical public path, e.g. /college/sait/indore"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Public institute page, addressed by its canonical URL.
+
+    Declared before `/{page_id}` so "resolve" is not read as an id.
+    """
+    return await _public_page_response(db, await find_page_by_public_path(db, path), current_user)
+
+
+@router.get("/slug/{slug}", response_model=PageDetailResponse)
+async def get_page_by_slug(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Public institute page by name segment alone — the pre-`/{type}/{name}/{city}`
+    URL shape. Kept so links shared before the change still resolve; ambiguous
+    only if two pages share a slug across types or cities, in which case the
+    canonical `/resolve` above is the one to use."""
+    page = (await db.execute(select(Page).where(Page.slug == slug))).scalars().first()
+    return await _public_page_response(db, page, current_user)
 
 
 @router.get("/{page_id}", response_model=PageDetailResponse)
@@ -278,7 +399,16 @@ async def update_page(
         raise HTTPException(status_code=422, detail=f"type must be one of {INSTITUTE_TYPES}")
 
     if "slug" in data and data["slug"]:
-        data["slug"] = await _unique_slug(db, data["slug"], page.name)
+        # Checked against where the page will BE once this patch lands, not
+        # where it is now — type and city may be changing in the same call.
+        data["slug"] = await _unique_slug(
+            db,
+            data["slug"],
+            page.name,
+            page_type=data.get("type", page.type),
+            city=data.get("city", page.city),
+            exclude_id=page.id,
+        )
 
     for field, value in data.items():
         setattr(page, field, value)
@@ -331,14 +461,7 @@ async def assign_page_admin(
     if payload.role not in ("OWNER", "ADMIN"):
         raise HTTPException(status_code=422, detail="role must be OWNER or ADMIN")
 
-    target = (
-        await db.execute(select(User).where(func.lower(User.email) == payload.email.lower()))
-    ).scalars().first()
-    if target is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No user account exists for {payload.email}. Create the account first.",
-        )
+    target = await _resolve_or_create_admin(db, payload.email, payload.name, payload.password)
 
     existing = (
         await db.execute(

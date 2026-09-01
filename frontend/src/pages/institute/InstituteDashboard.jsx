@@ -7,6 +7,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import { useInstitute } from '../../context/InstituteContext';
 import { fetchPageCourses, fetchPageOpportunities } from '../../Api/Api';
+import { pageDisplayUrl } from '../../utils/pageUrl';
 
 function Stat({ icon, label, value, to }) {
   const body = (
@@ -70,7 +71,7 @@ export default function InstituteDashboard() {
         <div>
           <h1 className="font-display text-2xl font-bold text-on-surface m-0">{page.name}</h1>
           <p className="text-xs text-on-surface-variant m-0 mt-1">
-            connectedus.in/{page.slug} · <Badge tone="primary" className="ml-1">{page.type}</Badge>
+            {pageDisplayUrl(page)} · <Badge tone="primary" className="ml-1">{page.type}</Badge>
           </p>
         </div>
         <div className="flex gap-2">

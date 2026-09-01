@@ -8,6 +8,7 @@ import { Input, Textarea, FormGroup } from '../components/ui/Field';
 import { useSession } from '../context/useSession';
 import { useFollows } from './useFollows';
 import { mockPages } from './mockData';
+import { pagePath, pageDisplayUrl } from '../utils/pageUrl';
 import { ApiError, fetchMyOrganization, saveMyOrganization } from '../Api/Api';
 import { isOrgAccount, isOrgRole } from '../constants/roles';
 import { useMyPages } from '../hooks/useMyPages';
@@ -787,10 +788,10 @@ export default function ProfessionalProfile() {
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-on-surface m-0 truncate">{p.name}</p>
                         <p className="text-[11px] text-on-surface-variant m-0 font-mono truncate">
-                          connectedus.in/{p.slug}
+                          {pageDisplayUrl(p)}
                         </p>
                       </div>
-                      <Link to={`/${p.slug}`} className="shrink-0">
+                      <Link to={pagePath(p)} className="shrink-0">
                         <Button size="sm" variant="outline" icon="open_in_new">View</Button>
                       </Link>
                     </li>

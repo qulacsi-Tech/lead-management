@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useEffect, useRef, useState } from 'react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import {
-  fetchAdminInstitutes,
+  fetchPages,
   fetchAdminStudents,
   fetchAdminMentors,
 } from '../Api/Api';
@@ -14,12 +14,18 @@ const DataContext = createContext(null);
 // docs/EDUCATION_NETWORK_ROADMAP.md. What remains here backs the Admin
 // "manage institutes/students/mentors" screens and their notification bell.
 //
-// These three lists come exclusively from the backend (`/api/admin/*`). They
+// `pages` replaced a former `institutes` list sourced from `/admin/institutes`
+// (the legacy Institute-role *accounts* table). The admin console now has a
+// single institute concept — the Page — so the Dashboard counts and links the
+// same records the Institute Pages screen manages. See
+// docs/CLIENT_FEEDBACK_2026-09-01.md.
+//
+// These three lists come exclusively from the backend. They
 // are deliberately NOT seeded or cached in localStorage: an admin console must
 // show what the database actually holds, never a demo fixture that survives a
 // failed request.
 export function DataProvider({ children }) {
-  const [institutes, setInstitutes] = useState([]);
+  const [pages, setPages] = useState([]);
   const [students, setStudents] = useState([]);
   const [mentors, setMentors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,33 +41,28 @@ export function DataProvider({ children }) {
     if (inFlight.current) return inFlight.current;
     inFlight.current = (async () => {
       setLoading(true);
-      const [instRes, studRes, mentRes] = await Promise.allSettled([
-        fetchAdminInstitutes(),
+      const [pagesRes, studRes, mentRes] = await Promise.allSettled([
+        fetchPages(),
         fetchAdminStudents(),
         fetchAdminMentors(),
       ]);
 
-      const failed = [instRes, studRes, mentRes].some((r) => r.status === 'rejected');
+      const failed = [pagesRes, studRes, mentRes].some((r) => r.status === 'rejected');
       setError(failed ? 'Some records could not be loaded from the server.' : '');
 
-      if (instRes.status === 'fulfilled' && Array.isArray(instRes.value)) {
-        setInstitutes(instRes.value.map((i) => {
-          const locParts = [i.block, i.district, i.state].filter(Boolean);
-          return {
-            id: i.id || `inst-${i.email}`,
-            name: i.name,
-            email: i.email,
-            phone: i.phone || 'N/A',
-            city: locParts.length ? locParts.join(', ') : i.city || 'N/A',
-            state: i.state,
-            district: i.district,
-            block: i.block,
-            courses: i.programs ? i.programs.split(', ') : [],
-            status: 'Active',
-            registeredAt: i.created_at ? new Date(i.created_at).getTime() : null,
-            autoApproved: true,
-          };
-        }));
+      if (pagesRes.status === 'fulfilled' && Array.isArray(pagesRes.value)) {
+        setPages(pagesRes.value.map((p) => ({
+          id: p.id,
+          name: p.name,
+          slug: p.slug,
+          type: p.type,
+          email: p.contact || '',
+          phone: p.contact || 'N/A',
+          city: [p.city, p.state].filter(Boolean).join(', ') || 'N/A',
+          state: p.state,
+          status: p.is_enabled === false ? 'Disabled' : 'Active',
+          registeredAt: p.created_at ? new Date(p.created_at).getTime() : null,
+        })));
       }
 
       if (studRes.status === 'fulfilled' && Array.isArray(studRes.value)) {
@@ -106,9 +107,7 @@ export function DataProvider({ children }) {
   // Local-only view state: the backend has no suspend/delete endpoints for
   // these accounts yet, so the change lives for the current session only.
   const updateEntityStatus = useCallback((type, id, status) => {
-    if (type === 'institute') {
-      setInstitutes((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)));
-    } else if (type === 'student') {
+    if (type === 'student') {
       setStudents((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)));
     } else if (type === 'mentor') {
       setMentors((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)));
@@ -116,9 +115,7 @@ export function DataProvider({ children }) {
   }, []);
 
   const deleteEntity = useCallback((type, id) => {
-    if (type === 'institute') {
-      setInstitutes((prev) => prev.filter((item) => item.id !== id));
-    } else if (type === 'student') {
+    if (type === 'student') {
       setStudents((prev) => prev.filter((item) => item.id !== id));
     } else if (type === 'mentor') {
       setMentors((prev) => prev.filter((item) => item.id !== id));
@@ -136,7 +133,7 @@ export function DataProvider({ children }) {
   const notificationsFor = useCallback((userKey) => notifications.filter((n) => n.userKey === userKey), [notifications]);
 
   const value = useMemo(() => ({
-    institutes,
+    pages,
     students,
     mentors,
     loading,
@@ -147,7 +144,7 @@ export function DataProvider({ children }) {
     markRead,
     markAllRead,
     refreshAdminData,
-  }), [institutes, students, mentors, loading, error, updateEntityStatus, deleteEntity, notificationsFor, markRead, markAllRead, refreshAdminData]);
+  }), [pages, students, mentors, loading, error, updateEntityStatus, deleteEntity, notificationsFor, markRead, markAllRead, refreshAdminData]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }

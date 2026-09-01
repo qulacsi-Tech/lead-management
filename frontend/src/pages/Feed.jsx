@@ -17,6 +17,7 @@ import {
   likeOpportunity,
   unlikeOpportunity,
 } from '../Api/Api';
+import { pagePath } from '../utils/pageUrl';
 
 const TYPE_BADGE = {
   admission: { label: 'Admission Open', tone: 'success' },
@@ -234,7 +235,7 @@ function OpportunityCard({ opportunity: o, page }) {
     <Card className="p-4">
       <div className="flex items-center gap-3 mb-3">
         <Link
-          to={page ? `/${page.slug}` : '#'}
+          to={pagePath(page)}
           className="w-11 h-11 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-primary shrink-0 overflow-hidden no-underline"
         >
           {page?.logo_url
@@ -242,7 +243,7 @@ function OpportunityCard({ opportunity: o, page }) {
             : initials(page?.name)}
         </Link>
         <div className="flex-1 min-w-0">
-          <Link to={page ? `/${page.slug}` : '#'} className="no-underline">
+          <Link to={pagePath(page)} className="no-underline">
             <p className="text-sm font-bold text-on-surface mb-0 truncate">{page?.name || 'Institute'}</p>
           </Link>
           <p className="text-xs text-on-surface-variant mb-0 truncate">
@@ -292,7 +293,7 @@ function OpportunityCard({ opportunity: o, page }) {
           )}
         </div>
         {page && (
-          <Link to={`/${page.slug}`}>
+          <Link to={pagePath(page)}>
             <Button size="sm" variant="soft">
               {o.type === 'admission' ? 'View Notice' : 'View Vacancy'}
             </Button>
@@ -321,12 +322,12 @@ function SuggestionsRail({ pages, myPageIds, followedIds, onToggleFollow, busyId
           const following = followedIds.has(p.id);
           return (
             <div key={p.id} className="flex items-center gap-2">
-              <Link to={`/${p.slug}`} className="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-xs font-bold text-primary shrink-0 overflow-hidden no-underline">
+              <Link to={pagePath(p)} className="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-xs font-bold text-primary shrink-0 overflow-hidden no-underline">
                 {p.logo_url
                   ? <img src={resolveAssetUrl(p.logo_url)} alt={p.name} className="w-full h-full object-cover" />
                   : initials(p.name)}
               </Link>
-              <Link to={`/${p.slug}`} className="flex-1 min-w-0 no-underline">
+              <Link to={pagePath(p)} className="flex-1 min-w-0 no-underline">
                 <p className="text-xs font-bold text-on-surface mb-0 truncate">{p.name}</p>
                 <p className="text-[11px] text-on-surface-variant mb-0 truncate">{p.type}</p>
               </Link>

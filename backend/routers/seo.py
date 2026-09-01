@@ -31,6 +31,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from core.urls import page_public_path, parse_public_path
+from routers.pages import find_page_by_public_path
 from core.database import get_db
 from models.course import Course
 from models.opportunity import Opportunity
@@ -41,10 +43,11 @@ router = APIRouter(tags=["SEO"])
 # Route prefixes that must never be indexed: either login-gated (so a crawler
 # only ever sees a redirect) or thin/duplicate content with no search value.
 #
-# This doubles as the list of KNOWN app routes: any other single-segment path
-# is treated as an institute vanity URL, so a frontend route missing from here
-# would be looked up as a slug and 404. Keep it in step with the route table in
-# frontend/src/App.jsx.
+# Institute pages are now namespaced under their type (/college/..., /coaching/...),
+# so this list no longer decides what IS an institute — `parse_public_path` does,
+# and a new app route can be added without touching this list. It is still
+# consulted by `legacy_slug_redirect`, which looks at bare single-segment paths,
+# so an app route missing here could be mistaken for an old institute slug.
 NOINDEX_PREFIXES = (
     "/admin",
     "/institute",
@@ -158,7 +161,7 @@ async def sitemap_xml(db: AsyncSession = Depends(get_db)) -> Response:
             if lastmod.tzinfo is None:
                 lastmod = lastmod.replace(tzinfo=timezone.utc)
             stamp = f"<lastmod>{lastmod.date().isoformat()}</lastmod>"
-        loc = html.escape(f"{base}/{page.slug}")
+        loc = html.escape(f"{base}{page_public_path(page)}")
         parts.append(f"  <url><loc>{loc}</loc>{stamp}<changefreq>weekly</changefreq><priority>0.8</priority></url>")
     parts.append("</urlset>")
 
@@ -218,7 +221,7 @@ def _page_json_ld(page: Page) -> str:
         "@context": "https://schema.org",
         "@type": "EducationalOrganization",
         "name": page.name,
-        "url": f"{settings.public_base_url}/{page.slug}",
+        "url": f"{settings.public_base_url}{page_public_path(page)}",
     }
     if page.about or page.tagline:
         data["description"] = truncate(page.about or page.tagline, 300)
@@ -387,7 +390,7 @@ async def _feed_body_html(db: AsyncSession) -> str:
         parts.append("<h2>Latest admission notices and vacancies</h2><ul>")
         for opp, page in opportunities:
             label = "Admission Notice" if opp.type == "admission" else "Job Vacancy"
-            href = _esc(f"{base}/{page.slug}")
+            href = _esc(f"{base}{page_public_path(page)}")
             line = (
                 f'<strong>{_esc(opp.title)}</strong> ({label}) — '
                 f'<a href="{href}">{_esc(page.name)}</a>'
@@ -401,7 +404,7 @@ async def _feed_body_html(db: AsyncSession) -> str:
         parts.append("<h2>Institutes on Connectedus</h2><ul>")
         for page in pages:
             location = ", ".join(p for p in (page.city, page.state) if p)
-            href = _esc(f"{base}/{page.slug}")
+            href = _esc(f"{base}{page_public_path(page)}")
             suffix = f" — {_esc(page.type)}" + (f", {_esc(location)}" if location else "")
             parts.append(f'<li><a href="{href}">{_esc(page.name)}</a>{suffix}</li>')
         parts.append("</ul>")
@@ -424,15 +427,15 @@ async def build_head_and_body(path: str, db: AsyncSession) -> tuple[str, str, in
     base = settings.public_base_url
     slug = path.strip("/")
 
-    # A single-segment path that is not a known app route is an institute
-    # vanity URL — the same rule react-router applies on the client.
-    is_vanity_url = bool(slug) and "/" not in slug and not is_noindex(f"/{slug}")
+    # An institute lives at /{type}/{name}/{city} (see core/urls.py), which is
+    # recognised by its leading type segment rather than by "anything that is
+    # not a known app route". That removes the old trap where adding a route to
+    # App.jsx without also adding it to NOINDEX_PREFIXES made that route 404.
+    page = await find_page_by_public_path(db, path)
+    is_vanity_url = parse_public_path(path) is not None
 
-    if is_vanity_url:
-        page = (
-            await db.execute(select(Page).where(Page.slug == slug))
-        ).scalars().first()
-        if page is not None and page.is_enabled:
+    if page is not None:
+        if page.is_enabled:
             location = ", ".join(p for p in (page.city, page.state) if p)
             title = f"{page.name}"
             if location:
@@ -443,7 +446,7 @@ async def build_head_and_body(path: str, db: AsyncSession) -> tuple[str, str, in
             meta = _meta_tags(
                 title=title,
                 description=description,
-                canonical=f"{base}/{page.slug}",
+                canonical=f"{base}{page_public_path(page)}",
                 image=absolute_url(page.logo_url) or absolute_url((page.banners or [None])[0]),
                 noindex=False,
                 json_ld=_page_json_ld(page),
@@ -486,6 +489,29 @@ async def build_head_and_body(path: str, db: AsyncSession) -> tuple[str, str, in
     # outbound links let a crawler reach every institute page.
     body = await _feed_body_html(db) if not slug else ""
     return meta, body, 404 if missing else 200
+
+
+async def legacy_slug_redirect(path: str, db: AsyncSession) -> Optional[str]:
+    """The canonical path for an old single-segment institute URL, or None.
+
+    Institute pages used to live at `/{slug}`. Those links are already out in
+    the world — handed to institutes, posted in chats — so they redirect
+    permanently to the new `/{type}/{name}/{city}` instead of 404ing. Search
+    engines follow a 301 and transfer the ranking rather than starting over.
+
+    Only single-segment paths that are not known app routes are considered, so
+    `/profile` is never mistaken for an institute.
+    """
+    slug = path.strip("/")
+    if not slug or "/" in slug or is_noindex(f"/{slug}"):
+        return None
+
+    page = (await db.execute(select(Page).where(Page.slug == slug))).scalars().first()
+    if page is None or not page.is_enabled:
+        return None
+
+    canonical = page_public_path(page)
+    return canonical if canonical != f"/{slug}" else None
 
 
 async def render_public_html(path: str, db: AsyncSession) -> Optional[HTMLResponse]:

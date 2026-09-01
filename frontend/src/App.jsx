@@ -14,6 +14,7 @@ import AppLayout from './layouts/AppLayout';
 import Feed from './pages/Feed';
 import CreateInstitutePage from './pages/CreateInstitutePage';
 import InstitutePage from './pages/InstitutePage';
+import LegacySlugRedirect from './pages/LegacySlugRedirect';
 import InstitutePageEditor from './pages/InstitutePageEditor';
 import ProfessionalProfile from './pages/ProfessionalProfile';
 import ProfessionalDashboard from './pages/ProfessionalDashboard';
@@ -22,11 +23,11 @@ import PurchasedHistory from './pages/PurchasedHistory';
 
 import AdminLayout from './layouts/AdminLayout';
 import AdminDashboard from './pages/admin/Dashboard';
-import ManageInstitutes from './pages/admin/ManageInstitutes';
 import ManageStudents from './pages/admin/ManageStudents';
 import ManageMentors from './pages/admin/ManageMentors';
 import ManageEnquiries from './pages/admin/ManageEnquiries';
 import ManagePages from './pages/admin/ManagePages';
+import InstituteDetails from './pages/admin/InstituteDetails';
 import PlatformTaxonomy from './pages/admin/PlatformTaxonomy';
 import AdminSettings from './pages/admin/AdminSettings';
 
@@ -105,10 +106,20 @@ function AppRoutes() {
         <Route path="search" element={<RequireSignedIn><SearchConnections /></RequireSignedIn>} />
         <Route path="purchased" element={<RequireSignedIn><PurchasedHistory /></RequireSignedIn>} />
 
-        {/* PUBLIC. Per-institute vanity URL — connectedus.in/<slug>. Last in
-            this block because react-router ranks literal segments above
-            dynamic ones, so every route above still wins. */}
-        <Route path=":instituteSlug" element={<InstitutePage />} />
+        {/* PUBLIC. Per-institute URL — connectedus.in/college/sait/indore.
+            Namespacing institutes under their type means they can no longer
+            collide with an app route, which the old single-segment scheme
+            risked on every route added. See docs/CLIENT_FEEDBACK_2026-09-01.md §9.
+
+            The two-segment form is the fallback for a page with no city; both
+            are last in this block because react-router ranks literal segments
+            above dynamic ones, so every route above still wins. */}
+        <Route path=":typeSegment/:instituteSlug/:citySegment" element={<InstitutePage />} />
+        <Route path=":typeSegment/:instituteSlug" element={<InstitutePage />} />
+
+        {/* Links shared before the format changed. Resolves the old slug and
+            replaces the history entry with the canonical URL. */}
+        <Route path=":instituteSlug" element={<LegacySlugRedirect />} />
       </Route>
 
       {/* INSTITUTE-OWNED: operational content for the page(s) a user administers.
@@ -142,7 +153,12 @@ function AppRoutes() {
       >
         <Route index element={<AdminDashboard />} />
         <Route path="pages" element={<ManagePages />} />
-        <Route path="institutes" element={<ManageInstitutes />} />
+        {/* Institute accounts used to live at /admin/institutes as a second,
+            parallel screen. Merged into Institute Pages, which is now the one
+            place an institute is created — see
+            docs/CLIENT_FEEDBACK_2026-09-01.md. Old links land on the list. */}
+        <Route path="pages/:pageId" element={<InstituteDetails />} />
+        <Route path="institutes" element={<Navigate to="/admin/pages" replace />} />
         <Route path="students" element={<ManageStudents />} />
         <Route path="mentors" element={<ManageMentors />} />
         <Route path="enquiries" element={<ManageEnquiries />} />

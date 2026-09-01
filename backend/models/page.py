@@ -21,11 +21,12 @@ assigns its admins. Everything *inside* the page is owned by those admins.
 from sqlalchemy import Column, String, Boolean, DateTime, JSON, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, computed_field
 from typing import Optional, List, Dict, Any
 import uuid
 
 from core.database import Base
+from core.urls import page_public_path
 
 
 class Page(Base):
@@ -35,7 +36,12 @@ class Page(Base):
 
     # --- Identity (PLATFORM-owned: set at creation by Main Admin) ---
     name = Column(String, nullable=False)
-    slug = Column(String, unique=True, index=True, nullable=False)
+    # NOT globally unique: the public URL is /{type}/{name}/{city}, so two
+    # "excel" coaching centres in different cities are two different URLs and
+    # both may keep the natural slug. Uniqueness is scoped to the triple by the
+    # constraint below and by `_unique_slug` in routers/pages.py. Indexed
+    # because every public page view looks a page up by it.
+    slug = Column(String, index=True, nullable=False)
     type = Column(String, nullable=False)  # School | Coaching | College | University | Training Institute
 
     # --- Public content (INSTITUTE-owned: maintained by Page Admins) ---
@@ -66,6 +72,14 @@ class Page(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     admins = relationship("PageAdmin", back_populates="page", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        # Database-level backstop for the rule the router enforces. It compares
+        # `city` as stored rather than slugified, so it cannot catch "Indore"
+        # vs "indore" — the router's check is the authoritative one, and the
+        # city dropdown keeps the column controlled.
+        UniqueConstraint("type", "slug", "city", name="uq_page_type_slug_city"),
+    )
 
 
 class PageAdmin(Base):
@@ -121,7 +135,15 @@ class PageCreate(BaseModel):
     contact: Optional[str] = None
     affiliation: Optional[str] = None
     # Optional first admin, assigned as part of creation.
+    #
+    # `admin_name` / `admin_password` are used ONLY when no account exists for
+    # `admin_email` yet — the Main Admin's console combines "create the
+    # institute" and "create its login" into one step, so it must be able to
+    # mint the account here. An existing account is linked as-is and its name
+    # and password are never touched.
     admin_email: Optional[EmailStr] = None
+    admin_name: Optional[str] = None
+    admin_password: Optional[str] = Field(default=None, min_length=6, max_length=128)
 
 
 class PageUpdate(BaseModel):
@@ -185,6 +207,13 @@ class PageResponse(BaseModel):
     is_enabled: bool = True
     created_at: Optional[Any] = None
 
+    @computed_field
+    @property
+    def public_path(self) -> str:
+        """`/college/sait/indore`. Derived here so every client links to the
+        same URL the router resolves — see core/urls.py."""
+        return page_public_path(self)
+
     class Config:
         from_attributes = True
 
@@ -201,3 +230,7 @@ class PageDetailResponse(PageResponse):
 class AssignAdminRequest(BaseModel):
     email: EmailStr
     role: str = "ADMIN"  # OWNER | ADMIN
+    # Same contract as PageCreate above: supplied only to mint a login that
+    # does not exist yet. Ignored when the email already has an account.
+    name: Optional[str] = None
+    password: Optional[str] = Field(default=None, min_length=6, max_length=128)

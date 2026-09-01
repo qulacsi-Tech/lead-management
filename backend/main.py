@@ -2,7 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,7 @@ from routers.opportunities import router as opportunities_router, public_router 
 from routers.page_enquiries import router as page_enquiries_router, admin_router as enquiries_admin_router
 from routers.social import follow_router, notification_router
 from routers.credits import router as credits_router
-from routers.seo import router as seo_router, render_public_html
+from routers.seo import router as seo_router, render_public_html, legacy_slug_redirect
 
 UPLOAD_ROOT = os.path.join(os.path.dirname(__file__), "uploads")
 
@@ -129,6 +129,12 @@ if settings.FRONTEND_DIST and os.path.isdir(settings.FRONTEND_DIST):
         """
         if full_path.startswith(("api/", "uploads/")):
             raise HTTPException(status_code=404, detail="Not found")
+
+        # An institute page moved from /{slug} to /{type}/{name}/{city}; send
+        # the old URL on permanently rather than 404ing links already shared.
+        moved = await legacy_slug_redirect(full_path, db)
+        if moved:
+            return RedirectResponse(moved, status_code=301)
 
         # A real file in the build (favicon.svg, icons.svg, _redirects, ...)
         # wins over the SPA shell.

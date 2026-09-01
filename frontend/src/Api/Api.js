@@ -147,16 +147,16 @@ export const fetchBlocks = async (state, district) =>
 export const registerStudent = async (data) =>
   apiFetch('/register/student', { method: 'POST', auth: false, body: data });
 
-// Mentor and Institute accounts are PROVISIONED BY A MAIN ADMIN on someone
-// else's behalf, so the backend requires an admin session on these two (see
-// routers/register.py). They must be sent WITH the caller's token — omitting
-// it makes the server reject the request as unauthenticated before it ever
-// gets to the role check.
+// Mentor accounts are PROVISIONED BY A MAIN ADMIN on someone else's behalf, so
+// the backend requires an admin session here (see routers/register.py). This
+// must be sent WITH the caller's token — omitting it makes the server reject
+// the request as unauthenticated before it ever gets to the role check.
+//
+// Institutes are no longer registered as accounts: an institute is a Page, and
+// its admin login is created alongside it by createPage/assignPageAdmin below.
 export const registerMentor = async (data) =>
   apiFetch('/register/mentor', { method: 'POST', body: data });
 
-export const registerInstitute = async (data) =>
-  apiFetch('/register/institute', { method: 'POST', body: data });
 
 // ----------------------------------------------------
 // Admin Data Endpoints
@@ -164,14 +164,7 @@ export const registerInstitute = async (data) =>
 
 export const fetchAdminStudents = async () => apiFetch('/admin/students');
 export const fetchAdminMentors = async () => apiFetch('/admin/mentors');
-export const fetchAdminInstitutes = async () => apiFetch('/admin/institutes');
 export const fetchAdminEnquiries = async () => apiFetch('/admin/enquiries');
-
-/** Main Admin edit of an institute account. `patch.password` resets the
- *  institute's sign-in password; `patch.email` changes the login id. Omit
- *  either to leave it untouched. */
-export const updateAdminInstitute = async (instituteId, patch) =>
-  apiFetch(`/admin/institutes/${instituteId}`, { method: 'PATCH', body: patch });
 
 // ----------------------------------------------------
 // Institute Page Endpoints (Main Admin console)
@@ -242,9 +235,18 @@ export const deletePage = async (pageId) =>
 
 export const fetchPageAdmins = async (pageId) => apiFetch(`/pages/${pageId}/admins`);
 
-/** role: 'OWNER' | 'ADMIN' */
-export const assignPageAdmin = async (pageId, { email, role = 'ADMIN' }) =>
-  apiFetch(`/pages/${pageId}/admins`, { method: 'POST', body: { email, role } });
+/**
+ * role: 'OWNER' | 'ADMIN'.
+ *
+ * `name`/`password` are used only when no account exists for `email` yet — the
+ * admin console creates the institute and its login in one step. An existing
+ * account is linked untouched; see backend `_resolve_or_create_admin`.
+ */
+export const assignPageAdmin = async (pageId, { email, role = 'ADMIN', name, password }) =>
+  apiFetch(`/pages/${pageId}/admins`, {
+    method: 'POST',
+    body: { email, role, name: name || undefined, password: password || undefined },
+  });
 
 export const revokePageAdmin = async (pageId, userId) =>
   apiFetch(`/pages/${pageId}/admins/${userId}`, { method: 'DELETE' });
@@ -263,6 +265,11 @@ export const uploadPageMedia = async (pageId, kind, file, caption = '') => {
  *  Anonymous-safe: the endpoint uses `get_optional_user`, and `apiFetch` simply
  *  omits the Authorization header when nobody is signed in. Signed-in callers
  *  additionally get `is_page_admin` / `is_following` resolved for them. */
+/** Resolve a canonical `/college/sait/indore` path to its page. */
+export const resolvePageByPath = async (path) =>
+  apiFetch(`/pages/resolve?path=${encodeURIComponent(path)}`, { auth: !!getToken() });
+
+/** Legacy single-segment lookup, used only to redirect old `/slug` links. */
 export const fetchPageBySlug = async (slug) =>
   apiFetch(`/pages/slug/${encodeURIComponent(slug)}`);
 

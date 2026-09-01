@@ -6,13 +6,14 @@ import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import { Input, FormGroup, Select } from '../components/ui/Field';
 import { COURSE_SPECIALIZATIONS } from './mockData';
+import { pageDisplayUrl } from '../utils/pageUrl';
 import { KEY_HIGHLIGHTS_OPTIONS, FACILITIES_OPTIONS, buildAboutParagraph } from './pageBuilderContent';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from './PageHeader';
 import {
   ApiError,
   resolveAssetUrl,
-  fetchPageBySlug,
+  resolvePageByPath,
   fetchPageCourses,
   fetchPageOpportunities,
   submitPageEnquiry,
@@ -260,16 +261,21 @@ function FloatingEnquiryButton({ onClick }) {
 }
 
 /**
- * An institute's public page, at connectedus.in/<slug>.
+ * An institute's public page, at connectedus.in/college/sait/indore.
  *
- * PUBLIC and slug-driven: it reads GET /pages/slug/{slug}, which serves
+ * PUBLIC and path-driven: it reads GET /pages/resolve?path=..., which serves
  * anonymous callers and hides disabled pages from everyone but their admins.
+ * The URL carries type and city as well as the name, so two institutes with
+ * the same name in different cities resolve to different pages.
  * Ownership is decided by `is_page_admin` on that response — resolved server
  * side from the page_admins table, never by comparing the URL slug or an email
  * in the browser.
  */
 export default function InstitutePage() {
-  const { instituteSlug: slug } = useParams();
+  const { typeSegment, instituteSlug, citySegment } = useParams();
+  // Rebuilt from the params rather than read off `location`, so a trailing
+  // slash or a query string cannot change what gets looked up.
+  const path = `/${[typeSegment, instituteSlug, citySegment].filter(Boolean).join('/')}`;
   const { user } = useAuth();
 
   const [page, setPage] = useState(null);
@@ -292,12 +298,12 @@ export default function InstitutePage() {
     setNotFound(false);
     setError('');
     try {
-      const detail = await fetchPageBySlug(slug);
+      const detail = await resolvePageByPath(path);
       setPage(detail);
       setFollowing(!!detail.is_following);
 
       // Courses and opportunities are page-scoped resources, so they can only
-      // be fetched once the slug has resolved to an id. Both endpoints return
+      // be fetched once the path has resolved to an id. Both endpoints return
       // published items only to non-admins, enforced server side.
       const [c, o] = await Promise.allSettled([
         fetchPageCourses(detail.id),
@@ -312,7 +318,7 @@ export default function InstitutePage() {
     } finally {
       setLoading(false);
     }
-  }, [slug]);
+  }, [path]);
 
   useEffect(() => {
     load();
@@ -366,7 +372,7 @@ export default function InstitutePage() {
     <div>
       <PageHeader
         title={isMyPage ? 'Institute Page' : page.name}
-        subtitle={`connectedus.in/${page.slug}`}
+        subtitle={pageDisplayUrl(page)}
       />
 
       {/* Cover + logo */}

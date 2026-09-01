@@ -5,6 +5,7 @@ import TopBar from '../components/ui/TopBar';
 import Footer from '../components/ui/Footer';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import { pagePath } from '../utils/pageUrl';
 
 // Grouped exactly along the ownership boundary: everything below is content the
 // INSTITUTE owns. Platform-level settings deliberately have no entry here —
@@ -128,7 +129,7 @@ function InstituteSidebar() {
       <div className="mt-auto border-t border-outline-variant pt-3 flex flex-col gap-1">
         {page && (
           <Link
-            to={`/${page.slug}`}
+            to={pagePath(page)}
             className="flex items-center gap-3 px-4 py-2 text-sm text-on-surface-variant rounded-lg hover:bg-surface-container-high no-underline transition-colors"
           >
             <span className="material-symbols-outlined text-[20px]">open_in_new</span>

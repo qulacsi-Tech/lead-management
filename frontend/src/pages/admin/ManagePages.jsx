@@ -8,7 +8,8 @@ import EmptyState from '../../components/ui/EmptyState';
 import DataTable, { RowAction } from '../../components/ui/DataTable';
 import { Input, Label, FormGroup } from '../../components/ui/Field';
 import { INSTITUTE_TYPES, AFFILIATION_OPTIONS, slugify } from '../../constants/taxonomy';
-import InstituteFullDetailsModal from '../../components/InstituteFullDetailsModal';
+import StateCitySelect from '../../components/ui/StateCitySelect';
+import { pagePath, pageDisplayUrl } from '../../utils/pageUrl';
 import {
   ApiError,
   resolveAssetUrl,
@@ -36,7 +37,7 @@ function affiliationConfig(type) {
 const emptyForm = {
   name: '', type: 'Coaching', tagline: '', logoFile: null, logoPreview: null, banners: [],
   address: '', city: '', state: '', website: '', contact: '', affiliation: '', slug: '',
-  adminEmail: '',
+  adminEmail: '', adminName: '', adminPassword: '',
 };
 
 /** Two-letter monogram, shown when an institute has not uploaded a logo. */
@@ -70,8 +71,7 @@ export default function ManagePages() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [adminsFor, setAdminsFor] = useState(null); // page whose admins are being managed
-  const [fullDetailsPage, setFullDetailsPage] = useState(null);
-  const [newAdmin, setNewAdmin] = useState({ email: '', role: 'ADMIN' });
+  const [newAdmin, setNewAdmin] = useState({ email: '', role: 'ADMIN', name: '', password: '' });
 
   const [adminError, setAdminError] = useState('');
   const logoInputRef = useRef(null);
@@ -141,7 +141,7 @@ export default function ManagePages() {
     setAdminError('');
     try {
       const admins = await assignPageAdmin(adminsFor.id, newAdmin);
-      setNewAdmin({ email: '', role: 'ADMIN' });
+      setNewAdmin({ email: '', role: 'ADMIN', name: '', password: '' });
       setAdminsFor((p) => ({ ...p, admins }));
       setPages((prev) => prev.map((p) => (p.id === adminsFor.id ? { ...p, admins } : p)));
     } catch (err) {
@@ -163,7 +163,21 @@ export default function ManagePages() {
 
   // Slug auto-fills from the name until the admin types their own.
   const previewSlug = slugify(form.slug || form.name) || 'institute-name';
-  const slugTaken = pages.some((p) => p.slug === previewSlug);
+  const previewUrl = pageDisplayUrl({
+    slug: previewSlug,
+    type: form.type,
+    city: form.city,
+  });
+  // Uniqueness is scoped to type + city, matching the backend — two "paras"
+  // coaching centres in different cities are two different URLs and neither
+  // needs a suffix. Comparing globally here would warn about a clash that
+  // will not happen.
+  const slugTaken = pages.some(
+    (p) =>
+      p.slug === previewSlug &&
+      p.type === form.type &&
+      slugify(p.city || '') === slugify(form.city || ''),
+  );
 
   const setLogo = (e) => {
     const file = e.target.files?.[0];
@@ -206,6 +220,9 @@ export default function ManagePages() {
         contact: form.contact || undefined,
         affiliation: form.affiliation || undefined,
         admin_email: form.adminEmail || undefined,
+        // Ignored by the backend when the email already has an account.
+        admin_name: form.adminName || undefined,
+        admin_password: form.adminPassword || undefined,
       });
 
       if (form.logoFile) await uploadPageMedia(page.id, 'logo', form.logoFile);
@@ -259,7 +276,7 @@ export default function ManagePages() {
                 </div>
                 <div className="min-w-0">
                   <p className="font-bold text-on-surface m-0 text-sm">{p.name}</p>
-                  <p className="text-[11px] text-on-surface-variant m-0 font-mono">connectedus.in/{p.slug}</p>
+                  <p className="text-[11px] text-on-surface-variant m-0 font-mono">{pageDisplayUrl(p)}</p>
                 </div>
               </div>
             ),
@@ -305,12 +322,10 @@ export default function ManagePages() {
             align: 'right',
             render: (p) => (
               <div className="flex items-center justify-end gap-1">
-                <RowAction
-                  icon="visibility"
-                  title="View & Edit Full Institute Info"
-                  onClick={() => setFullDetailsPage(p)}
-                />
-                <Link to={`/${p.slug}`} title="Open public page">
+                <Link to={`/admin/pages/${p.id}`} title="View & edit full institute info">
+                  <RowAction icon="visibility" title="View & edit full institute info" />
+                </Link>
+                <Link to={pagePath(p)} title="Open public page">
                   <RowAction icon="open_in_new" title="Open public page" />
                 </Link>
                 <RowAction
@@ -382,7 +397,7 @@ export default function ManagePages() {
               placeholder="auto-generated from the name"
             />
             <p className="text-[11px] text-on-surface-variant mt-1 mb-0 font-mono">
-              connectedus.in/{previewSlug}
+              {previewUrl}
               {slugTaken && (
                 <span className="text-error font-sans ml-2">taken — a suffix will be added</span>
               )}
@@ -446,16 +461,11 @@ export default function ManagePages() {
             <Label>Address</Label>
             <Input value={form.address} onChange={set('address')} placeholder="Street / area" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>City</Label>
-              <Input value={form.city} onChange={set('city')} placeholder="Indore" />
-            </div>
-            <div>
-              <Label>State</Label>
-              <Input value={form.state} onChange={set('state')} placeholder="Madhya Pradesh" />
-            </div>
-          </div>
+          <StateCitySelect
+            state={form.state}
+            city={form.city}
+            onChange={({ state, city }) => setForm((f) => ({ ...f, state, city }))}
+          />
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Website</Label>
@@ -485,13 +495,39 @@ export default function ManagePages() {
           </div>
 
           <div className="pt-3 border-t border-outline-variant">
-            <Label>Assign Institute Admin</Label>
+            <Label>Institute Admin login</Label>
             <p className="text-[11px] text-on-surface-variant mt-0 mb-2">
               They manage this institute&apos;s courses, notices, vacancies and enquiries from their own
-              console. The person must already have an account — enter the email they signed up with.
-              You can add more admins later.
+              console. If this email already has an account it is linked as-is; otherwise a new login
+              is created with the name and password below. You can add more admins later.
             </p>
-            <Input type="email" value={form.adminEmail} onChange={set('adminEmail')} placeholder="admin@institute.in" />
+            <Input
+              type="email"
+              value={form.adminEmail}
+              onChange={set('adminEmail')}
+              placeholder="admin@institute.in"
+            />
+            {form.adminEmail && (
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div>
+                  <Label small>Admin name</Label>
+                  <Input
+                    value={form.adminName}
+                    onChange={set('adminName')}
+                    placeholder="Full name"
+                  />
+                </div>
+                <div>
+                  <Label small>Temporary password</Label>
+                  <Input
+                    type="text"
+                    value={form.adminPassword}
+                    onChange={set('adminPassword')}
+                    placeholder="Min. 6 characters"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {formError && (
@@ -549,6 +585,10 @@ export default function ManagePages() {
 
             <form onSubmit={addAdmin} className="space-y-3 pt-4 border-t border-outline-variant">
               <FormGroup label="Assign a new admin">
+                <p className="text-[11px] text-on-surface-variant mt-0 mb-2">
+                  An existing account is linked as-is. To create a new login, add a name and
+                  password as well.
+                </p>
                 <div className="grid grid-cols-2 gap-2">
                   <Input
                     type="email"
@@ -566,6 +606,19 @@ export default function ManagePages() {
                     <option value="OWNER">Owner / Primary Admin</option>
                   </select>
                 </div>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <Input
+                    value={newAdmin.name}
+                    onChange={(e) => setNewAdmin((a) => ({ ...a, name: e.target.value }))}
+                    placeholder="Name (new account only)"
+                  />
+                  <Input
+                    type="text"
+                    value={newAdmin.password}
+                    onChange={(e) => setNewAdmin((a) => ({ ...a, password: e.target.value }))}
+                    placeholder="Password (new account only)"
+                  />
+                </div>
               </FormGroup>
               {adminError && (
                 <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{adminError}</p>
@@ -578,16 +631,6 @@ export default function ManagePages() {
           </>
         )}
       </Modal>
-
-      {/* Full 90%x90% Tabbed Institute Details Modal */}
-      {fullDetailsPage && (
-        <InstituteFullDetailsModal
-          open={!!fullDetailsPage}
-          onClose={() => setFullDetailsPage(null)}
-          institute={fullDetailsPage}
-          onSaveSuccess={() => load()}
-        />
-      )}
     </div>
   );
 }

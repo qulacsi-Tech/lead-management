@@ -5,11 +5,11 @@ import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 
 export default function AdminDashboard() {
-  const { institutes, students, mentors, loading, error } = useData();
+  const { pages, students, mentors, loading, error } = useData();
 
   // Combine all registered entities into a unified recent activity feed
   const recentRegistrations = [
-    ...institutes.map((i) => ({ ...i, entityType: 'Institute', icon: 'account_balance', badgeVariant: 'primary' })),
+    ...pages.map((p) => ({ ...p, entityType: 'Institute', icon: 'account_balance', badgeVariant: 'primary' })),
     ...students.map((s) => ({ ...s, entityType: 'Student', icon: 'school', badgeVariant: 'tertiary' })),
     ...mentors.map((m) => ({ ...m, entityType: 'Mentor', icon: 'person', badgeVariant: 'success' })),
   ].sort((a, b) => (b.registeredAt || 0) - (a.registeredAt || 0));
@@ -44,7 +44,7 @@ export default function AdminDashboard() {
         <StatCard
           icon="account_balance"
           title="Registered Institutes"
-          value={institutes.length}
+          value={pages.length}
           trend="+100% Auto-Approved"
         />
         <StatCard
@@ -63,7 +63,7 @@ export default function AdminDashboard() {
 
       {/* Quick Action Navigation Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Link to="/admin/institutes" className="no-underline">
+        <Link to="/admin/pages" className="no-underline">
           <Card className="p-6 hover:shadow-md transition-shadow cursor-pointer border border-outline-variant h-full flex flex-col justify-between">
             <div>
               <div className="w-12 h-12 rounded-2xl bg-primary-fixed flex items-center justify-center text-primary mb-4">
@@ -71,11 +71,12 @@ export default function AdminDashboard() {
               </div>
               <h3 className="text-lg font-bold text-on-surface m-0 mb-1">Manage Institutes</h3>
               <p className="text-xs text-on-surface-variant m-0">
-                View, filter, edit courses offered, credits, and active status for all partner institutes.
+                Create institutes, set their public identity, assign Institute Admins and manage
+                their full profile.
               </p>
             </div>
             <div className="mt-4 flex items-center text-xs font-bold text-primary gap-1">
-              View {institutes.length} Institutes <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              View {pages.length} Institutes <span className="material-symbols-outlined text-sm">arrow_forward</span>
             </div>
           </Card>
         </Link>

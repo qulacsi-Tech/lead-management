@@ -24,7 +24,6 @@ const NAV_GROUPS = [
   {
     label: 'Accounts',
     items: [
-      { to: '/admin/institutes', label: 'Institutes', icon: 'account_balance' },
       { to: '/admin/students', label: 'Students', icon: 'school' },
       { to: '/admin/mentors', label: 'Mentors', icon: 'person' },
     ],

@@ -16,6 +16,7 @@ import {
 import { useInstitute } from '../context/InstituteContext';
 import { updatePage, uploadPageMedia } from '../Api/Api';
 import InstituteFullDetailsModal from '../components/InstituteFullDetailsModal';
+import { pagePath } from '../utils/pageUrl';
 
 
 
@@ -245,7 +246,7 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
   const SaveBar = (
     <div className="flex items-center gap-3 mt-5">
       <Button size="sm" onClick={save}>Save Changes</Button>
-      <Button size="sm" variant="outline" onClick={() => navigate(`/${page.slug}`)}>Preview Page</Button>
+      <Button size="sm" variant="outline" onClick={() => navigate(pagePath(page))}>Preview Page</Button>
       <Button size="sm" variant="soft" icon="open_in_full" onClick={() => setFullModalOpen(true)}>
         Full CMS Manager (90%×90%)
       </Button>

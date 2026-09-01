@@ -408,3 +408,166 @@ async def test_credit_ledger_derives_balance_and_blocks_overspend(app_client, wo
         "user_id": user_id, "amount": -1000, "reason": "unlock",
     })
     assert overspend.status_code == 402
+
+
+# ---------------------------------------------------------------------------
+# Creating an institute also creates its admin's login
+#
+# The Main Admin console has one screen for institutes, so page creation is the
+# only place an institute admin account gets made. Before this, both endpoints
+# 404'd with "create the account first" and pointed at a screen that no longer
+# exists.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_creating_a_page_mints_a_new_admin_login(app_client, world):
+    platform = world["platform"]
+
+    created = await app_client.post("/api/pages", headers=platform, json={
+        "name": "Fresh Institute", "type": "College",
+        "admin_email": "fresh.admin@example.com",
+        "admin_name": "Fresh Admin",
+        "admin_password": "s3cret-pass",
+    })
+    assert created.status_code == 201
+    assert [a["email"] for a in created.json()["admins"]] == ["fresh.admin@example.com"]
+
+    # The new account is a real, usable login that lands on its own page.
+    token = (await app_client.post("/api/auth/login", data={
+        "username": "fresh.admin@example.com", "password": "s3cret-pass",
+    })).json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    mine = (await app_client.get("/api/pages/mine", headers=headers)).json()
+    assert [p["name"] for p in mine] == ["Fresh Institute"]
+
+
+@pytest.mark.asyncio
+async def test_new_admin_email_without_a_password_is_rejected(app_client, world):
+    """Silently creating a passwordless account would be worse than failing."""
+    res = await app_client.post("/api/pages", headers=world["platform"], json={
+        "name": "No Password Institute", "type": "School",
+        "admin_email": "nobody@example.com",
+    })
+    assert res.status_code == 404
+    assert "password" in res.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_existing_account_is_linked_not_overwritten(app_client, world):
+    """A page form must never rewrite an existing user's name or password —
+    that would be account takeover by typo."""
+    platform = world["platform"]
+
+    res = await app_client.post("/api/pages", headers=platform, json={
+        "name": "Second Institute For A", "type": "Coaching",
+        "admin_email": "admin.a@institute-a.example.com",
+        "admin_name": "Impostor", "admin_password": "attacker-chosen",
+    })
+    assert res.status_code == 201
+
+    # Original credentials still work; the attacker-supplied one does not.
+    rejected = await app_client.post("/api/auth/login", data={
+        "username": "admin.a@institute-a.example.com", "password": "attacker-chosen",
+    })
+    assert rejected.status_code == 400
+    still_valid = await app_client.post("/api/auth/login", data={
+        "username": "admin.a@institute-a.example.com", "password": "password123",
+    })
+    assert still_valid.status_code == 200
+    assert still_valid.json()["user"]["name"] != "Impostor"
+
+
+# ---------------------------------------------------------------------------
+# Public URLs: /{type}/{name}/{city}
+#
+# Client request, 01 Sep 2026 — connectedus.in/college/sait/indore. See
+# docs/CLIENT_FEEDBACK_2026-09-01.md, Section 9.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_page_advertises_its_canonical_path(app_client, world):
+    created = (await app_client.post("/api/pages", headers=world["platform"], json={
+        "name": "Sri Aurobindo Institute", "type": "College",
+        "slug": "sait", "city": "Indore", "state": "Madhya Pradesh",
+    })).json()
+    assert created["public_path"] == "/college/sait/indore"
+
+
+@pytest.mark.asyncio
+async def test_resolve_finds_the_page_at_its_path(app_client, world):
+    await app_client.post("/api/pages", headers=world["platform"], json={
+        "name": "Paras Coaching", "type": "Coaching", "slug": "paras", "city": "Bhopal",
+    })
+
+    found = await app_client.get("/api/pages/resolve", params={"path": "/coaching/paras/bhopal"})
+    assert found.status_code == 200
+    assert found.json()["name"] == "Paras Coaching"
+
+    # Right name, wrong city or wrong type — a different URL, not this page.
+    for wrong in ("/coaching/paras/indore", "/college/paras/bhopal"):
+        assert (await app_client.get("/api/pages/resolve", params={"path": wrong})).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_same_name_in_two_cities_keeps_both_natural_slugs(app_client, world):
+    """The whole point of putting the city in the URL: these no longer collide,
+    so neither gets an ugly `-2` suffix."""
+    platform = world["platform"]
+    a = (await app_client.post("/api/pages", headers=platform, json={
+        "name": "Excel Coaching", "type": "Coaching", "slug": "excel", "city": "Indore",
+    })).json()
+    b = (await app_client.post("/api/pages", headers=platform, json={
+        "name": "Excel Coaching", "type": "Coaching", "slug": "excel", "city": "Bhopal",
+    })).json()
+
+    assert a["slug"] == b["slug"] == "excel"
+    assert a["public_path"] == "/coaching/excel/indore"
+    assert b["public_path"] == "/coaching/excel/bhopal"
+
+
+@pytest.mark.asyncio
+async def test_genuine_collision_still_gets_a_suffix(app_client, world):
+    """Same name, same type, same city really is one URL for two pages."""
+    platform = world["platform"]
+    await app_client.post("/api/pages", headers=platform, json={
+        "name": "Apex Coaching", "type": "Coaching", "slug": "apex", "city": "Indore",
+    })
+    second = (await app_client.post("/api/pages", headers=platform, json={
+        "name": "Apex Coaching", "type": "Coaching", "slug": "apex", "city": "Indore",
+    })).json()
+    assert second["slug"] == "apex-2"
+
+
+@pytest.mark.asyncio
+async def test_page_without_a_city_uses_the_two_segment_form(app_client, world):
+    created = (await app_client.post("/api/pages", headers=world["platform"], json={
+        "name": "Nomad Training", "type": "Training Institute", "slug": "nomad",
+    })).json()
+    assert created["public_path"] == "/training-institute/nomad"
+    assert (await app_client.get(
+        "/api/pages/resolve", params={"path": "/training-institute/nomad"}
+    )).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_moving_a_page_moves_its_url(app_client, world):
+    """The path is derived, never stored — so it cannot contradict the record."""
+    page = (await app_client.post("/api/pages", headers=world["platform"], json={
+        "name": "Mobile Institute", "type": "School", "slug": "mobile", "city": "Indore",
+    })).json()
+    assert page["public_path"] == "/school/mobile/indore"
+
+    moved = (await app_client.patch(
+        f"/api/pages/{page['id']}", headers=world["platform"], json={"city": "Bhopal"}
+    )).json()
+    assert moved["public_path"] == "/school/mobile/bhopal"
+
+
+@pytest.mark.asyncio
+async def test_app_routes_are_never_resolved_as_institutes(app_client):
+    """The old single-segment scheme treated any unknown path as a slug. Under
+    the namespaced scheme these cannot even be parsed as institute URLs."""
+    for path in ("/profile", "/admin/pages", "/dashboard", "/", "/some/unknown/deep/path"):
+        assert (await app_client.get(
+            "/api/pages/resolve", params={"path": path}
+        )).status_code == 404
