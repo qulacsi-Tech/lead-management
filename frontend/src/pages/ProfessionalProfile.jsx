@@ -4,7 +4,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { Input, Textarea, FormGroup } from '../components/ui/Field';
+import { Input, Textarea, FormGroup, Select } from '../components/ui/Field';
 import { useSession } from '../context/useSession';
 import { useFollows } from './useFollows';
 import { mockPages } from './mockData';
@@ -12,6 +12,8 @@ import { pagePath, pageDisplayUrl } from '../utils/pageUrl';
 import { ApiError, fetchMyOrganization, saveMyOrganization } from '../Api/Api';
 import { isOrgAccount, isOrgRole } from '../constants/roles';
 import { useMyPages } from '../hooks/useMyPages';
+import StateCitySelect from '../components/ui/StateCitySelect';
+import { INSTITUTE_TYPES, AFFILIATION_OPTIONS } from '../constants/taxonomy';
 import PageHeader from './PageHeader';
 
 // Account Setup (role/category switching) is paused per client feedback
@@ -33,9 +35,25 @@ const INDIVIDUAL_ONLY_TABS = new Set(['experience', 'resume']);
 /** The mirror image: only an organisation account maintains these. */
 const ORG_ONLY_TABS = new Set(['organization']);
 
-/** Organisation fields, matching what the Admin panel fills for an institute
- *  (minus the credentials — this account already has its own). */
-const ORG_FIELDS = ['name', 'phone', 'city', 'state', 'district', 'block', 'programs', 'website', 'about'];
+/** Same per-type affiliation rules the Admin create form applies. */
+function affiliationConfig(type) {
+  if (type === 'School') return { mode: 'select', label: 'Board' };
+  if (type === 'College') return { mode: 'select', label: 'Affiliating University' };
+  if (type === 'University') return { mode: 'select', label: 'Accreditation' };
+  return { mode: 'text', label: 'Affiliation' };
+}
+
+/** Organisation fields — the same set Admin → Institute Pages collects when it
+ *  creates an institute, minus the credentials (this account already has its
+ *  own), the logo/banner (page editor) and the slug (derived).
+ *
+ *  Saving these creates a real Institute Page and makes this account its owner,
+ *  so everything else — courses, notices, vacancies, the richer page content —
+ *  is filled in afterwards in the Institute Console. */
+const ORG_FIELDS = [
+  'name', 'type', 'tagline', 'contact', 'address',
+  'state', 'city', 'website', 'affiliation', 'about',
+];
 
 function toOrgFormState(org) {
   const base = {};
@@ -459,7 +477,7 @@ export default function ProfessionalProfile() {
   const isOrg = isOrgAccount(role, profile);
   // Real answer from page_admins, so the console link only appears to someone
   // who actually administers a page.
-  const { pages: myPages, loading: myPagesLoading } = useMyPages();
+  const { refresh: refreshMyPages } = useMyPages();
   // An Admin-provisioned Institute account is an organisation by definition,
   // so it gets no toggle — only a self-registered account chooses.
   const canChooseKind = !isOrgRole(role) && role !== 'admin';
@@ -508,6 +526,7 @@ export default function ProfessionalProfile() {
   const setOrgField = (key) => (e) => setOrgForm((f) => ({ ...f, [key]: e.target.value }));
 
   const orgDirty = ORG_FIELDS.some((f) => (orgForm[f] || '') !== (org?.[f] || ''));
+  const orgAffiliation = affiliationConfig(orgForm.type);
 
   const saveOrg = async () => {
     setOrgSaving(true);
@@ -517,6 +536,9 @@ export default function ProfessionalProfile() {
       setOrg(saved);
       setOrgForm(toOrgFormState(saved));
       setOrgSavedAt(Date.now());
+      // The first save creates the page and makes this account its owner, so
+      // the Institute Console entry point has to appear without a reload.
+      refreshMyPages();
     } catch (err) {
       setOrgError(err instanceof ApiError ? err.message : 'Could not save organisation details.');
     } finally {
@@ -713,8 +735,22 @@ export default function ProfessionalProfile() {
               <FormGroup label="Organisation name">
                 <Input value={orgForm.name} onChange={setOrgField('name')} placeholder="e.g. Apex Institute of Technology" />
               </FormGroup>
+              {/* Type decides the public URL (/college/<name>/<city>), so it is
+                  fixed at creation rather than filled in later. */}
+              <FormGroup label="Institute type">
+                <Select value={orgForm.type} onChange={setOrgField('type')} disabled={!!org}>
+                  <option value="">Select a type</option>
+                  {INSTITUTE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </Select>
+              </FormGroup>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4 mb-4">
+              <FormGroup label="Tagline">
+                <Input value={orgForm.tagline} onChange={setOrgField('tagline')} placeholder="One line about the institute" />
+              </FormGroup>
               <FormGroup label="Contact number">
-                <Input value={orgForm.phone} onChange={setOrgField('phone')} placeholder="+91-XXXXXXXXXX" />
+                <Input value={orgForm.contact} onChange={setOrgField('contact')} placeholder="+91-XXXXXXXXXX" />
               </FormGroup>
             </div>
 
@@ -725,27 +761,33 @@ export default function ProfessionalProfile() {
               This is your account address — change it from the account menu, not here.
             </p>
 
-            <div className="grid sm:grid-cols-2 gap-4 mb-4">
-              <FormGroup label="State">
-                <Input value={orgForm.state} onChange={setOrgField('state')} placeholder="Madhya Pradesh" />
-              </FormGroup>
-              <FormGroup label="District">
-                <Input value={orgForm.district} onChange={setOrgField('district')} placeholder="Indore" />
-              </FormGroup>
-              <FormGroup label="Block / Area">
-                <Input value={orgForm.block} onChange={setOrgField('block')} placeholder="Vijay Nagar" />
-              </FormGroup>
-              <FormGroup label="City">
-                <Input value={orgForm.city} onChange={setOrgField('city')} placeholder="Indore" />
-              </FormGroup>
+            <FormGroup label="Address">
+              <Input value={orgForm.address} onChange={setOrgField('address')} placeholder="Street / area" />
+            </FormGroup>
+            <div className="mb-4 mt-4">
+              <StateCitySelect
+                className="grid sm:grid-cols-2 gap-4"
+                state={orgForm.state}
+                city={orgForm.city}
+                onChange={({ state, city }) => setOrgForm((f) => ({ ...f, state, city }))}
+              />
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4 mb-4">
-              <FormGroup label="Courses offered">
-                <Input value={orgForm.programs} onChange={setOrgField('programs')} placeholder="Comma separated" />
-              </FormGroup>
               <FormGroup label="Website">
                 <Input value={orgForm.website} onChange={setOrgField('website')} placeholder="www.example.com" />
+              </FormGroup>
+              <FormGroup label={orgAffiliation.label}>
+                {orgAffiliation.mode === 'select' ? (
+                  <Select value={orgForm.affiliation} onChange={setOrgField('affiliation')}>
+                    <option value="">Select {orgAffiliation.label.toLowerCase()}</option>
+                    {(AFFILIATION_OPTIONS[orgForm.type] || []).map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input value={orgForm.affiliation} onChange={setOrgField('affiliation')} placeholder="Optional" />
+                )}
               </FormGroup>
             </div>
 
@@ -767,52 +809,29 @@ export default function ProfessionalProfile() {
             </div>
           </Card>
 
-          {/* Where an organisation goes next: publish a public Institute Page,
-              then manage its courses, notices and vacancies in the console. */}
-          <Card className="p-5">
-            <h4 className="text-sm font-bold text-on-surface mb-1">Institute Page</h4>
-            {myPagesLoading ? (
-              <p className="text-xs text-on-surface-variant m-0">Checking your institute pages…</p>
-            ) : myPages.length > 0 ? (
-              <>
-                <p className="text-xs text-on-surface-variant mb-4">
-                  You administer {myPages.length === 1 ? 'this institute page' : `${myPages.length} institute pages`}.
-                  Courses, admission notices, vacancies and enquiries are managed in the console.
-                </p>
-                <ul className="list-none p-0 m-0 mb-4 space-y-2">
-                  {myPages.map((p) => (
-                    <li
-                      key={p.id}
-                      className="flex items-center justify-between gap-3 p-3 rounded-xl border border-outline-variant"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-on-surface m-0 truncate">{p.name}</p>
-                        <p className="text-[11px] text-on-surface-variant m-0 font-mono truncate">
-                          {pageDisplayUrl(p)}
-                        </p>
-                      </div>
-                      <Link to={pagePath(p)} className="shrink-0">
-                        <Button size="sm" variant="outline" icon="open_in_new">View</Button>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+          {/* No "create a page" step: saving the details above IS the
+              creation. What is left — courses, admission notices, vacancies,
+              banners and the richer page content — is filled in the Institute
+              Console, which this links to once the page exists. */}
+          {org && (
+            <Card className="p-5">
+              <h4 className="text-sm font-bold text-on-surface mb-1">Your Institute Page is live</h4>
+              <p className="text-xs text-on-surface-variant mb-3">
+                Add courses, admission notices and job vacancies in the Institute Console.
+              </p>
+              <p className="text-[11px] text-on-surface-variant m-0 mb-4 font-mono truncate">
+                {pageDisplayUrl(org)}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
                 <Link to="/institute">
                   <Button size="sm" icon="dashboard">Open Institute Console</Button>
                 </Link>
-              </>
-            ) : (
-              <>
-                <p className="text-xs text-on-surface-variant mb-4">
-                  You don&apos;t have a public Institute Page yet. Create one to start posting
-                  admission notices and job vacancies.
-                </p>
-                <Link to="/create-page">
-                  <Button size="sm" icon="add_business">Create Institute Page</Button>
+                <Link to={pagePath(org)}>
+                  <Button size="sm" variant="outline" icon="open_in_new">View public page</Button>
                 </Link>
-              </>
-            )}
-          </Card>
+              </div>
+            </Card>
+          )}
         </div>
       )}
 

@@ -61,6 +61,10 @@ async def app_client():
             ("admin.a@institute-a.example.com", UserRole.PROFESSIONAL),
             ("admin.b@institute-b.example.com", UserRole.PROFESSIONAL),
             ("normal@user.example.com", UserRole.STUDENT),
+            # Two clean accounts for the self-registered organisation tests,
+            # which assert on the state of an account that has never had a page.
+            ("typeless@example.com", UserRole.PROFESSIONAL),
+            ("orgflag@example.com", UserRole.PROFESSIONAL),
         ]:
             db.add(User(
                 email=email, name=email.split("@")[0],
@@ -571,3 +575,77 @@ async def test_app_routes_are_never_resolved_as_institutes(app_client):
         assert (await app_client.get(
             "/api/pages/resolve", params={"path": path}
         )).status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Self-registered organisations
+#
+# Client report, 02 Sep 2026: a user marks their account as an organisation,
+# fills Organisation Details, submits — "organization doesnt get created or it
+# shows in super admin panel". It wrote only to the legacy `institutes` table,
+# so no Page and no page_admins row ever existed.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_org_details_create_a_real_page_visible_to_admin(app_client, world):
+    user = await login(app_client, "normal@user.example.com")
+
+    saved = await app_client.put("/api/profile/me/organization", headers=user, json={
+        "name": "Self Serve Academy", "type": "Coaching",
+        "city": "Indore", "state": "Madhya Pradesh", "contact": "9876500000",
+    })
+    assert saved.status_code == 200
+    page = saved.json()
+    assert page["public_path"] == "/coaching/self-serve-academy/indore"
+
+    # The bug, directly: it must show up in the Main Admin's console.
+    listed = (await app_client.get("/api/pages", headers=world["platform"])).json()
+    assert "Self Serve Academy" in [p["name"] for p in listed]
+
+    # ...and the account must actually administer it, which is what grants the
+    # Institute Console and lets them add courses next.
+    mine = (await app_client.get("/api/pages/mine", headers=user)).json()
+    assert "Self Serve Academy" in [p["name"] for p in mine]
+
+    # The public page resolves at its canonical URL.
+    assert (await app_client.get(
+        "/api/pages/resolve", params={"path": "/coaching/self-serve-academy/indore"}
+    )).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_org_details_are_editable_without_creating_a_second_page(app_client):
+    user = await login(app_client, "admin.b@institute-b.example.com")
+
+    before = (await app_client.get("/api/pages/mine", headers=user)).json()
+    updated = await app_client.put("/api/profile/me/organization", headers=user, json={
+        "tagline": "Learning that lasts", "website": "www.institute-b.example.com",
+    })
+    assert updated.status_code == 200
+    assert updated.json()["tagline"] == "Learning that lasts"
+
+    after = (await app_client.get("/api/pages/mine", headers=user)).json()
+    assert len(after) == len(before)
+
+
+@pytest.mark.asyncio
+async def test_type_is_required_before_a_page_can_be_created(app_client):
+    """Type decides the public URL, so it cannot be filled in later."""
+    user = await login(app_client, "typeless@example.com")
+    res = await app_client.put("/api/profile/me/organization", headers=user, json={
+        "name": "No Type Institute", "city": "Bhopal",
+    })
+    assert res.status_code == 422
+    assert "type" in res.json()["detail"].lower()
+    assert (await app_client.get("/api/pages/mine", headers=user)).json() == []
+
+
+@pytest.mark.asyncio
+async def test_saving_org_details_marks_the_account_as_an_organisation(app_client):
+    user = await login(app_client, "orgflag@example.com")
+    assert (await app_client.get("/api/profile/me", headers=user)).json()["is_organization"] is False
+
+    await app_client.put("/api/profile/me/organization", headers=user, json={
+        "name": "Flagged Institute", "type": "School", "city": "Gwalior",
+    })
+    assert (await app_client.get("/api/profile/me", headers=user)).json()["is_organization"] is True

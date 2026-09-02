@@ -129,7 +129,12 @@ export default function InstitutePageEditor() {
 }
 
 function InstitutePageEditorForm({ page, navigate, commit }) {
-  const [main, setMain] = useState({ name: page.name, tagline: page.tagline, banners: page.banners, logoUrl: page.logoUrl });
+  const [main, setMain] = useState({
+    name: page.name,
+    tagline: page.tagline,
+    banners: page.banners || [],
+    logoUrl: page.logoUrl,
+  });
   const [contact, setContact] = useState({
     address: page.address || '',
     website: page.website || '',
@@ -139,12 +144,19 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
   const [socialLinks, setSocialLinks] = useState(page.socialLinks || {});
   const [gallery, setGallery] = useState(page.gallery || []);
   const galleryInputRef = useRef(null);
-  const [aboutStats, setAboutStats] = useState(page.content.aboutStats);
-  const [whyChooseUs, setWhyChooseUs] = useState(page.content.whyChooseUs);
-  const [keyHighlights, setKeyHighlights] = useState(page.content.keyHighlights);
-  const [facilities, setFacilities] = useState(page.content.facilities);
-  const [campusLife, setCampusLife] = useState(page.content.campusLife);
-  const [achievements, setAchievements] = useState(page.content.achievements);
+  // A page created through Admin -> Institute Pages or the organisation form
+  // starts with `content` = {}, so every one of these is absent until the
+  // institute fills the tab in. Without the defaults the About Us tab crashed
+  // on `aboutStats[f.key]` the first time it was opened — i.e. for every new
+  // institute. Objects and arrays are not interchangeable here: aboutStats and
+  // achievements are keyed records, the rest are lists.
+  const content = page.content || {};
+  const [aboutStats, setAboutStats] = useState(content.aboutStats || {});
+  const [whyChooseUs, setWhyChooseUs] = useState(content.whyChooseUs || []);
+  const [keyHighlights, setKeyHighlights] = useState(content.keyHighlights || []);
+  const [facilities, setFacilities] = useState(content.facilities || []);
+  const [campusLife, setCampusLife] = useState(content.campusLife || []);
+  const [achievements, setAchievements] = useState(content.achievements || {});
   const [tab, setTab] = useState('main');
   const [savedAt, setSavedAt] = useState(0);
   const bannerInputRef = useRef(null);
@@ -234,7 +246,7 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
         address: contact.address, website: contact.website, contact: contact.contact, about: contact.about,
         socialLinks, gallery,
       });
-      Object.assign(page.content, { aboutStats, whyChooseUs, keyHighlights, facilities, campusLife, achievements });
+      page.content = { ...(page.content || {}), aboutStats, whyChooseUs, keyHighlights, facilities, campusLife, achievements };
     });
     setSavedAt(Date.now());
   };

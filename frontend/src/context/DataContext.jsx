@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useEffect, useRef, useState } from 'react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import { useAuth } from './AuthContext';
 import {
   fetchPages,
   fetchAdminStudents,
@@ -25,6 +26,14 @@ const DataContext = createContext(null);
 // show what the database actually holds, never a demo fixture that survives a
 // failed request.
 export function DataProvider({ children }) {
+  // Every endpoint below is Main-Admin-only. This provider wraps the whole app,
+  // so without this gate a student simply loading the feed fired three
+  // requests that could only ever answer 403 — console noise on every page
+  // load, and it tripped the "some records could not be loaded" banner for
+  // users who were never entitled to those records in the first place.
+  const { user, initializing } = useAuth();
+  const isPlatformAdmin = user?.role === 'admin';
+
   const [pages, setPages] = useState([]);
   const [students, setStudents] = useState([]);
   const [mentors, setMentors] = useState([]);
@@ -38,6 +47,10 @@ export function DataProvider({ children }) {
   const inFlight = useRef(null);
 
   const refreshAdminData = useCallback(() => {
+    if (!isPlatformAdmin) {
+      setLoading(false);
+      return Promise.resolve();
+    }
     if (inFlight.current) return inFlight.current;
     inFlight.current = (async () => {
       setLoading(true);
@@ -97,12 +110,14 @@ export function DataProvider({ children }) {
       inFlight.current = null;
     })();
     return inFlight.current;
-  }, []);
+  }, [isPlatformAdmin]);
 
-  // Sync data on provider load
+  // Sync data on provider load — once the session check has settled, so a
+  // hard refresh does not run as "not an admin" before the token resolves.
   useEffect(() => {
+    if (initializing) return;
     refreshAdminData();
-  }, [refreshAdminData]);
+  }, [refreshAdminData, initializing]);
 
   // Local-only view state: the backend has no suspend/delete endpoints for
   // these accounts yet, so the change lives for the current session only.

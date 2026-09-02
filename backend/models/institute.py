@@ -75,19 +75,30 @@ class InstituteProfileUpdate(BaseModel):
 class OrganizationProfileUpdate(BaseModel):
     """Organisation details a user maintains for their own account.
 
-    Mirrors the fields the Admin panel fills when it provisions an institute,
-    minus the credentials: email stays the account's sign-in address and the
-    password is changed through /auth/change-password, so neither is editable
-    here. Every field is optional — the form saves incrementally.
+    These are the SAME fields Admin -> Institute Pages collects when it creates
+    an institute (models/page.py PageCreate), minus the four that cannot apply
+    here: the slug is derived, the logo and banner belong in the page editor,
+    and there is no `admin_email` because the user filling this in *is* the
+    admin. Saving writes a real Page — see routers/profile.py.
+
+    `district`, `block` and `programs` were dropped with the rewrite: the Page
+    model has no district/block (address + state + city carry the location),
+    and courses are rows on the page, managed in the Institute Console rather
+    than typed as a comma-separated string here.
+
+    Every field is optional so the form can save incrementally, except that a
+    `type` is required before the page can first be created — the router
+    enforces that, since it also decides the public URL.
     """
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
-    phone: Optional[str] = None
+    type: Optional[str] = None
+    tagline: Optional[str] = None
+    contact: Optional[str] = None
+    address: Optional[str] = None
     state: Optional[str] = None
-    district: Optional[str] = None
-    block: Optional[str] = None
     city: Optional[str] = None
-    programs: Optional[str] = None
     website: Optional[str] = None
+    affiliation: Optional[str] = None
     about: Optional[str] = None
 
 

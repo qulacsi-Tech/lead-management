@@ -425,3 +425,156 @@ A seven-tab editor with a live preview was more than a 90vw overlay should carry
 
 - **Legacy institute account rows are no longer visible in the admin UI.** They still exist and those users can still log in — only the management screen is gone, as instructed. `GET /admin/institutes` is still there if we ever need to inspect them. If any of those accounts matter, they should be migrated onto pages before this ships. **Worth confirming with the client.**
 - The temporary password is typed by the admin and shown in clear text in the form, so they can pass it on. There is no "email the new admin their password" step — the platform has no outbound email. Worth raising if the client expects one.
+
+
+---
+
+## 13. Follow-up, 02 Sep 2026 — self-registered organisations were never created — ✅ **FIXED**
+
+> "when a new user registers → marks as org account in overview → then fills Organisation Details and submits, then organization doesnt get created or it shows in super admin panel. Refactor this — make it similar way we add one org in platform admin, same details we should take here as well, and once basic details filled and user goes to org console then only it'll fill rest of the items."
+
+### Root cause — a real bug, confirmed
+
+`PUT /profile/me/organization` wrote **one row to the legacy `institutes` table and nothing else.**
+
+Everything that makes an institute real is driven by two other tables:
+
+| What the user expected | What actually drives it | Was it written? |
+|---|---|---|
+| Shows in Admin → Institute Pages | `pages` | ❌ |
+| Gets an Institute Console | `page_admins` | ❌ |
+| Has a public page at a URL | `pages` | ❌ |
+
+So the submit "succeeded", the account was flagged `is_organization`, and nothing existed. The Section 12 merge made this sharper still: with the legacy Institutes screen gone, `institutes` rows are now visible **nowhere**.
+
+### The fix
+
+The endpoint now does exactly what Admin → Institute Pages does: create the `Page`, then write a `page_admins` row making the caller its **OWNER**. That single row is what grants the Institute Console.
+
+**Same details as the admin form**, as asked — name, type, tagline, contact, address, state, city, website, affiliation, about. The four the admin form has that cannot apply here are omitted: the slug is derived, logo and banner belong in the page editor, and there is no `admin_email` because the user filling it in *is* the admin.
+
+**Type is now required and fixed at creation.** It was not collected at all before, and it cannot be deferred — it decides the public URL (`/training-institute/<name>/<city>`). The field is locked once the page exists, since changing it would move the URL.
+
+### The three annotations on the screenshot
+
+| Marked | Done |
+|---|---|
+| State / District / Block / City circled | Replaced with **Address + the `StateCitySelect` dropdowns** from Section 1 — the same control the admin form uses. District and Block are gone: `Page` has no such columns, and the location is address + state + city. |
+| "Courses offered" crossed out | Removed. Courses are rows on the page, created in the Institute Console — which is exactly the "fill the rest there" the client asked for, and it was a comma-separated string that went nowhere. |
+| "Create Institute Page" card crossed out | Removed. Saving the details *is* the creation, so there is nothing left to create. In its place, once the page exists: its public URL, **Open Institute Console**, and **View public page**. |
+
+### Verified end to end
+
+Ran the client's exact sequence against a live app — mark as org → fill details → submit:
+
+```
+3. submit                -> 200 Herald Institute of Technology
+                            connectedus.in/training-institute/herald-institute-of-technology/gwalior
+4. super admin panel     -> ['Herald Institute of Technology']   (was [])
+5. institute console     -> ['Herald Institute of Technology']
+6. public page           -> 200
+7. edit again            -> still 1 page, not 2
+8. add a course in console -> 201
+```
+
+35 backend tests (4 new, covering this bug directly) and 25 frontend tests pass; build and lint clean.
+
+### Worth knowing
+
+- **Accounts that filled the old form already have an `institutes` row and no page.** Their input is not lost: the first save after this change seeds the new page from that row. To convert them without waiting for each user to re-save, run the existing `backend/backfill_pages.py`. **Worth doing before this ships.**
+- **Nothing writes to `institutes` any more.** It is now purely historical, read by `GET /admin/institutes` (which no screen calls) and a compatibility shim in `core/authz.py`. Removing it is a separate cleanup, not done here.
+- The **one-way** rule is unchanged: an organisation account still cannot be switched back to an individual.
+
+
+---
+
+## 14. Follow-up, 02 Sep 2026 — two bugs found testing the new organisation flow — ✅ **FIXED**
+
+> "after submitting, unless I refresh again, on profile click Institute Console option not showing. Also after it gets opened, when trying to change any other tab e.g. About Us it's showing [error]."
+
+Both were real, and neither was caused by Section 13 — the second predated it and would have hit **every** newly created institute, including ones made by the admin.
+
+### Bug 1 — Institute Console missing until a manual reload
+
+`useMyPages()` kept a **`useState` per calling component** over a shared module cache. `refresh()` invalidated the cache and then called `setPages` — but only on the component that called it. The profile's organisation tab updated; the Me menu, which is a separate `useMyPages()` instance in `AppLayout`, never heard about it and kept offering "Create Institute Page" until a reload remounted it.
+
+Rewritten as a single subscribable store (`useSyncExternalStore`), so every consumer — Me menu, feed, profile, route guard — re-renders from one source. Three regression tests cover it: a refresh in one component updating another, simultaneous consumers still sharing one request, and a user switch never showing one account another's pages.
+
+### Bug 2 — About Us tab crashed the console
+
+```
+TypeError: Cannot read properties of undefined (reading 'establishedYear')
+    at InstitutePageEditor.jsx:368
+```
+
+`InstitutePageEditor` initialised its six content sections straight from `page.content.*`:
+
+```js
+const [aboutStats, setAboutStats] = useState(page.content.aboutStats);   // undefined
+```
+
+Every page is created with `content = {}` — by the admin console and by the organisation form alike — so all six were `undefined`, and opening the About Us tab hit `aboutStats[f.key]` on `undefined`. It only escaped notice because the demo pages ship with `content` fully populated.
+
+Fixed with correct empty defaults, which are not interchangeable: `aboutStats` and `achievements` are keyed records, `whyChooseUs` / `keyHighlights` / `facilities` / `campusLife` are lists. `page.banners` got the same guard, and the save path no longer `Object.assign`s onto a possibly-absent `content`.
+
+### Also fixed — 403 spam on every page load
+
+Visible in the same console output:
+
+```
+GET /api/pages 403 (Forbidden)
+GET /api/admin/students 403 (Forbidden)
+GET /api/admin/mentors 403 (Forbidden)
+```
+
+`DataProvider` wraps the whole app and fetched three Main-Admin-only endpoints for **every** user. A student loading the feed fired three requests that could only ever 403 — and it tripped the "Some records could not be loaded from the server" banner for users who were never entitled to those records. It now fetches only for platform admins, and only once the session check has settled.
+
+Two of those three predated this work; `/api/pages` was added in Section 12 when the Dashboard switched from legacy institute accounts to pages.
+
+### Not a bug — the WebSocket line
+
+```
+WebSocket connection to 'ws://localhost:8000/api/notifications/ws/...' failed
+```
+
+The endpoint exists (`routers/social.py`); this is what a dev session logs when the backend is not up. The bell already catches it and falls back to polling. Left alone.
+
+### Verification
+
+35 backend tests and 28 frontend tests (3 new) pass; build and lint clean.
+
+
+---
+
+## 15. Follow-up, 02 Sep 2026 — new organisations missing from the home page — ✅ **FIXED**
+
+> "now in the main homepage why that newly created org not showing. Check and fix — whatever org gets created it should show. If more than 5 is there then first 5, then in tiles format load and next institute suggestion etc format."
+
+### Cause — a frontend filter, not missing data
+
+The API was always right. Verified against a running app: create an organisation, and `GET /pages/public` returns it immediately, first in the list (the endpoint orders newest-first and pages are enabled by default).
+
+The home page's "Institute Pages to follow" rail then threw it away:
+
+```js
+const unowned = pages.filter((p) => !myPageIds.has(p.id));
+const suggestions = (unowned.length > 0 ? unowned : pages).slice(0, 6);
+```
+
+Pages the viewer administers were filtered out. So the person who had just created their organisation was the one person guaranteed not to see it — which reads as "it was never created", exactly the conclusion drawn. (The odd `unowned.length > 0 ? unowned : pages` fallback also meant someone who administered *every* listed page saw them all again, so the rule was not even applied consistently.)
+
+### The fix
+
+- **Every enabled institute appears**, the viewer's own included.
+- **Own pages get "Manage"** (linking to the Institute Console) instead of "Follow" — you cannot follow yourself, but the entry still has to be visible and useful.
+- **Five at a time**, then "Show 5 more of N" adds a page at a time, with "Show less" to collapse. Replaces the hard `slice(0, 6)`, which silently hid everything past the sixth institute with no way to reach it.
+
+Newest-first ordering comes from the API, so a page just created sits at the top of the rail.
+
+### One interpretation to confirm
+
+"Tiles format" was read as **progressive disclosure** — five, then more on demand — and kept in the existing row layout. The rail is a narrow sidebar column; a genuine tile grid would give roughly 120px per tile and truncate most institute names. If a card/grid layout is actually wanted, say so and it is a small change — but it likely belongs in the main column rather than the rail.
+
+### Verification
+
+Five new tests cover the rail: an administered page is shown (with Manage, not Follow), a non-administered one offers Follow, the five-at-a-time expansion, no expander when everything fits, and nothing rendered at all when there are no institutes. 33 frontend and 35 backend tests pass; build and lint clean.

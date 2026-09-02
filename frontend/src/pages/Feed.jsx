@@ -304,22 +304,36 @@ function OpportunityCard({ opportunity: o, page }) {
   );
 }
 
-function SuggestionsRail({ pages, myPageIds, followedIds, onToggleFollow, busyId }) {
+/** How many institutes the rail shows before "Show more". */
+const SUGGESTIONS_PAGE_SIZE = 5;
+
+export function SuggestionsRail({ pages, myPageIds, followedIds, onToggleFollow, busyId }) {
   const { auth } = useSession();
   const { openLogin } = useLoginPrompt();
+  const [visible, setVisible] = useState(SUGGESTIONS_PAGE_SIZE);
 
-  // Filter out pages administered by the user, or fall back to showing all public pages
-  const unowned = pages.filter((p) => !myPageIds.has(p.id));
-  const suggestions = (unowned.length > 0 ? unowned : pages).slice(0, 6);
+  // EVERY enabled institute appears here, including the ones the viewer
+  // administers. They used to be filtered out, so someone who had just created
+  // their organisation looked at the home page and could not find it — which
+  // reads as "it was not created". Client report, 02 Sep 2026.
+  //
+  // Own pages are shown but not offered a Follow button; you cannot follow
+  // yourself, so they get a link into the console instead. Newest first, which
+  // is the order the API returns, so a page just created is at the top.
+  const suggestions = pages;
   if (suggestions.length === 0) return null;
+
+  const shown = suggestions.slice(0, visible);
+  const remaining = suggestions.length - shown.length;
 
 
   return (
     <Card className="p-4">
       <h4 className="text-sm font-bold text-on-surface mb-3">Institute Pages to follow</h4>
       <div className="space-y-3">
-        {suggestions.map((p) => {
+        {shown.map((p) => {
           const following = followedIds.has(p.id);
+          const mine = myPageIds.has(p.id);
           return (
             <div key={p.id} className="flex items-center gap-2">
               <Link to={pagePath(p)} className="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-xs font-bold text-primary shrink-0 overflow-hidden no-underline">
@@ -331,18 +345,47 @@ function SuggestionsRail({ pages, myPageIds, followedIds, onToggleFollow, busyId
                 <p className="text-xs font-bold text-on-surface mb-0 truncate">{p.name}</p>
                 <p className="text-[11px] text-on-surface-variant mb-0 truncate">{p.type}</p>
               </Link>
-              <Button
-                size="sm"
-                variant={following ? 'outline' : 'ghost'}
-                disabled={busyId === p.id}
-                onClick={() => (auth ? onToggleFollow(p) : openLogin('Sign in to follow institutes.'))}
-              >
-                {following ? 'Following' : 'Follow'}
-              </Button>
+              {mine ? (
+                <Link to="/institute" className="no-underline shrink-0">
+                  <Button size="sm" variant="outline">Manage</Button>
+                </Link>
+              ) : (
+                <Button
+                  size="sm"
+                  variant={following ? 'outline' : 'ghost'}
+                  disabled={busyId === p.id}
+                  onClick={() => (auth ? onToggleFollow(p) : openLogin('Sign in to follow institutes.'))}
+                >
+                  {following ? 'Following' : 'Follow'}
+                </Button>
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Progressive disclosure rather than a hard cap: the rail opens at five
+          and grows a page at a time, so a long list stays reachable without
+          burying the feed beside it. */}
+      {remaining > 0 && (
+        <button
+          type="button"
+          onClick={() => setVisible((v) => v + SUGGESTIONS_PAGE_SIZE)}
+          className="w-full mt-3 py-2 rounded-lg text-xs font-semibold text-primary bg-transparent border-none hover:bg-surface-container-low cursor-pointer"
+        >
+          Show {Math.min(remaining, SUGGESTIONS_PAGE_SIZE)} more
+          {remaining > SUGGESTIONS_PAGE_SIZE ? ` of ${remaining}` : ''}
+        </button>
+      )}
+      {remaining === 0 && visible > SUGGESTIONS_PAGE_SIZE && (
+        <button
+          type="button"
+          onClick={() => setVisible(SUGGESTIONS_PAGE_SIZE)}
+          className="w-full mt-3 py-2 rounded-lg text-xs font-semibold text-on-surface-variant bg-transparent border-none hover:bg-surface-container-low cursor-pointer"
+        >
+          Show less
+        </button>
+      )}
     </Card>
   );
 }
