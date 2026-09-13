@@ -9,7 +9,10 @@ import { COURSE_SPECIALIZATIONS } from './mockData';
 import { pageDisplayUrl } from '../utils/pageUrl';
 import { KEY_HIGHLIGHTS_OPTIONS, FACILITIES_OPTIONS, buildAboutParagraph } from './pageBuilderContent';
 import { useAuth } from '../context/AuthContext';
+import { useLoginPrompt } from '../context/LoginPrompt';
 import PageHeader from './PageHeader';
+import SponsoredAdRail from '../components/SponsoredAdRail';
+import StudyMaterialSection from '../components/StudyMaterialSection';
 import {
   ApiError,
   resolveAssetUrl,
@@ -19,6 +22,10 @@ import {
   submitPageEnquiry,
   followPage,
   unfollowPage,
+  fetchPagePapers,
+  fetchPublicOpportunities,
+  fetchPublicPapers,
+  fetchPublicPages,
 } from '../Api/Api';
 
 function normalizeHighlights(options, items) {
@@ -267,9 +274,12 @@ function FloatingEnquiryButton({ onClick }) {
  * anonymous callers and hides disabled pages from everyone but their admins.
  * The URL carries type and city as well as the name, so two institutes with
  * the same name in different cities resolve to different pages.
- * Ownership is decided by `is_page_admin` on that response — resolved server
- * side from the page_admins table, never by comparing the URL slug or an email
- * in the browser.
+ * Ownership is decided by `is_page_member` on that response — a real row in
+ * page_admins, resolved server side, never by comparing the URL slug or an
+ * email in the browser. Note `is_page_member`, NOT `is_page_admin`: the latter
+ * is true for a Main Admin on every page, and keying the owner controls off it
+ * put "Manage / Notices / Vacancies" on every institute for platform staff and
+ * sent them into a console for an institute they have nothing to do with.
  */
 export default function InstitutePage() {
   const { typeSegment, instituteSlug, citySegment } = useParams();
@@ -277,10 +287,17 @@ export default function InstitutePage() {
   // slash or a query string cannot change what gets looked up.
   const path = `/${[typeSegment, instituteSlug, citySegment].filter(Boolean).join('/')}`;
   const { user } = useAuth();
+  const { openLogin } = useLoginPrompt();
 
   const [page, setPage] = useState(null);
   const [courses, setCourses] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
+  const [papers, setPapers] = useState([]);
+  // [{ ...opportunity, org }] — the advertiser's name is resolved when the
+  // rail loads, because OpportunityResponse carries only its page_id.
+  const [sponsored, setSponsored] = useState([]);
+  // Papers other institutes have cleared to run platform-wide.
+  const [sharedPapers, setSharedPapers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState('');
@@ -305,12 +322,14 @@ export default function InstitutePage() {
       // Courses and opportunities are page-scoped resources, so they can only
       // be fetched once the path has resolved to an id. Both endpoints return
       // published items only to non-admins, enforced server side.
-      const [c, o] = await Promise.allSettled([
+      const [c, o, p] = await Promise.allSettled([
         fetchPageCourses(detail.id),
         fetchPageOpportunities(detail.id),
+        fetchPagePapers(detail.id),
       ]);
       setCourses(c.status === 'fulfilled' ? c.value : []);
       setOpportunities(o.status === 'fulfilled' ? o.value : []);
+      setPapers(p.status === 'fulfilled' && Array.isArray(p.value) ? p.value : []);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) setNotFound(true);
       else setError(err instanceof ApiError ? err.message : 'Could not load this institute page.');
@@ -323,6 +342,55 @@ export default function InstitutePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  /**
+   * Sponsored rail — ads a Main Admin has cleared to run across every
+   * institute page (visibility: 'platform'). Eligibility is that explicit
+   * decision, not something inferred here: the platform is selling placement
+   * on a page the advertiser does not own, so nothing opts an institute in on
+   * its behalf. The server applies both filters; this only orders the result.
+   *
+   * Loaded separately from `load` so a failure can never keep the institute's
+   * own page from rendering — advertising is the least important thing here.
+   */
+  useEffect(() => {
+    if (!page?.id) return undefined;
+    let cancelled = false;
+
+    Promise.allSettled([
+      fetchPublicOpportunities({ limit: 20, visibility: 'platform', excludePageId: page.id }),
+      fetchPublicPages(),
+      fetchPublicPapers({ limit: 10, visibility: 'platform', excludePageId: page.id }),
+    ])
+      .then(([oppRes, pageRes, paperRes]) => {
+        if (cancelled) return;
+
+        const nameById = Object.fromEntries(
+          (pageRes.status === 'fulfilled' && Array.isArray(pageRes.value) ? pageRes.value : [])
+            .map((pg) => [pg.id, pg.name]),
+        );
+
+        if (paperRes.status === 'fulfilled' && Array.isArray(paperRes.value)) {
+          setSharedPapers(paperRes.value.map((sp) => ({ ...sp, org: nameById[sp.page_id] })));
+        }
+
+        if (oppRes.status !== 'fulfilled' || !Array.isArray(oppRes.value)) return;
+
+        // Same-city ads first, so the "near you" label is earned by whichever
+        // ad leads the rail rather than being decoration.
+        const here = (page.city || '').trim().toLowerCase();
+        const isNear = (o) =>
+          !!here && !!o.location && o.location.trim().toLowerCase().includes(here);
+        const ordered = [...oppRes.value].sort((a, b) => Number(isNear(b)) - Number(isNear(a)));
+
+        setSponsored(
+          ordered.slice(0, 4).map((o) => ({ ...o, org: nameById[o.page_id], near: isNear(o) })),
+        );
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [page?.id, page?.city]);
 
   const toggleFollow = async () => {
     if (!page) return;
@@ -358,7 +426,12 @@ export default function InstitutePage() {
     setEnquiryOpen(true);
   };
 
-  const isMyPage = !!page.is_page_admin;
+  // "This page is mine to run" — page_admins membership, and the only thing
+  // that may reveal the Institute Console.
+  const isMyPage = !!page.is_page_member;
+  // Platform staff: full write access, but this institute is not theirs. They
+  // get a link to the screen actually built for it instead of the console.
+  const isPlatformAdmin = !isMyPage && !!page.is_page_admin;
   const content = page.content || {};
   const gallery = page.gallery || [];
   const banners = page.banners || [];
@@ -408,6 +481,14 @@ export default function InstitutePage() {
                    editing in place — one place owns this institute's content. */
                 <Link to="/institute">
                   <Button variant="outline" size="sm" icon="tune">Manage this page</Button>
+                </Link>
+              ) : isPlatformAdmin ? (
+                /* Not this admin's institute — the platform console is where
+                   they edit it, so never offer the Institute Console here. */
+                <Link to={`/admin/pages/${page.id}`}>
+                  <Button variant="outline" size="sm" icon="shield_person">
+                    Open in Platform Admin
+                  </Button>
                 </Link>
               ) : user ? (
                 <Button
@@ -495,6 +576,23 @@ export default function InstitutePage() {
             </Card>
           )}
 
+          {/* Promoted ads from nearby institutes. Visually separated from the
+              institute's own content — see SponsoredAdRail.jsx. */}
+          <SponsoredAdRail
+            city={sponsored.some((o) => o.near) ? page.city : null}
+            ads={sponsored.map((o) => ({
+              id: o.id,
+              type: o.type,
+              title: o.type === 'job'
+                ? `We Are Hiring – ${o.position || o.title}`
+                : o.title,
+              org: o.org,
+              meta: [o.location, o.experience].filter(Boolean).join(' · '),
+              href: o.apply_url || '/',
+              external: !!o.apply_url,
+            }))}
+          />
+
           {normalizeAchievements(content.achievements).length > 0 && (
             <Card className="p-5">
               <h2 className="text-sm font-bold text-on-surface mb-3">Achievements &amp; Placement</h2>
@@ -571,6 +669,13 @@ export default function InstitutePage() {
               )}
             </div>
           </Card>
+
+          <StudyMaterialSection
+            papers={papers}
+            sharedPapers={sharedPapers}
+            isMyPage={isMyPage}
+            onRequireLogin={openLogin}
+          />
 
           {/* Gallery — INSTITUTE-OWNED, managed at /institute/profile */}
           {gallery.length > 0 && (

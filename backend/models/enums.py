@@ -53,3 +53,23 @@ class TaskPriority(str, Enum):
     LOW = "Low"
     MEDIUM = "Medium"
     HIGH = "High"
+
+
+class AdVisibility(str, Enum):
+    """Where an ad (admission notice, vacancy, guess paper) is allowed to run.
+
+    PAGE is the default and matches how ads behaved before this existed: the
+    item shows on its own institute's public page and in the feed, and nowhere
+    else. PLATFORM additionally makes it eligible for the sponsored rail on
+    *other* institutes' pages.
+
+    It is a deliberate choice by a Main Admin, not a derived property — the
+    platform is selling placement on pages the advertiser does not own, so
+    nothing should opt an institute into that on its behalf.
+    """
+
+    PAGE = "page"
+    PLATFORM = "platform"
+
+
+AD_VISIBILITIES = [AdVisibility.PAGE.value, AdVisibility.PLATFORM.value]

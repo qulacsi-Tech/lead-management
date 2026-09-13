@@ -54,10 +54,39 @@ def is_main_admin(user: User) -> bool:
 # Page ownership
 # ---------------------------------------------------------------------------
 
+async def user_is_page_member(db: AsyncSession, user: User, page_id: str) -> bool:
+    """Is this user on THIS page's admin team? Membership only.
+
+    Deliberately does NOT treat a Main Admin as a member. The two questions are
+    different and were previously conflated:
+
+        user_administers_page  -> "may I write to this page?"   (authorization)
+        user_is_page_member    -> "is this page mine to run?"   (identity)
+
+    A Main Admin may write to every page, but no page is *theirs*. Answering
+    the second question with the first is what put "Manage / Notices /
+    Vacancies" on every institute's public page for platform staff and sent
+    them into an Institute Console for an institute they have nothing to do
+    with. Authorization still flows through `user_administers_page`; this is
+    only ever used to decide what to show and whose console is whose.
+    """
+    result = await db.execute(
+        select(PageAdmin.id).where(
+            PageAdmin.page_id == page_id,
+            PageAdmin.user_id == user.id,
+        )
+    )
+    return result.scalars().first() is not None
+
+
 async def user_administers_page(db: AsyncSession, user: User, page_id: str) -> bool:
-    """The authoritative answer to 'is this user an administrator of this
+    """The authoritative answer to 'is this user allowed to write to this
     page?' — a database relationship check, never a slug or email comparison
-    performed in the browser."""
+    performed in the browser.
+
+    True for a Main Admin on every page. For "is this page theirs", which is a
+    different question, use `user_is_page_member`.
+    """
     if is_main_admin(user):
         return True
     result = await db.execute(
@@ -168,11 +197,16 @@ def assert_belongs_to_page(resource, page_id: str, label: str = "Resource") -> N
         raise HTTPException(status_code=404, detail=f"{label} not found on this institute")
 
 
-async def pages_administered_by(db: AsyncSession, user: User) -> list[Page]:
-    """Every page the user may administer — backs the Institute Console's page
-    switcher and its 'you administer nothing' empty state."""
-    if is_main_admin(user):
-        return list((await db.execute(select(Page).order_by(Page.name))).scalars().all())
+async def pages_where_user_is_member(db: AsyncSession, user: User) -> list[Page]:
+    """The pages that are actually THIS user's to run — backs `/pages/mine`,
+    the Institute Console's page switcher, and its 'you administer nothing'
+    empty state.
+
+    Membership only, Main Admin included: platform staff administer every page
+    but own none, and returning all of them here meant a Main Admin opening the
+    Institute Console silently landed in whichever institute sorted first. They
+    manage institutes from /admin/pages, which is the screen built for it.
+    """
     result = await db.execute(
         select(Page)
         .join(PageAdmin, PageAdmin.page_id == Page.id)

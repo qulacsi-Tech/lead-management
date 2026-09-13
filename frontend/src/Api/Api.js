@@ -182,9 +182,16 @@ export const fetchPublicPages = async (q) =>
 
 /** Published admission notices and job vacancies across every enabled
  *  institute. Public: the feed is readable without an account. */
-export const fetchPublicOpportunities = async ({ type, limit = 30 } = {}) => {
+/** `visibility: 'platform'` narrows to ads cleared to run on other institutes'
+ *  pages; `excludePageId` drops the page doing the asking. The feed passes
+ *  neither and is unaffected. */
+export const fetchPublicOpportunities = async ({
+  type, limit = 30, visibility, excludePageId,
+} = {}) => {
   const params = new URLSearchParams();
   if (type) params.set('type', type);
+  if (visibility) params.set('visibility', visibility);
+  if (excludePageId) params.set('exclude_page_id', excludePageId);
   params.set('limit', String(limit));
   return apiFetch(`/opportunities?${params}`);
 };
@@ -329,3 +336,53 @@ export const deleteSectionItem = async (pageId, sectionName, itemId) =>
   apiFetch(`/pages/${pageId}/sections/${sectionName}/items/${itemId}`, { method: 'DELETE' });
 
 
+
+// ----------------------------------------------------
+// Guess papers & study material
+//
+// The third ad type a page publishes, alongside admission notices and
+// vacancies. Note what is missing: there is no "who downloaded this" call,
+// because no such endpoint exists. The institute is given the count and
+// nothing else — see backend/models/study_paper.py.
+// ----------------------------------------------------
+
+export const fetchPagePapers = async (pageId) => apiFetch(`/pages/${pageId}/papers`);
+
+export const createPaper = async (pageId, payload) =>
+  apiFetch(`/pages/${pageId}/papers`, { method: 'POST', body: payload });
+
+export const updatePaper = async (pageId, paperId, patch) =>
+  apiFetch(`/pages/${pageId}/papers/${paperId}`, { method: 'PATCH', body: patch });
+
+export const deletePaper = async (pageId, paperId) =>
+  apiFetch(`/pages/${pageId}/papers/${paperId}`, { method: 'DELETE' });
+
+export const pushToTopPaper = async (pageId, paperId) =>
+  apiFetch(`/pages/${pageId}/papers/${paperId}/push-to-top`, { method: 'POST' });
+
+/** Attach the PDF. A paper stays a Draft until this succeeds — the backend
+ *  refuses to publish one with no file, so a reader can never click through to
+ *  a dead download. */
+export const uploadPaperFile = async (pageId, paperId, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiUpload(`/pages/${pageId}/papers/${paperId}/file`, formData);
+};
+
+/** Published papers, optionally for one page. Anonymous-safe. */
+export const fetchPublicPapers = async ({
+  pageId, kind, limit = 30, visibility, excludePageId,
+} = {}) => {
+  const params = new URLSearchParams();
+  if (pageId) params.set('page_id', pageId);
+  if (kind) params.set('kind', kind);
+  if (visibility) params.set('visibility', visibility);
+  if (excludePageId) params.set('exclude_page_id', excludePageId);
+  params.set('limit', String(limit));
+  return apiFetch(`/papers?${params}`, { auth: !!getToken() });
+};
+
+/** Records the download and returns `{ file_url, downloads_count }`.
+ *  Requires a session — the count is of distinct people, not clicks. */
+export const downloadPaper = async (paperId) =>
+  apiFetch(`/papers/${paperId}/download`, { method: 'POST' });

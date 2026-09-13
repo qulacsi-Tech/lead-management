@@ -37,6 +37,7 @@ from core.database import get_db
 from models.course import Course
 from models.opportunity import Opportunity
 from models.page import Page
+from models.study_paper import StudyPaper
 
 router = APIRouter(tags=["SEO"])
 
@@ -287,7 +288,12 @@ def _esc(value) -> str:
     return html.escape(str(value)) if value else ""
 
 
-def _page_body_html(page: Page, courses: List[Course], opportunities: List[Opportunity]) -> str:
+def _page_body_html(
+    page: Page,
+    courses: List[Course],
+    opportunities: List[Opportunity],
+    papers: Optional[List[StudyPaper]] = None,
+) -> str:
     """A plain, semantic rendering of the institute page.
 
     Deliberately minimal: headings, paragraphs and lists carrying the facts a
@@ -339,6 +345,23 @@ def _page_body_html(page: Page, courses: List[Course], opportunities: List[Oppor
             line = f"<strong>{_esc(o.title)}</strong> ({label})"
             if o.description:
                 line += f" — {_esc(o.description)}"
+            parts.append(f"<li>{line}</li>")
+        parts.append("</ul>")
+
+    # Worth rendering server-side even though it is the least "institutional"
+    # section: "physics class 12 guess paper" is exactly the kind of query that
+    # brings a student to an institute they had not heard of. The download
+    # itself needs a session, so what a crawler gets is the listing, not the
+    # file — which is the correct thing to index anyway.
+    if papers:
+        parts.append("<h2>Guess Papers &amp; Study Material</h2><ul>")
+        for sp in papers:
+            meta_bits = " · ".join(
+                _esc(b) for b in (sp.subject, sp.class_level, sp.exam) if b
+            )
+            line = f"<strong>{_esc(sp.kind or 'Guess Paper')}: {_esc(sp.title)}</strong>"
+            if meta_bits:
+                line += f" — {meta_bits}"
             parts.append(f"<li>{line}</li>")
         parts.append("</ul>")
 
@@ -471,7 +494,16 @@ async def build_head_and_body(path: str, db: AsyncSession) -> tuple[str, str, in
                     )
                 ).scalars().all()
             )
-            return meta, _page_body_html(page, courses, opportunities), 200
+            papers = list(
+                (
+                    await db.execute(
+                        select(StudyPaper)
+                        .where(StudyPaper.page_id == page.id, StudyPaper.status == "Published")
+                        .order_by(StudyPaper.ranking, StudyPaper.created_at.desc())
+                    )
+                ).scalars().all()
+            )
+            return meta, _page_body_html(page, courses, opportunities, papers), 200
 
     # A vanity URL that matched no enabled page really is missing. Replying 200
     # here would be a soft 404: Google treats a page that says "not found"

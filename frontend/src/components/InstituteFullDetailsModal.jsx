@@ -4,6 +4,7 @@ import Button from './ui/Button';
 import Badge from './ui/Badge';
 import { Input, FormGroup, Select } from './ui/Field';
 import StateCitySelect from './ui/StateCitySelect';
+import AdsTab from './AdsTab';
 import { pageDisplayUrl } from '../utils/pageUrl';
 import {
   fetchPage,
@@ -99,6 +100,13 @@ const TABS = [
   { key: 'facilities', label: 'Facilities', icon: 'apartment' },
   { key: 'achievements', label: 'Achievements', icon: 'emoji_events' },
   { key: 'gallery', label: 'Gallery', icon: 'photo_library' },
+  // Last three, because they are the only tabs that write to their own
+  // endpoints rather than to the page's `content` blob — see AdsTab.jsx. Kept
+  // as three tabs rather than one scrolling "Ads" screen so an admin working
+  // on vacancies is not scrolling past admission notices to reach them.
+  { key: 'ads-notice', label: 'Ads · Notice', icon: 'campaign' },
+  { key: 'ads-hiring', label: 'Ads · Hiring', icon: 'work' },
+  { key: 'papers', label: 'Guess Papers', icon: 'description' },
 ];
 
 function generateAboutParagraph(state, allFieldDefs, name = 'Our institute') {
@@ -1188,6 +1196,12 @@ export default function InstituteFullDetailsModal({
                 </div>
               </div>
             )}
+
+            {/* TABS 9-11: ADS — admission notices, vacancies and study
+                material. Self-saving; deliberately not part of `saveAll`. */}
+            {tab === 'ads-notice' && <AdsTab pageId={institute?.id} section="admission" />}
+            {tab === 'ads-hiring' && <AdsTab pageId={institute?.id} section="job" />}
+            {tab === 'papers' && <AdsTab pageId={institute?.id} section="paper" />}
 
             {/* TAB 8: GALLERY */}
             {tab === 'gallery' && (

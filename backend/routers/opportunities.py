@@ -16,8 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
 from core.deps import get_current_active_user, get_optional_user
-from core.authz import require_page_admin, assert_belongs_to_page, user_administers_page
+from core.authz import require_page_admin, assert_belongs_to_page, user_administers_page, is_main_admin
 from models.user import User
+from models.enums import AD_VISIBILITIES, AdVisibility
 from models.page import Page
 from models.course import Course
 from models.opportunity import (
@@ -29,6 +30,27 @@ from models.opportunity import (
     OPPORTUNITY_STATUSES,
 )
 from models.social import Follow, Notification, OpportunityLike, LikeResponse
+
+def _assert_may_set_visibility(value: Optional[str], user: User) -> None:
+    """Validate the visibility value, and gate the platform-wide one.
+
+    Running on every institute's page is inventory the PLATFORM owns, not
+    something an institute grants itself — otherwise any page admin could
+    promote their own vacancy onto every competitor's page for free. Main
+    Admin only, mirroring PLATFORM_ONLY_PAGE_FIELDS in models/page.py.
+    """
+    if value is None:
+        return
+    if value not in AD_VISIBILITIES:
+        raise HTTPException(
+            status_code=422, detail=f"visibility must be one of {AD_VISIBILITIES}"
+        )
+    if value == AdVisibility.PLATFORM.value and not is_main_admin(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Main Admin can run an ad across every institute page",
+        )
+
 
 router = APIRouter(prefix="/pages/{page_id}/opportunities", tags=["Opportunities"])
 public_router = APIRouter(prefix="/opportunities", tags=["Opportunities"])
@@ -104,6 +126,7 @@ async def create_opportunity(
         raise HTTPException(status_code=422, detail=f"type must be one of {OPPORTUNITY_TYPES}")
     if payload.status not in OPPORTUNITY_STATUSES:
         raise HTTPException(status_code=422, detail=f"status must be one of {OPPORTUNITY_STATUSES}")
+    _assert_may_set_visibility(payload.visibility, current_user)
 
     # A linked course must belong to this same institute.
     if payload.course_id:
@@ -140,6 +163,7 @@ async def update_opportunity(
     payload: OpportunityUpdate,
     page: Page = Depends(require_page_admin),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     opp = await _load(db, opportunity_id)
     assert_belongs_to_page(opp, page.id, "Opportunity")
@@ -147,6 +171,8 @@ async def update_opportunity(
     data = payload.model_dump(exclude_unset=True)
     if "status" in data and data["status"] not in OPPORTUNITY_STATUSES:
         raise HTTPException(status_code=422, detail=f"status must be one of {OPPORTUNITY_STATUSES}")
+    if "visibility" in data:
+        _assert_may_set_visibility(data["visibility"], current_user)
     if data.get("course_id"):
         course = (
             await db.execute(select(Course).where(Course.id == data["course_id"]))
@@ -217,10 +243,18 @@ async def list_public_opportunities(
     current_user: Optional[User] = Depends(get_optional_user),
     type_filter: Optional[str] = Query(None, alias="type"),
     following_only: bool = Query(False),
+    visibility: Optional[str] = Query(None),
+    exclude_page_id: Optional[str] = Query(None),
     limit: int = Query(30, le=100),
     offset: int = Query(0, ge=0),
 ):
-    """Backs the feed. Only Published opportunities on enabled pages, ever."""
+    """Backs the feed, and the sponsored rail on institute pages.
+
+    `visibility=platform` narrows to the ads a Main Admin has cleared to run on
+    other institutes' pages; `exclude_page_id` drops the page doing the asking,
+    since a page advertising to its own visitors is just its Opportunities
+    section again. The feed passes neither and so is unaffected.
+    """
     stmt = (
         select(Opportunity)
         .join(Page, Page.id == Opportunity.page_id)
@@ -228,6 +262,10 @@ async def list_public_opportunities(
     )
     if type_filter:
         stmt = stmt.where(Opportunity.type == type_filter)
+    if visibility:
+        stmt = stmt.where(Opportunity.visibility == visibility)
+    if exclude_page_id:
+        stmt = stmt.where(Opportunity.page_id != exclude_page_id)
     if following_only:
         if not current_user:
             return []

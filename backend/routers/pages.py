@@ -34,7 +34,8 @@ from core.authz import (
     require_main_admin,
     require_page_admin,
     user_administers_page,
-    pages_administered_by,
+    pages_where_user_is_member,
+    user_is_page_member,
     follower_count,
     is_main_admin,
 )
@@ -226,6 +227,10 @@ async def create_page(
         **PageResponse.model_validate(page).model_dump(),
         admins=await _admin_rows(db, page.id),
         is_page_admin=True,
+        # A Main Admin creating a page for someone else is not on its team, so
+        # this is resolved rather than assumed — it decides whether the client
+        # offers them the Institute Console for a page that is not theirs.
+        is_page_member=await user_is_page_member(db, admin, page.id),
         followers_count=0,
     )
 
@@ -249,7 +254,7 @@ async def list_my_pages(
     current_user: User = Depends(get_current_active_user),
 ):
     """Backs the Institute Console: which institutes may I manage?"""
-    return await pages_administered_by(db, current_user)
+    return await pages_where_user_is_member(db, current_user)
 
 
 @router.get("/public", response_model=List[PageResponse])
@@ -287,6 +292,9 @@ async def _public_page_response(
     is_admin_here = (
         await user_administers_page(db, current_user, page.id) if current_user else False
     )
+    is_member_here = (
+        await user_is_page_member(db, current_user, page.id) if current_user else False
+    )
     if not page.is_enabled and not is_admin_here:
         raise HTTPException(status_code=404, detail="Institute page not found")
 
@@ -302,6 +310,7 @@ async def _public_page_response(
         **PageResponse.model_validate(page).model_dump(),
         admins=await _admin_rows(db, page.id) if is_admin_here else [],
         is_page_admin=is_admin_here,
+        is_page_member=is_member_here,
         is_following=following,
         followers_count=await follower_count(db, page.id),
     )
@@ -359,12 +368,20 @@ async def get_page_by_slug(
 async def get_page(
     page: Page = Depends(require_page_admin),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """Management view — only for people who administer this page."""
+    """Management view — only for people who administer this page.
+
+    `is_page_admin` is unconditionally True because `require_page_admin` has
+    already run. `is_page_member` is resolved for real: a Main Admin reaching
+    this endpoint administers the page without it being theirs, and the client
+    uses that distinction to decide whether to offer the Institute Console.
+    """
     return PageDetailResponse(
         **PageResponse.model_validate(page).model_dump(),
         admins=await _admin_rows(db, page.id),
         is_page_admin=True,
+        is_page_member=await user_is_page_member(db, current_user, page.id),
         followers_count=await follower_count(db, page.id),
     )
 

@@ -222,7 +222,13 @@ class PageDetailResponse(PageResponse):
     """Adds the caller's own relationship to the page, so the frontend never
     has to work out permissions for itself."""
     admins: List[PageAdminResponse] = []
+    # MAY I WRITE to this page — true for a Main Admin on every page.
     is_page_admin: bool = False
+    # IS THIS PAGE MINE — a row in page_admins, so false for a Main Admin who
+    # is not on this page's team. The two are separate because the answer to
+    # the first must not decide what the UI calls "my institute"; see
+    # core/authz.py user_is_page_member.
+    is_page_member: bool = False
     is_following: bool = False
     followers_count: int = 0
 

@@ -21,6 +21,7 @@ from datetime import date
 import uuid
 
 from core.database import Base
+from models.enums import AD_VISIBILITIES, AdVisibility
 
 OPPORTUNITY_TYPES = ["admission", "job"]
 OPPORTUNITY_STATUSES = ["Draft", "Published", "Expired", "Closed"]
@@ -59,6 +60,11 @@ class Opportunity(Base):
     apply_before = Column(Date)
 
     apply_url = Column(String)
+
+    # Where this ad may run — see models/enums.py AdVisibility. Defaults to
+    # "page", which is exactly how every ad behaved before this column existed,
+    # so no existing row changes meaning.
+    visibility = Column(String, default=AdVisibility.PAGE.value, nullable=False, index=True)
 
     # Ordering on the public page; 1 = top. "Push to top" rewrites these.
     ranking = Column(Integer, default=100)
@@ -99,6 +105,7 @@ class OpportunityCreate(BaseModel):
     apply_before: Optional[date] = None
 
     apply_url: Optional[str] = None
+    visibility: str = AdVisibility.PAGE.value
 
 
 class OpportunityUpdate(BaseModel):
@@ -121,6 +128,7 @@ class OpportunityUpdate(BaseModel):
     skills: Optional[List[str]] = None
     apply_before: Optional[date] = None
     apply_url: Optional[str] = None
+    visibility: Optional[str] = None
 
 
 class OpportunityResponse(BaseModel):
@@ -146,6 +154,7 @@ class OpportunityResponse(BaseModel):
     skills: Optional[List[str]] = None
     apply_before: Optional[date] = None
     apply_url: Optional[str] = None
+    visibility: Optional[str] = None
     ranking: Optional[int] = None
     reach: Optional[int] = None
     views: Optional[int] = None

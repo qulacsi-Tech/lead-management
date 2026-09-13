@@ -19,8 +19,10 @@ from models import opportunity     # noqa: F401
 from models import social          # noqa: F401
 from models import credit          # noqa: F401
 from models import page_enquiry    # noqa: F401
+from models import study_paper    # noqa: F401
 
 ALL_MODEL_MODULES = (
     "user", "revoked_token", "student", "mentor", "institute", "enquiry",
     "page", "course", "opportunity", "social", "credit", "page_enquiry",
+    "study_paper",
 )

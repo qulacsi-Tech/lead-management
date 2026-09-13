@@ -180,11 +180,57 @@ function NoInstituteAssigned() {
   );
 }
 
-function InstituteShell() {
-  const { page, isInstituteAdmin } = useInstitute();
-  const { displayName } = useAuth();
+/** A Main Admin is not an Institute Admin.
+ *
+ * They can write to every page, so the old "you administer nothing" copy was
+ * both wrong and unhelpful — and before this the console simply opened on
+ * whichever institute sorted first, implying they ran it. Institutes are
+ * managed from /admin/pages, so point there. */
+function NotYourConsole() {
+  return (
+    <div className="min-h-screen bg-surface flex items-center justify-center p-8">
+      <Card className="p-8 max-w-lg text-center">
+        <span className="material-symbols-outlined text-on-surface-variant/60 text-[44px]">
+          shield_person
+        </span>
+        <h2 className="text-lg font-bold text-on-surface mt-2 mb-1">
+          The Institute Console isn&apos;t yours to open
+        </h2>
+        <p className="text-sm text-on-surface-variant mb-5">
+          You&apos;re signed in as a Platform Admin. This console belongs to the admins of one
+          specific institute — you aren&apos;t on any institute&apos;s admin team, so there is
+          nothing here to manage. Institutes are administered from Institute Pages in the Platform
+          Admin portal.
+        </p>
+        <div className="flex gap-2 justify-center">
+          <Link to="/admin/pages"><Button icon="shield_person">Go to Institute Pages</Button></Link>
+          <Link to="/"><Button variant="outline">Back to Connectedus</Button></Link>
+        </div>
+      </Card>
+    </div>
+  );
+}
 
-  if (!isInstituteAdmin) return <NoInstituteAssigned />;
+function InstituteShell() {
+  const { page, isInstituteAdmin, loading } = useInstitute();
+  const { displayName, role } = useAuth();
+
+  // Hold the frame while /pages/mine is in flight. Without this a real
+  // institute admin sees "you don't administer an Institute Page" flash before
+  // their own console renders, because the list starts empty.
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <p className="text-xs text-on-surface-variant m-0">Loading your institute…</p>
+      </div>
+    );
+  }
+
+  // Membership is the gate, not write access. A Main Admin passes every
+  // authorization check in the app and still does not belong here.
+  if (!isInstituteAdmin) {
+    return role === 'admin' ? <NotYourConsole /> : <NoInstituteAssigned />;
+  }
 
   return (
     <div className="min-h-screen bg-surface">

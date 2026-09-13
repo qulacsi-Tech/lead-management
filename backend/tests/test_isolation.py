@@ -649,3 +649,91 @@ async def test_saving_org_details_marks_the_account_as_an_organisation(app_clien
         "name": "Flagged Institute", "type": "School", "city": "Gwalior",
     })
     assert (await app_client.get("/api/profile/me", headers=user)).json()["is_organization"] is True
+
+
+# ---------------------------------------------------------------------------
+# "May I write to this page" is NOT "is this page mine"
+#
+# A Main Admin passes every authorization check in the app. Treating that as
+# ownership put Manage / Notices / Vacancies on every institute's public page
+# for platform staff, and opened the Institute Console on whichever institute
+# sorted first — implying they ran it.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_main_admin_may_write_but_no_page_is_theirs(app_client, world):
+    platform, page_a = world["platform"], world["page_a"]
+
+    detail = (await app_client.get(f"/api/pages/{page_a['id']}", headers=platform)).json()
+    assert detail["is_page_admin"] is True, "platform staff must still be able to write"
+    assert detail["is_page_member"] is False, "but the institute is not theirs"
+
+
+@pytest.mark.asyncio
+async def test_real_page_admin_is_both(app_client, world):
+    detail = (await app_client.get(
+        f"/api/pages/{world['page_a']['id']}", headers=world["admin_a"]
+    )).json()
+    assert detail["is_page_admin"] is True
+    assert detail["is_page_member"] is True
+
+
+@pytest.mark.asyncio
+async def test_public_page_view_separates_the_two(app_client, world):
+    """The public page keys its owner controls off `is_page_member`, so this is
+    the response that decides whether the console is offered."""
+    platform, admin_a, page_a = world["platform"], world["admin_a"], world["page_a"]
+    path = f"/api/pages/slug/{page_a['slug']}"
+
+    as_platform = (await app_client.get(path, headers=platform)).json()
+    assert as_platform["is_page_admin"] is True
+    assert as_platform["is_page_member"] is False
+
+    as_owner = (await app_client.get(path, headers=admin_a)).json()
+    assert as_owner["is_page_member"] is True
+
+    anonymous = (await app_client.get(path)).json()
+    assert anonymous["is_page_admin"] is False
+    assert anonymous["is_page_member"] is False
+
+
+@pytest.mark.asyncio
+async def test_my_pages_is_empty_for_a_main_admin_on_nobodys_team(app_client, world):
+    """`/pages/mine` used to return every page to a Main Admin, which is what
+    let the Institute Console open for them at all."""
+    mine = (await app_client.get("/api/pages/mine", headers=world["platform"])).json()
+    assert mine == [], f"expected no pages, got {[p['name'] for p in mine]}"
+
+
+@pytest.mark.asyncio
+async def test_a_main_admin_added_to_a_page_does_get_it(app_client, world):
+    """The rule is membership, not role — a Main Admin genuinely assigned to a
+    page is on its team like anyone else."""
+    platform, page_b = world["platform"], world["page_b"]
+
+    assigned = await app_client.post(
+        f"/api/pages/{page_b['id']}/admins",
+        headers=platform,
+        json={"email": "platform@connectedus.example.com", "role": "ADMIN"},
+    )
+    assert assigned.status_code == 201, assigned.text
+
+    mine = (await app_client.get("/api/pages/mine", headers=platform)).json()
+    assert [p["name"] for p in mine] == ["Institute B"]
+
+    detail = (await app_client.get(f"/api/pages/{page_b['id']}", headers=platform)).json()
+    assert detail["is_page_member"] is True
+
+    # Still not a member of the page they were never added to.
+    other = (await app_client.get(f"/api/pages/{world['page_a']['id']}", headers=platform)).json()
+    assert other["is_page_member"] is False
+
+    # `world` is module-scoped, so this membership would otherwise leak into
+    # any test that ran after it and quietly invalidate the assertion that a
+    # Main Admin is on nobody's team.
+    me = (await app_client.get("/api/profile/me", headers=platform)).json()
+    revoked = await app_client.delete(
+        f"/api/pages/{page_b['id']}/admins/{me['id']}", headers=platform
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert (await app_client.get("/api/pages/mine", headers=platform)).json() == []

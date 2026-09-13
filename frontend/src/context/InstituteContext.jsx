@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { fetchMyPages } from '../Api/Api';
-import { pagesAdministeredBy, findPageBySlug } from '../pages/mockData';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 
 const InstituteContext = createContext(null);
@@ -24,7 +23,9 @@ export function InstituteProvider({ children }) {
       const res = await fetchMyPages();
       setApiPages(Array.isArray(res) ? res : []);
     } catch (err) {
-      console.warn('Failed to fetch /pages/mine, falling back to mock data', err);
+      // No fallback. A failed request means "we do not know", and the only
+      // safe reading of that is "no pages" — see the note on myPages below.
+      console.warn('Failed to fetch /pages/mine', err);
       setApiPages([]);
     } finally {
       setLoading(false);
@@ -36,22 +37,25 @@ export function InstituteProvider({ children }) {
     loadPages();
   }, [loadPages, revision]);
 
-  const mockFallbackPages = useMemo(
-    () => pagesAdministeredBy(user?.email),
-    [user?.email, revision]
+  /**
+   * The server is the sole authority on which pages are this user's.
+   *
+   * There was a fallback here that matched the signed-in email against a
+   * bundled `mockPages` array whenever the API returned nothing — the same
+   * class of bug as the fabricated offline session removed from AuthContext.
+   * It meant anyone whose email appeared in that fixture got an Institute
+   * Console, and it fired precisely when the real answer was "you administer
+   * no pages". An empty list must stay an empty list.
+   */
+  const myPages = apiPages;
+
+  // The pinned page only counts while it is still one of this user's — a slug
+  // left in localStorage by a previous account, or a page whose admin was
+  // since revoked, must not select anything.
+  const page = useMemo(
+    () => myPages.find((p) => p.slug === activeSlug) || myPages[0] || null,
+    [activeSlug, myPages],
   );
-
-  const myPages = useMemo(() => {
-    return apiPages.length > 0 ? apiPages : mockFallbackPages;
-  }, [apiPages, mockFallbackPages]);
-
-  const page = useMemo(() => {
-    const pinned = activeSlug
-      ? myPages.find((p) => p.slug === activeSlug) || findPageBySlug(activeSlug)
-      : null;
-    const stillMine = pinned && myPages.some((p) => p.slug === pinned.slug);
-    return stillMine ? pinned : myPages[0] || null;
-  }, [activeSlug, myPages]);
 
   const switchPage = useCallback((slug) => setActiveSlug(slug), [setActiveSlug]);
 
@@ -93,9 +97,8 @@ export function useIsInstituteAdmin() {
       .then((res) => {
         setIsAdmin(Array.isArray(res) && res.length > 0);
       })
-      .catch(() => {
-        setIsAdmin(pagesAdministeredBy(user?.email).length > 0);
-      });
+      // A failed request is not evidence of access.
+      .catch(() => setIsAdmin(false));
   }, [user]);
 
   return isAdmin;
