@@ -6,7 +6,7 @@ import Modal from '../../components/ui/Modal';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import DataTable, { RowAction } from '../../components/ui/DataTable';
-import { Input, Textarea, Select, Label, FormGroup } from '../../components/ui/Field';
+import { Input, Select, Label, FormGroup } from '../../components/ui/Field';
 import { useInstitute } from '../../context/InstituteContext';
 import {
   fetchPageOpportunities,
@@ -15,7 +15,9 @@ import {
   deleteOpportunity,
   pushToTopOpportunity,
 } from '../../Api/Api';
-import { EMPLOYMENT_TYPES, upsertOpportunity, removeOpportunity } from '../mockData';
+import { EMPLOYMENT_TYPES } from '../../constants/taxonomy';
+import { upsertOpportunity, removeOpportunity } from '../mockData';
+import AdCopyFields from '../../components/ui/AdCopyFields';
 
 const TABS = ['All', 'Draft', 'Published', 'Expired', 'Closed'];
 
@@ -28,9 +30,9 @@ const CONFIG = {
     icon: 'campaign',
     emptyTitle: 'No admission notices yet',
     emptyBody: 'Announce an open admission cycle — it becomes a Sell Lead visible to students following your page.',
-    titleOf: (o) => o.course || o.title,
+    titleOf: (o) => o.title || o.session,
     blank: {
-      type: 'admission', course: '', courseId: '', session: '', startDate: '', endDate: '',
+      type: 'admission', title: '', courseId: '', session: '', startDate: '', endDate: '',
       eligibility: '', description: '', applyUrl: '', status: 'Draft',
     },
   },
@@ -42,9 +44,9 @@ const CONFIG = {
     icon: 'work',
     emptyTitle: 'No job vacancies yet',
     emptyBody: 'Post an opening — it becomes a Sell Lead visible to professionals on Connectedus.',
-    titleOf: (o) => o.position || o.title,
+    titleOf: (o) => o.title || o.position,
     blank: {
-      type: 'job', position: '', subject: '', department: '', employmentType: EMPLOYMENT_TYPES[0],
+      type: 'job', title: '', position: '', subject: '', department: '', employmentType: EMPLOYMENT_TYPES[0],
       location: '', experience: '', qualification: '', salary: '', skills: [], applyBefore: '',
       applyUrl: '', description: '', status: 'Draft',
     },
@@ -99,7 +101,7 @@ export default function ManageOpportunities({ type }) {
       try {
         const payload = {
           type: draft.type,
-          title: draft.type === 'admission' ? (draft.course || draft.title || 'Admission Notice') : (draft.position || draft.title || 'Job Opening'),
+          title: draft.title || (draft.type === 'admission' ? 'Admission Notice' : 'Job Opening'),
           description: draft.description,
           status: draft.status || 'Draft',
           session: draft.session || undefined,
@@ -333,7 +335,6 @@ export default function ManageOpportunities({ type }) {
                         setEditing((f) => ({
                           ...f,
                           courseId: e.target.value,
-                          course: course ? course.name : f.course,
                           eligibility: course?.eligibility || f.eligibility,
                         }));
                       }}
@@ -341,9 +342,6 @@ export default function ManageOpportunities({ type }) {
                       <option value="">Not linked to a course</option>
                       {page.courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </Select>
-                  </FormGroup>
-                  <FormGroup label="Notice Title">
-                    <Input required value={editing.course} onChange={set('course')} placeholder="e.g. JEE Advanced Crash Course" />
                   </FormGroup>
                   <div className="grid grid-cols-3 gap-3">
                     <FormGroup label="Session">
@@ -362,7 +360,7 @@ export default function ManageOpportunities({ type }) {
                 </>
               ) : (
                 <>
-                  <FormGroup label="Job Title">
+                  <FormGroup label="Position">
                     <Input required value={editing.position} onChange={set('position')} placeholder="e.g. Physics Faculty" />
                   </FormGroup>
                   <div className="grid grid-cols-2 gap-3">
@@ -430,11 +428,21 @@ export default function ManageOpportunities({ type }) {
                 </>
               )}
 
-              <FormGroup label="Description">
-                <Textarea rows={4} value={editing.description} onChange={set('description')} placeholder="Details applicants should know" />
-              </FormGroup>
-              <FormGroup label="Application Link / Email">
-                <Input value={editing.applyUrl} onChange={set('applyUrl')} placeholder="www.example.in/apply or careers@example.in" />
+              <AdCopyFields
+                section={type}
+                title={editing.title}
+                description={editing.description}
+                onTitleChange={(v) => setEditing((f) => ({ ...f, title: v }))}
+                onDescriptionChange={(v) => setEditing((f) => ({ ...f, description: v }))}
+                instituteName={page.name}
+              />
+
+              {/* Applications are taken on the page itself (see the Apply
+                  dialog on the public institute page), so an external link is
+                  only for institutes that must route elsewhere. Client
+                  feedback 22 Sep 2026: do not redirect the applicant away. */}
+              <FormGroup label="External application link (optional)">
+                <Input value={editing.applyUrl} onChange={set('applyUrl')} placeholder="Leave blank — applicants apply on your page" />
               </FormGroup>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-outline-variant">

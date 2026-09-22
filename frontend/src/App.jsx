@@ -36,6 +36,7 @@ import InstituteDashboard from './pages/institute/InstituteDashboard';
 import ManageCourses from './pages/institute/ManageCourses';
 import ManageOpportunities from './pages/institute/ManageOpportunities';
 import InstituteEnquiries from './pages/institute/InstituteEnquiries';
+import InstituteApplications from './pages/institute/InstituteApplications';
 
 /** Platform-level gate: only the Main/Platform Admin reaches /admin. */
 function RequireAdmin({ children }) {
@@ -139,6 +140,9 @@ function AppRoutes() {
         <Route path="notices" element={<ManageOpportunities type="admission" />} />
         <Route path="jobs" element={<ManageOpportunities type="job" />} />
         <Route path="enquiries" element={<InstituteEnquiries />} />
+        {/* People who clicked Apply on a notice or vacancy. Separate from
+            enquiries — see pages/institute/InstituteApplications.jsx. */}
+        <Route path="applications" element={<InstituteApplications />} />
       </Route>
 
       {/* PLATFORM-OWNED: Main Admin. Uses the same unified login above — no

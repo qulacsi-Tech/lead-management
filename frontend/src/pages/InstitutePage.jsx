@@ -13,6 +13,7 @@ import { useLoginPrompt } from '../context/LoginPrompt';
 import PageHeader from './PageHeader';
 import SponsoredAdRail from '../components/SponsoredAdRail';
 import StudyMaterialSection from '../components/StudyMaterialSection';
+import ApplyModal from '../components/ApplyModal';
 import {
   ApiError,
   resolveAssetUrl,
@@ -26,6 +27,7 @@ import {
   fetchPublicOpportunities,
   fetchPublicPapers,
   fetchPublicPages,
+  fetchMyApplication,
 } from '../Api/Api';
 
 function normalizeHighlights(options, items) {
@@ -98,7 +100,7 @@ function formatDate(value) {
 // Public, read-only. Editing an opportunity belongs to the Institute Console
 // (/institute/notices, /institute/jobs) so that the public page has a single
 // job: showing published content to visitors.
-function OpportunityCard({ op }) {
+function OpportunityCard({ op, onApply, applied }) {
   const isAdmission = op.type === 'admission';
 
   return (
@@ -111,7 +113,9 @@ function OpportunityCard({ op }) {
       <h4 className="text-sm font-bold text-on-surface mb-1">
         {isAdmission ? op.title : op.position || op.title}
       </h4>
-      {op.description && <p className="text-xs text-on-surface-variant mb-3">{op.description}</p>}
+      {op.description && (
+        <p className="text-xs text-on-surface-variant mb-3 whitespace-pre-line">{op.description}</p>
+      )}
       <div className="grid grid-cols-2 gap-y-1 text-xs text-on-surface-variant mb-3">
         {isAdmission ? (
           <>
@@ -129,9 +133,21 @@ function OpportunityCard({ op }) {
           </>
         )}
       </div>
-      {op.apply_url && (
-        <p className="text-xs text-primary mb-0">Apply: {op.apply_url}</p>
-      )}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Button size="sm" onClick={onApply} disabled={applied} icon={applied ? 'check' : 'send'}>
+          {applied ? 'Applied' : 'Apply'}
+        </Button>
+        {op.apply_url && (
+          <a
+            href={/^https?:\/\//.test(op.apply_url) ? op.apply_url : `https://${op.apply_url}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-on-surface-variant underline"
+          >
+            Institute&apos;s own application page
+          </a>
+        )}
+      </div>
     </Card>
   );
 }
@@ -147,6 +163,19 @@ function EnquiryModal({ open, onClose, page, courses, course, setCourse, special
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Client feedback 22 Sep 2026, row 3: "these categories should appear in the
+  // enquiry form so when a student submits enquiry they can see and select the
+  // relevant courses."
+  //
+  // This is what the form asks for *first*, because it works from the moment
+  // the page exists. The Course dropdown below only has entries once the
+  // institute has built its catalogue, so an institute with no Course rows
+  // used to present an enquiry form whose one required field was empty.
+  const [category, setCategory] = useState('');
+  const [subcategory, setSubcategory] = useState('');
+
+  const declared = page.course_categories || [];
+  const subcategoriesFor = declared.find((c) => c.category === category)?.subcategories || [];
 
   const selectedCourse = courses.find((c) => c.name === course);
   // Specializations come from the institute's own course record when it has
@@ -160,6 +189,8 @@ function EnquiryModal({ open, onClose, page, courses, course, setCourse, special
     // Reset after the close animation would run, so a reopen starts fresh.
     setTimeout(() => {
       setForm({ name: '', email: '', phone: '', state: '', city: '' });
+      setCategory('');
+      setSubcategory('');
       setSubmitted(false);
       setError('');
     }, 200);
@@ -184,6 +215,8 @@ function EnquiryModal({ open, onClose, page, courses, course, setCourse, special
         course_id: selectedCourse?.id,
         course_name: course || undefined,
         specialization: specialization || undefined,
+        course_category: category || undefined,
+        course_subcategory: subcategory || undefined,
       });
       setSubmitted(true);
     } catch (err) {
@@ -200,7 +233,7 @@ function EnquiryModal({ open, onClose, page, courses, course, setCourse, special
           <span className="material-symbols-outlined text-secondary text-[44px]">check_circle</span>
           <h3 className="text-base font-bold text-on-surface mt-2 mb-1">Enquiry Submitted</h3>
           <p className="text-sm text-on-surface-variant mb-4">
-            {page.name} will contact you shortly about {course || 'your enquiry'}.
+            {page.name} will contact you shortly about {course || subcategory || category || 'your enquiry'}.
           </p>
           <Button size="sm" onClick={close}>Close</Button>
         </div>
@@ -218,20 +251,48 @@ function EnquiryModal({ open, onClose, page, courses, course, setCourse, special
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mt-4 mb-3">
-            <FormGroup label="Select Course">
-              <Select value={course} onChange={(e) => { setCourse(e.target.value); setSpecialization(''); }}>
-                <option value="" disabled>Choose a course</option>
-                {courses.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </Select>
-            </FormGroup>
-            <FormGroup label="Specialization">
-              <Select value={specialization} onChange={(e) => setSpecialization(e.target.value)} disabled={!specializations.length}>
-                <option value="" disabled>{specializations.length ? 'Choose one' : 'Select a course first'}</option>
-                {specializations.map((s) => <option key={s} value={s}>{s}</option>)}
-              </Select>
-            </FormGroup>
-          </div>
+          {declared.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 mt-4 mb-3">
+              <FormGroup label="Course Category">
+                <Select
+                  value={category}
+                  onChange={(e) => { setCategory(e.target.value); setSubcategory(''); }}
+                >
+                  <option value="">Choose a category</option>
+                  {declared.map((c) => <option key={c.category} value={c.category}>{c.category}</option>)}
+                </Select>
+              </FormGroup>
+              <FormGroup label="Sub Category">
+                <Select
+                  value={subcategory}
+                  onChange={(e) => setSubcategory(e.target.value)}
+                  disabled={!subcategoriesFor.length}
+                >
+                  <option value="">
+                    {subcategoriesFor.length ? 'Choose one' : 'Select a category first'}
+                  </option>
+                  {subcategoriesFor.map((sub) => <option key={sub} value={sub}>{sub}</option>)}
+                </Select>
+              </FormGroup>
+            </div>
+          )}
+
+          {courses.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 mt-4 mb-3">
+              <FormGroup label="Specific Course (optional)">
+                <Select value={course} onChange={(e) => { setCourse(e.target.value); setSpecialization(''); }}>
+                  <option value="">Not sure / any</option>
+                  {courses.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </Select>
+              </FormGroup>
+              <FormGroup label="Specialization">
+                <Select value={specialization} onChange={(e) => setSpecialization(e.target.value)} disabled={!specializations.length}>
+                  <option value="">{specializations.length ? 'Choose one' : 'Select a course first'}</option>
+                  {specializations.map((s) => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </FormGroup>
+            </div>
+          )}
 
           <form onSubmit={submit} className="space-y-3">
             <Input required placeholder="Full Name" value={form.name} onChange={set('name')} />
@@ -244,7 +305,11 @@ function EnquiryModal({ open, onClose, page, courses, course, setCourse, special
             {error && (
               <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{error}</p>
             )}
-            <Button type="submit" className="w-full" disabled={!course || saving}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={saving || (declared.length > 0 && !category && !course)}
+            >
               {saving ? 'Submitting…' : 'Submit Enquiry'}
             </Button>
           </form>
@@ -292,6 +357,16 @@ export default function InstitutePage() {
   const [page, setPage] = useState(null);
   const [courses, setCourses] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
+  // Which of the three ad tabs is showing. Client feedback 22 Sep 2026, row 5:
+  // "How will these options (Ad notice / vacancy / guess paper) be displayed on
+  // the landing page? ... you should create separate tabs on the same landing
+  // page." The default is resolved below, after the lists have loaded, so the
+  // page never opens on an empty tab.
+  const [adTab, setAdTab] = useState(null);
+  const [applyTo, setApplyTo] = useState(null);
+  // Opportunity ids the visitor has already applied to, so the button can say
+  // so instead of failing on submit with a duplicate.
+  const [appliedIds, setAppliedIds] = useState(() => new Set());
   const [papers, setPapers] = useState([]);
   // [{ ...opportunity, org }] — the advertiser's name is resolved when the
   // rail loads, because OpportunityResponse carries only its page_id.
@@ -328,8 +403,22 @@ export default function InstitutePage() {
         fetchPagePapers(detail.id),
       ]);
       setCourses(c.status === 'fulfilled' ? c.value : []);
-      setOpportunities(o.status === 'fulfilled' ? o.value : []);
+      const ops = o.status === 'fulfilled' ? o.value : [];
+      setOpportunities(ops);
       setPapers(p.status === 'fulfilled' && Array.isArray(p.value) ? p.value : []);
+
+      // Which of these the visitor has already applied to. Resolved per
+      // opportunity because the answer depends on the caller, so it cannot be
+      // cached on the opportunity itself. Anonymous callers get null for every
+      // one and the set stays empty.
+      const mine = await Promise.allSettled(ops.map((op) => fetchMyApplication(op.id)));
+      setAppliedIds(
+        new Set(
+          mine
+            .filter((r) => r.status === 'fulfilled' && r.value)
+            .map((r) => r.value.opportunity_id),
+        ),
+      );
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) setNotFound(true);
       else setError(err instanceof ApiError ? err.message : 'Could not load this institute page.');
@@ -432,6 +521,27 @@ export default function InstitutePage() {
   // Platform staff: full write access, but this institute is not theirs. They
   // get a link to the screen actually built for it instead of the console.
   const isPlatformAdmin = !isMyPage && !!page.is_page_admin;
+
+  // --- The three ad tabs -------------------------------------------------
+  // Notices, vacancies and papers are three different things a visitor comes
+  // for; stacking them in one scrolling column meant a student looking for a
+  // guess paper scrolled past every job vacancy to reach it.
+  const notices = opportunities.filter((o) => o.type === 'admission');
+  const vacancies = opportunities.filter((o) => o.type === 'job');
+  const paperCount = papers.length + sharedPapers.length;
+  const AD_TABS = [
+    { key: 'admission', label: 'Admission Notices', icon: 'campaign', count: notices.length },
+    { key: 'job', label: 'We Are Hiring', icon: 'work', count: vacancies.length },
+    { key: 'paper', label: 'Guess Papers', icon: 'description', count: paperCount },
+  ];
+  // Open on the first tab that actually has something. An institute admin
+  // always sees all three, because empty ones are where they add content.
+  const visibleAdTabs = isMyPage ? AD_TABS : AD_TABS.filter((t) => t.count > 0);
+  const activeAdTab =
+    visibleAdTabs.find((t) => t.key === adTab)?.key || visibleAdTabs[0]?.key || null;
+
+  const declaredCategories = page.course_categories || [];
+
   const content = page.content || {};
   const gallery = page.gallery || [];
   const banners = page.banners || [];
@@ -608,6 +718,45 @@ export default function InstitutePage() {
           )}
 
 
+          {/* What this institute teaches, as declared when the page was created.
+              Client feedback 22 Sep 2026, row 3: the categories chosen at
+              creation "are displayed on the institute's landing page". Shown
+              above the course catalogue because it is the broader statement,
+              and because it is present even when no Course rows exist yet. */}
+          {declaredCategories.length > 0 && (
+            <Card className="p-5">
+              <h2 className="text-sm font-bold text-on-surface mb-3">Courses We Offer</h2>
+              <div className="space-y-3">
+                {declaredCategories.map(({ category, subcategories }) => (
+                  <div key={category}>
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <Badge tone="primary">{category}</Badge>
+                      <button
+                        type="button"
+                        onClick={() => openEnquiry()}
+                        className="bg-transparent border-none p-0 text-[11px] text-primary font-semibold cursor-pointer"
+                      >
+                        Enquire
+                      </button>
+                    </div>
+                    {subcategories?.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pl-1">
+                        {subcategories.map((sub) => (
+                          <span
+                            key={sub}
+                            className="text-xs bg-surface-container-high px-2.5 py-1 rounded-lg text-on-surface-variant"
+                          >
+                            {sub}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
           {/* Courses — INSTITUTE-OWNED, managed at /institute/courses */}
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
@@ -647,35 +796,90 @@ export default function InstitutePage() {
             )}
           </Card>
 
-          <Card className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-on-surface">Opportunities</h2>
-              {isMyPage && (
-                <div className="flex gap-2">
-                  <Link to="/institute/notices">
-                    <Button size="sm" variant="soft" icon="campaign">Notices</Button>
+          {/* Admission notices, vacancies and guess papers as three tabs of one
+              section rather than three stacked cards — client feedback
+              22 Sep 2026, row 5. */}
+          {activeAdTab && (
+            <Card className="p-5">
+              <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                <div className="flex flex-wrap gap-2">
+                  {visibleAdTabs.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setAdTab(t.key)}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                        activeAdTab === t.key
+                          ? 'bg-primary text-on-primary border-primary'
+                          : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">{t.icon}</span>
+                      {t.label}
+                      {t.count > 0 && (
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            activeAdTab === t.key ? 'bg-on-primary/20' : 'bg-surface-container-high'
+                          }`}
+                        >
+                          {t.count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {isMyPage && (
+                  <Link to={activeAdTab === 'job' ? '/institute/jobs' : '/institute/notices'}>
+                    <Button size="sm" variant="ghost" icon="tune">Manage</Button>
                   </Link>
-                  <Link to="/institute/jobs">
-                    <Button size="sm" variant="soft" icon="work">Vacancies</Button>
-                  </Link>
+                )}
+              </div>
+
+              {activeAdTab === 'admission' && (
+                <div className="space-y-3">
+                  {notices.length > 0 ? (
+                    notices.map((op) => (
+                      <OpportunityCard
+                        key={op.id}
+                        op={op}
+                        onApply={() => setApplyTo(op)}
+                        applied={appliedIds.has(op.id)}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-sm text-on-surface-variant mb-0">No admission notices yet.</p>
+                  )}
                 </div>
               )}
-            </div>
-            <div className="space-y-3">
-              {opportunities.length > 0 ? (
-                opportunities.map((op) => <OpportunityCard key={op.id} op={op} />)
-              ) : (
-                <p className="text-sm text-on-surface-variant mb-0">No opportunities posted yet.</p>
-              )}
-            </div>
-          </Card>
 
-          <StudyMaterialSection
-            papers={papers}
-            sharedPapers={sharedPapers}
-            isMyPage={isMyPage}
-            onRequireLogin={openLogin}
-          />
+              {activeAdTab === 'job' && (
+                <div className="space-y-3">
+                  {vacancies.length > 0 ? (
+                    vacancies.map((op) => (
+                      <OpportunityCard
+                        key={op.id}
+                        op={op}
+                        onApply={() => setApplyTo(op)}
+                        applied={appliedIds.has(op.id)}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-sm text-on-surface-variant mb-0">No vacancies posted yet.</p>
+                  )}
+                </div>
+              )}
+
+              {activeAdTab === 'paper' && (
+                <StudyMaterialSection
+                  papers={papers}
+                  sharedPapers={sharedPapers}
+                  isMyPage={isMyPage}
+                  onRequireLogin={openLogin}
+                  bare
+                />
+              )}
+            </Card>
+          )}
 
           {/* Gallery — INSTITUTE-OWNED, managed at /institute/profile */}
           {gallery.length > 0 && (
@@ -841,6 +1045,16 @@ export default function InstitutePage() {
         setCourse={setCourse}
         specialization={specialization}
         setSpecialization={setSpecialization}
+      />
+      <ApplyModal
+        open={!!applyTo}
+        onClose={() => setApplyTo(null)}
+        opportunity={applyTo}
+        pageName={page.name}
+        onApplied={(application) =>
+          setAppliedIds((prev) => new Set(prev).add(application.opportunity_id))
+        }
+        onRequireLogin={openLogin}
       />
     </div>
   );

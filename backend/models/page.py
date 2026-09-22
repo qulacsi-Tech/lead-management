@@ -55,6 +55,19 @@ class Page(Base):
     # keyHighlights, facilities, campusLife, achievements.
     content = Column(JSON, default=dict)
 
+    # The course categories this institute declares it offers, chosen at
+    # creation from the platform list for its *type* (see the frontend's
+    # constants/taxonomy.js -> COURSE_CATEGORIES_BY_TYPE).
+    #
+    #     [{"category": "Medical Entrance", "subcategories": ["NEET UG", ...]}, ...]
+    #
+    # Distinct from the `courses` table: a Course is a specific programme with
+    # fees, duration and intake that the institute maintains over time, while
+    # this is the declaration of what the institute broadly teaches. It exists
+    # because the public page and the enquiry form both need something to show
+    # from the moment the page is created, before any Course row is added.
+    course_categories = Column(JSON, default=list)
+
     # --- Contact / location ---
     address = Column(String)
     city = Column(String, index=True)
@@ -134,6 +147,7 @@ class PageCreate(BaseModel):
     website: Optional[str] = None
     contact: Optional[str] = None
     affiliation: Optional[str] = None
+    course_categories: Optional[List[Dict[str, Any]]] = None
     # Optional first admin, assigned as part of creation.
     #
     # `admin_name` / `admin_password` are used ONLY when no account exists for
@@ -159,6 +173,7 @@ class PageUpdate(BaseModel):
     gallery: Optional[List[Dict[str, Any]]] = None
     social_links: Optional[Dict[str, Any]] = None
     content: Optional[Dict[str, Any]] = None
+    course_categories: Optional[List[Dict[str, Any]]] = None
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
@@ -198,6 +213,7 @@ class PageResponse(BaseModel):
     gallery: Optional[List[Dict[str, Any]]] = None
     social_links: Optional[Dict[str, Any]] = None
     content: Optional[Dict[str, Any]] = None
+    course_categories: Optional[List[Dict[str, Any]]] = None
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None

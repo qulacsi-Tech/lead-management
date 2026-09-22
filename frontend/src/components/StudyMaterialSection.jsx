@@ -33,11 +33,20 @@ function formatCount(n) {
   return Number(n || 0).toLocaleString('en-IN');
 }
 
+/**
+ * `bare` drops the outer Card and heading.
+ *
+ * On the institute's public page this now renders inside the Guess Papers tab
+ * of the ads section (client feedback 22 Sep 2026, row 5), which already
+ * supplies the card and the tab label — nesting a second titled Card inside it
+ * would repeat the heading. Everywhere else it keeps its own chrome.
+ */
 export default function StudyMaterialSection({
   papers = [],
   sharedPapers = [],
   isMyPage,
   onRequireLogin,
+  bare = false,
 }) {
   // Per-paper state so one failed download does not blank the whole list.
   const [counts, setCounts] = useState({});
@@ -107,9 +116,11 @@ export default function StudyMaterialSection({
     );
   };
 
-  return (
-    <Card className="p-5">
-      <h2 className="text-sm font-bold text-on-surface mb-1">Guess Papers &amp; Study Material</h2>
+  const body = (
+    <>
+      {!bare && (
+        <h2 className="text-sm font-bold text-on-surface mb-1">Guess Papers &amp; Study Material</h2>
+      )}
       <p className="text-xs text-on-surface-variant mb-3">
         Free to download. No enquiry form, and your details are never shared with the institute.
       </p>
@@ -129,6 +140,8 @@ export default function StudyMaterialSection({
           <div className="space-y-3">{sharedPapers.map((p) => renderPaper(p, { showOrg: true }))}</div>
         </div>
       )}
-    </Card>
+    </>
   );
+
+  return bare ? body : <Card className="p-5">{body}</Card>;
 }

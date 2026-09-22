@@ -201,6 +201,7 @@ async def create_page(
         website=payload.website,
         contact=payload.contact,
         affiliation=payload.affiliation,
+        course_categories=payload.course_categories or [],
         banners=[], gallery=[], social_links={}, content={},
         created_by=admin.id,
     )

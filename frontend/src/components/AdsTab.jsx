@@ -3,9 +3,10 @@ import Button from './ui/Button';
 import Badge from './ui/Badge';
 import StatusBadge from './ui/StatusBadge';
 import EmptyState from './ui/EmptyState';
-import { Input, Textarea, Select, FormGroup } from './ui/Field';
+import { Input, Select, FormGroup } from './ui/Field';
 import { useAuth } from '../context/AuthContext';
-import { EMPLOYMENT_TYPES } from '../pages/mockData';
+import { EMPLOYMENT_TYPES } from '../constants/taxonomy';
+import AdCopyFields from './ui/AdCopyFields';
 import {
   fetchPageOpportunities,
   createOpportunity,
@@ -195,7 +196,7 @@ function AdRow({ title, meta, status, visibility, onEdit, onDelete, onPushToTop,
   );
 }
 
-export default function AdsTab({ pageId, section }) {
+export default function AdsTab({ pageId, pageName, section }) {
   const cfg = SECTIONS[section];
   const isPaper = section === 'paper';
   const isJob = section === 'job';
@@ -472,16 +473,21 @@ export default function AdsTab({ pageId, section }) {
 
           {isPaper ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormGroup label="Paper Title">
-                  <Input value={editing.title || ''} onChange={setField('title')} placeholder="Physics Class 12" />
-                </FormGroup>
-                <FormGroup label="Material Type">
-                  <Select value={editing.kind || 'Guess Paper'} onChange={setField('kind')}>
-                    {PAPER_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-                  </Select>
-                </FormGroup>
-              </div>
+              <FormGroup label="Material Type">
+                <Select value={editing.kind || 'Guess Paper'} onChange={setField('kind')}>
+                  {PAPER_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+                </Select>
+              </FormGroup>
+
+              <AdCopyFields
+                section="paper"
+                title={editing.title}
+                description={editing.description}
+                onTitleChange={(v) => setEditing((d) => ({ ...d, title: v }))}
+                onDescriptionChange={(v) => setEditing((d) => ({ ...d, description: v }))}
+                instituteName={pageName}
+                titleLabel="Paper Title (one line)"
+              />
 
               <div className="grid grid-cols-3 gap-4">
                 <FormGroup label="Subject">
@@ -495,9 +501,6 @@ export default function AdsTab({ pageId, section }) {
                 </FormGroup>
               </div>
 
-              <FormGroup label="Description">
-                <Textarea rows={2} value={editing.description || ''} onChange={setField('description')} placeholder="What this paper covers." />
-              </FormGroup>
 
               <FormGroup label="PDF File">
                 <div className="flex items-center gap-3">
@@ -556,22 +559,20 @@ export default function AdsTab({ pageId, section }) {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormGroup label={isJob ? 'Position' : 'Notice Title'}>
-                  <Input
-                    value={(isJob ? editing.position : editing.title) || ''}
-                    onChange={setField(isJob ? 'position' : 'title')}
-                    placeholder={isJob ? 'Mathematics Faculty' : 'B.Tech Admissions Open'}
-                  />
+              {isJob ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormGroup label="Position">
+                    <Input value={editing.position || ''} onChange={setField('position')} placeholder="Mathematics Faculty" />
+                  </FormGroup>
+                  <FormGroup label="Subject">
+                    <Input value={editing.subject || ''} onChange={setField('subject')} placeholder="Mathematics" />
+                  </FormGroup>
+                </div>
+              ) : (
+                <FormGroup label="Session">
+                  <Input value={editing.session || ''} onChange={setField('session')} placeholder="2026-27" />
                 </FormGroup>
-                <FormGroup label={isJob ? 'Subject' : 'Session'}>
-                  <Input
-                    value={(isJob ? editing.subject : editing.session) || ''}
-                    onChange={setField(isJob ? 'subject' : 'session')}
-                    placeholder={isJob ? 'Mathematics' : '2026–27'}
-                  />
-                </FormGroup>
-              </div>
+              )}
 
               {isJob ? (
                 <div className="grid grid-cols-3 gap-4">
@@ -602,9 +603,14 @@ export default function AdsTab({ pageId, section }) {
                 </div>
               )}
 
-              <FormGroup label="Description">
-                <Textarea rows={3} value={editing.description || ''} onChange={setField('description')} />
-              </FormGroup>
+              <AdCopyFields
+                section={section}
+                title={editing.title}
+                description={editing.description}
+                onTitleChange={(v) => setEditing((d) => ({ ...d, title: v }))}
+                onDescriptionChange={(v) => setEditing((d) => ({ ...d, description: v }))}
+                instituteName={pageName}
+              />
 
               <VisibilityControl
                 value={editing.visibility}

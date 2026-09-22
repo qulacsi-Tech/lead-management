@@ -1199,9 +1199,9 @@ export default function InstituteFullDetailsModal({
 
             {/* TABS 9-11: ADS — admission notices, vacancies and study
                 material. Self-saving; deliberately not part of `saveAll`. */}
-            {tab === 'ads-notice' && <AdsTab pageId={institute?.id} section="admission" />}
-            {tab === 'ads-hiring' && <AdsTab pageId={institute?.id} section="job" />}
-            {tab === 'papers' && <AdsTab pageId={institute?.id} section="paper" />}
+            {tab === 'ads-notice' && <AdsTab pageId={institute?.id} pageName={institute?.name} section="admission" />}
+            {tab === 'ads-hiring' && <AdsTab pageId={institute?.id} pageName={institute?.name} section="job" />}
+            {tab === 'papers' && <AdsTab pageId={institute?.id} pageName={institute?.name} section="paper" />}
 
             {/* TAB 8: GALLERY */}
             {tab === 'gallery' && (

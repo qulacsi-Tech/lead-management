@@ -32,7 +32,10 @@ const NAV_GROUPS = [
   },
   {
     label: 'Leads',
-    items: [{ to: '/institute/enquiries', label: 'Enquiries', icon: 'forum' }],
+    items: [
+      { to: '/institute/enquiries', label: 'Enquiries', icon: 'forum' },
+      { to: '/institute/applications', label: 'Applications', icon: 'how_to_reg' },
+    ],
   },
 ];
 

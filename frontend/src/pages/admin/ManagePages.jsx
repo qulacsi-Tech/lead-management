@@ -9,6 +9,7 @@ import DataTable, { RowAction } from '../../components/ui/DataTable';
 import { Input, Label, FormGroup } from '../../components/ui/Field';
 import { INSTITUTE_TYPES, AFFILIATION_OPTIONS, slugify } from '../../constants/taxonomy';
 import StateCitySelect from '../../components/ui/StateCitySelect';
+import CourseCategorySelect from '../../components/ui/CourseCategorySelect';
 import { pagePath, pageDisplayUrl } from '../../utils/pageUrl';
 import {
   ApiError,
@@ -19,7 +20,6 @@ import {
   fetchPageAdmins,
   assignPageAdmin,
   revokePageAdmin,
-  uploadPageMedia,
   fetchPageCourses,
   fetchPageOpportunities,
 } from '../../Api/Api';
@@ -34,9 +34,17 @@ function affiliationConfig(type) {
   return { mode: 'na', label: 'Affiliation' };
 }
 
+// Logo and banner deliberately absent.
+//
+// Client feedback 22 Sep 2026, row 1: "The pop up window opens, there are two
+// options 'Logo Header Banner' & Images — we need to remove from here only;
+// while editing we will still have to access to these options inside the
+// editor." Creating the institute is the Main Admin's job; its visual identity
+// is the Institute Admin's, and they set it at /institute/profile.
 const emptyForm = {
-  name: '', type: 'Coaching', tagline: '', logoFile: null, logoPreview: null, banners: [],
+  name: '', type: 'Coaching', tagline: '',
   address: '', city: '', state: '', website: '', contact: '', affiliation: '', slug: '',
+  courseCategories: [],
   adminEmail: '', adminName: '', adminPassword: '',
 };
 
@@ -74,8 +82,6 @@ export default function ManagePages() {
   const [newAdmin, setNewAdmin] = useState({ email: '', role: 'ADMIN', name: '', password: '' });
 
   const [adminError, setAdminError] = useState('');
-  const logoInputRef = useRef(null);
-  const bannerInputRef = useRef(null);
   // Overlapping callers share one round-trip — otherwise StrictMode's
   // double-invoked mount effect fetches the whole page list twice.
   const inFlight = useRef(null);
@@ -179,23 +185,6 @@ export default function ManagePages() {
       slugify(p.city || '') === slugify(form.city || ''),
   );
 
-  const setLogo = (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setForm((f) => ({ ...f, logoFile: file, logoPreview: URL.createObjectURL(file) }));
-  };
-
-  const addBanner = (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setForm((f) => ({
-      ...f,
-      banners: [...f.banners, { file, preview: URL.createObjectURL(file) }].slice(0, 3),
-    }));
-  };
-
   const closeCreate = () => {
     setCreateOpen(false);
     setForm(emptyForm);
@@ -207,8 +196,7 @@ export default function ManagePages() {
     setSaving(true);
     setFormError('');
     try {
-      // The record is created first because media uploads are page-scoped.
-      const page = await createPage({
+      await createPage({
         name: form.name,
         type: form.type,
         slug: form.slug || undefined,
@@ -219,16 +207,12 @@ export default function ManagePages() {
         website: form.website || undefined,
         contact: form.contact || undefined,
         affiliation: form.affiliation || undefined,
+        course_categories: form.courseCategories,
         admin_email: form.adminEmail || undefined,
         // Ignored by the backend when the email already has an account.
         admin_name: form.adminName || undefined,
         admin_password: form.adminPassword || undefined,
       });
-
-      if (form.logoFile) await uploadPageMedia(page.id, 'logo', form.logoFile);
-      for (const banner of form.banners) {
-        await uploadPageMedia(page.id, 'banner', banner.file);
-      }
 
       closeCreate();
       await load();
@@ -362,7 +346,8 @@ export default function ManagePages() {
       <Modal open={createOpen} onClose={closeCreate} width={480}>
         <h2 className="text-lg font-bold text-on-surface m-0 mb-1">Create Institute Page</h2>
         <p className="text-xs text-on-surface-variant m-0 mb-5">
-          It goes live immediately at its own URL — deeper content (Why Choose Us, Achievements, etc.) can be filled in later.
+          It goes live immediately at its own URL. The logo, header banners and deeper content (Why
+          Choose Us, Achievements, etc.) are set by the Institute Admin in the page editor.
         </p>
         <form onSubmit={submit} className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
           <div>
@@ -372,7 +357,7 @@ export default function ManagePages() {
                 <button
                   key={t}
                   type="button"
-                  onClick={() => setForm((f) => ({ ...f, type: t, affiliation: '' }))}
+                  onClick={() => setForm((f) => ({ ...f, type: t, affiliation: '', courseCategories: [] }))}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
                     form.type === t
                       ? 'bg-primary text-on-primary border-primary'
@@ -406,55 +391,6 @@ export default function ManagePages() {
           <div>
             <Label>Tagline</Label>
             <Input value={form.tagline} onChange={set('tagline')} placeholder="e.g. Where Ambition Meets Achievement" />
-          </div>
-
-          <div>
-            <Label>Logo</Label>
-            <div className="flex items-center gap-3 mt-1.5">
-              <button
-                type="button"
-                onClick={() => logoInputRef.current?.click()}
-                className="w-14 h-14 rounded-xl border-2 border-dashed border-outline-variant hover:border-primary flex items-center justify-center text-on-surface-variant cursor-pointer overflow-hidden shrink-0"
-              >
-                {form.logoPreview ? (
-                  <img src={form.logoPreview} alt="Logo" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="material-symbols-outlined">add_photo_alternate</span>
-                )}
-              </button>
-              <Button type="button" variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}>
-                {form.logoPreview ? 'Change Logo' : 'Upload Logo'}
-              </Button>
-            </div>
-            <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={setLogo} />
-          </div>
-
-          <div>
-            <Label>Header Banner Images (2–3)</Label>
-            <div className="flex flex-wrap gap-2 mt-1.5">
-              {form.banners.map((b, i) => (
-                <div key={b.preview} className="relative w-20 h-14 rounded-lg overflow-hidden border border-outline-variant">
-                  <img src={b.preview} alt={`Banner ${i + 1}`} className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, banners: f.banners.filter((_, idx) => idx !== i) }))}
-                    className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-on-surface/60 text-white flex items-center justify-center cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-[11px]">close</span>
-                  </button>
-                </div>
-              ))}
-              {form.banners.length < 3 && (
-                <button
-                  type="button"
-                  onClick={() => bannerInputRef.current?.click()}
-                  className="w-20 h-14 rounded-lg border-2 border-dashed border-outline-variant hover:border-primary flex items-center justify-center text-on-surface-variant cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[18px]">add_photo_alternate</span>
-                </button>
-              )}
-            </div>
-            <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={addBanner} />
           </div>
 
           <div>
@@ -492,6 +428,14 @@ export default function ManagePages() {
             {affiliation.mode === 'na' && (
               <p className="text-xs text-on-surface-variant mb-0 mt-1.5">Not applicable for {form.type} pages.</p>
             )}
+          </div>
+
+          <div className="pt-3 border-t border-outline-variant">
+            <CourseCategorySelect
+              type={form.type}
+              value={form.courseCategories}
+              onChange={(courseCategories) => setForm((f) => ({ ...f, courseCategories }))}
+            />
           </div>
 
           <div className="pt-3 border-t border-outline-variant">

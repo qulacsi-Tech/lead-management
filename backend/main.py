@@ -21,6 +21,7 @@ from routers.opportunities import router as opportunities_router, public_router 
 from routers.page_enquiries import router as page_enquiries_router, admin_router as enquiries_admin_router
 from routers.study_papers import router as study_papers_router, public_router as public_papers_router
 from routers.social import follow_router, notification_router
+from routers.applications import router as applications_router, page_router as page_applications_router
 from routers.credits import router as credits_router
 from routers.seo import router as seo_router, render_public_html, legacy_slug_redirect
 
@@ -84,9 +85,11 @@ app.include_router(courses_router, prefix="/api")
 app.include_router(opportunities_router, prefix="/api")
 app.include_router(page_enquiries_router, prefix="/api")
 app.include_router(study_papers_router, prefix="/api")
+app.include_router(page_applications_router, prefix="/api")
 app.include_router(pages_router, prefix="/api")
 app.include_router(public_opportunities_router, prefix="/api")
 app.include_router(public_papers_router, prefix="/api")
+app.include_router(applications_router, prefix="/api")
 app.include_router(enquiries_admin_router, prefix="/api")
 app.include_router(follow_router, prefix="/api")
 app.include_router(notification_router, prefix="/api")

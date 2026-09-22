@@ -315,6 +315,34 @@ export const deleteOpportunity = async (pageId, oppId) =>
 export const pushToTopOpportunity = async (pageId, oppId) =>
   apiFetch(`/pages/${pageId}/opportunities/${oppId}/push-to-top`, { method: 'POST' });
 
+// ----------------------------------------------------
+// Applications to an Admission Notice / Job Vacancy
+//
+// Applying never navigates away from the institute page — an applicant with no
+// account creates their profile in the same request and the response carries a
+// token to sign them in on the spot. See backend routers/applications.py.
+// ----------------------------------------------------
+
+/** Anonymous-capable. Returns { application, access_token, account_created }. */
+export const applyToOpportunity = async (opportunityId, payload) =>
+  apiFetch(`/opportunities/${opportunityId}/applications`, { method: 'POST', body: payload });
+
+/** null when not signed in or not yet applied — lets the button show "Applied". */
+export const fetchMyApplication = async (opportunityId) =>
+  apiFetch(`/opportunities/${opportunityId}/applications/mine`);
+
+/** INSTITUTE-OWNED inbox of applications received. */
+export const fetchPageApplications = async (pageId, { opportunityId, status } = {}) => {
+  const qs = new URLSearchParams();
+  if (opportunityId) qs.set('opportunity_id', opportunityId);
+  if (status) qs.set('status', status);
+  const query = qs.toString();
+  return apiFetch(`/pages/${pageId}/applications${query ? `?${query}` : ''}`);
+};
+
+export const updateApplication = async (pageId, applicationId, patch) =>
+  apiFetch(`/pages/${pageId}/applications/${applicationId}`, { method: 'PATCH', body: patch });
+
 export const fetchPageEnquiries = async (pageId) =>
   apiFetch(`/pages/${pageId}/enquiries`);
 

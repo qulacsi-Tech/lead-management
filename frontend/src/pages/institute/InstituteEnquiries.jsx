@@ -228,7 +228,16 @@ export default function InstituteEnquiries() {
               <div className="col-span-2">
                 <span className="text-on-surface-variant">Interested in</span>
                 <p className="font-semibold text-on-surface m-0">
-                  {viewing.course}{viewing.specialization ? ` · ${viewing.specialization}` : ''}
+                  {/* An enquirer now picks from the institute's declared course
+                      categories, which exist before any Course record does, so
+                      an enquiry may carry only a category. Falling back
+                      through both keeps older rows readable too. */}
+                  {[
+                    viewing.course_category,
+                    viewing.course_subcategory,
+                    viewing.course_name || viewing.course,
+                    viewing.specialization,
+                  ].filter(Boolean).join(' · ') || '—'}
                 </p>
               </div>
             </div>

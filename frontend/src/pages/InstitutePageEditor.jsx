@@ -14,8 +14,9 @@ import {
   buildAboutParagraph,
 } from './pageBuilderContent';
 import { useInstitute } from '../context/InstituteContext';
-import { updatePage, uploadPageMedia } from '../Api/Api';
+import { updatePage, uploadPageMedia, resolveAssetUrl } from '../Api/Api';
 import InstituteFullDetailsModal from '../components/InstituteFullDetailsModal';
+import CourseCategorySelect from '../components/ui/CourseCategorySelect';
 import { pagePath } from '../utils/pageUrl';
 
 
@@ -31,6 +32,49 @@ const TABS = [
   { key: 'campus', label: 'Campus Life', icon: 'diversity_3' },
   { key: 'achievements', label: 'Achievements', icon: 'military_tech' },
 ];
+
+/**
+ * Client feedback 22 Sep 2026, row 2: "Kindly mention Logo / images Size &
+ * Dimensions". Stated in the field label AND enforced on selection — a
+ * recommendation nobody checks is how a 9MB phone photo ends up as a banner.
+ */
+const MEDIA_RULES = {
+  logo: { label: 'Square, 512 x 512 px recommended', maxMB: 1, minPx: 200 },
+  banner: { label: '1600 x 500 px recommended (wide)', maxMB: 2, minPx: 800 },
+  gallery: { label: '1200 x 800 px recommended', maxMB: 2, minPx: 600 },
+};
+
+/** Reads the real pixel size of a picked file before it is uploaded. */
+function readImageSize(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
+
+/** Returns an error string, or null when the file is acceptable. */
+async function validateImage(file, kind) {
+  const rule = MEDIA_RULES[kind];
+  if (!file.type.startsWith('image/')) return 'That file is not an image.';
+  const mb = file.size / (1024 * 1024);
+  if (mb > rule.maxMB) {
+    return `That image is ${mb.toFixed(1)}MB — the limit is ${rule.maxMB}MB. ${rule.label}.`;
+  }
+  const size = await readImageSize(file);
+  if (size && Math.max(size.width, size.height) < rule.minPx) {
+    return `That image is only ${size.width}x${size.height}px — too small to stay sharp. ${rule.label}.`;
+  }
+  return null;
+}
 
 const SOCIAL_FIELDS = [
   { key: 'facebook', label: 'Facebook', placeholder: 'facebook.com/yourinstitute' },
@@ -129,19 +173,29 @@ export default function InstitutePageEditor() {
 }
 
 function InstitutePageEditorForm({ page, navigate, commit }) {
+  // `logo_url` / `social_links`, not `logoUrl` / `socialLinks`. PageResponse is
+  // snake_case; reading the camelCase keys meant an institute that already had
+  // a logo and social links opened the editor with both blank, and — because
+  // `save()` sends this state straight back — could wipe them by saving any
+  // other tab. Client feedback 22 Sep 2026, row 2: "Not visible on live page".
   const [main, setMain] = useState({
     name: page.name,
     tagline: page.tagline,
     banners: page.banners || [],
-    logoUrl: page.logoUrl,
+    logoUrl: page.logo_url || page.logoUrl || null,
   });
+  const [mediaError, setMediaError] = useState('');
+  // Set by Main Admin at creation, revisable here: these drive both the
+  // public page's course list and the enquiry form's dropdowns, so the
+  // institute has to be able to correct them without a platform round-trip.
+  const [courseCategories, setCourseCategories] = useState(page.course_categories || []);
   const [contact, setContact] = useState({
     address: page.address || '',
     website: page.website || '',
     contact: page.contact || '',
     about: page.about || '',
   });
-  const [socialLinks, setSocialLinks] = useState(page.socialLinks || {});
+  const [socialLinks, setSocialLinks] = useState(page.social_links || page.socialLinks || {});
   const [gallery, setGallery] = useState(page.gallery || []);
   const galleryInputRef = useRef(null);
   // A page created through Admin -> Institute Pages or the organisation form
@@ -165,59 +219,63 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
   const setStat = (key) => (e) => setAboutStats((s) => ({ ...s, [key]: e.target.value }));
   const setAchievement = (key) => (e) => setAchievements((a) => ({ ...a, [key]: e.target.value }));
 
+  /**
+   * Upload one image and take the stored URL from the response.
+   *
+   * POST /pages/{id}/media returns the updated **Page**, not `{ url }`. All
+   * three handlers below used to test `uploaded?.url` — always undefined — and
+   * fall through to `URL.createObjectURL(file)`. That put a `blob:` URL into
+   * state, and `save()` then wrote that blob URL to the database, overwriting
+   * the perfectly good `/uploads/...` path the upload had just stored. The
+   * blob dies with the tab, so the logo and banners were invisible on the live
+   * page ever after. Client feedback 22 Sep 2026, row 2.
+   *
+   * There is no local-preview fallback any more, on purpose: if the upload
+   * failed, the honest outcome is an error, not a picture that looks saved and
+   * is not.
+   */
+  const uploadImage = async (kind, file) => {
+    setMediaError('');
+    const invalid = await validateImage(file, kind);
+    if (invalid) {
+      setMediaError(invalid);
+      return null;
+    }
+    if (!page?.id) {
+      setMediaError('This page is not saved yet — reload and try again.');
+      return null;
+    }
+    try {
+      return await uploadPageMedia(page.id, kind, file);
+    } catch (err) {
+      console.warn(`Upload ${kind} error:`, err);
+      setMediaError(err?.message || `Could not upload that ${kind}. Please try again.`);
+      return null;
+    }
+  };
+
   const addBanner = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (page?.id) {
-      try {
-        const uploaded = await uploadPageMedia(page.id, 'banner', file);
-        if (uploaded?.url) {
-          setMain((m) => ({ ...m, banners: [...m.banners, uploaded.url].slice(0, 3) }));
-          return;
-        }
-      } catch (err) {
-        console.warn('Upload banner error:', err);
-      }
-    }
-    const url = URL.createObjectURL(file);
-    setMain((m) => ({ ...m, banners: [...m.banners, url].slice(0, 3) }));
+    const updated = await uploadImage('banner', file);
+    if (updated) setMain((m) => ({ ...m, banners: updated.banners || m.banners }));
   };
 
   const setLogo = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (page?.id) {
-      try {
-        const uploaded = await uploadPageMedia(page.id, 'logo', file);
-        if (uploaded?.url) {
-          setMain((m) => ({ ...m, logoUrl: uploaded.url }));
-          return;
-        }
-      } catch (err) {
-        console.warn('Upload logo error:', err);
-      }
-    }
-    setMain((m) => ({ ...m, logoUrl: URL.createObjectURL(file) }));
+    const updated = await uploadImage('logo', file);
+    if (updated) setMain((m) => ({ ...m, logoUrl: updated.logo_url || m.logoUrl }));
   };
 
   const addGalleryImage = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (page?.id) {
-      try {
-        const uploaded = await uploadPageMedia(page.id, 'gallery', file);
-        if (uploaded?.url) {
-          setGallery((g) => [...g, { id: `img-${Date.now()}`, url: uploaded.url, caption: '' }]);
-          return;
-        }
-      } catch (err) {
-        console.warn('Upload gallery error:', err);
-      }
-    }
-    setGallery((g) => [...g, { id: `img-${Date.now()}`, url: URL.createObjectURL(file), caption: '' }]);
+    const updated = await uploadImage('gallery', file);
+    if (updated) setGallery(updated.gallery || []);
   };
 
   const save = async () => {
@@ -233,6 +291,7 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
           contact: contact.contact,
           about: contact.about,
           social_links: socialLinks,
+          course_categories: courseCategories,
           gallery: gallery,
           content: { aboutStats, whyChooseUs, keyHighlights, facilities, campusLife, achievements },
         });
@@ -242,9 +301,9 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
     }
     commit(() => {
       Object.assign(page, {
-        name: main.name, tagline: main.tagline, banners: main.banners, logoUrl: main.logoUrl,
+        name: main.name, tagline: main.tagline, banners: main.banners, logo_url: main.logoUrl,
         address: contact.address, website: contact.website, contact: contact.contact, about: contact.about,
-        socialLinks, gallery,
+        social_links: socialLinks, gallery, course_categories: courseCategories,
       });
       page.content = { ...(page.content || {}), aboutStats, whyChooseUs, keyHighlights, facilities, campusLife, achievements };
     });
@@ -307,6 +366,9 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
       {tab === 'main' && (
         <Card className="p-5 max-w-2xl">
           <h4 className="text-sm font-bold text-on-surface mb-3">Main Part</h4>
+          {mediaError && (
+            <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 mt-0 mb-4">{mediaError}</p>
+          )}
           <div className="grid sm:grid-cols-2 gap-4 mb-4">
             <FormGroup label="Institute Name">
               <Input value={main.name} onChange={(e) => setMain((m) => ({ ...m, name: e.target.value }))} />
@@ -319,7 +381,7 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
               />
             </FormGroup>
           </div>
-          <FormGroup label="Logo (square, recommended 512×512px)">
+          <FormGroup label={`Logo — ${MEDIA_RULES.logo.label}, max ${MEDIA_RULES.logo.maxMB}MB`}>
             <div className="flex items-center gap-3 mb-4">
               <button
                 type="button"
@@ -327,7 +389,7 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
                 className="w-16 h-16 rounded-xl border-2 border-dashed border-outline-variant hover:border-primary flex items-center justify-center text-on-surface-variant cursor-pointer overflow-hidden shrink-0"
               >
                 {main.logoUrl ? (
-                  <img src={main.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                  <img src={resolveAssetUrl(main.logoUrl)} alt="Logo" className="w-full h-full object-cover" />
                 ) : (
                   <span className="material-symbols-outlined">add_photo_alternate</span>
                 )}
@@ -338,11 +400,11 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
             </div>
             <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={setLogo} />
           </FormGroup>
-          <FormGroup label="Banner Images (2–3, recommended 1600×500px, under 2MB each)">
+          <FormGroup label={`Header Banners (2-3) — ${MEDIA_RULES.banner.label}, max ${MEDIA_RULES.banner.maxMB}MB each`}>
             <div className="flex flex-wrap gap-3 mb-2">
               {main.banners.map((src, i) => (
                 <div key={i} className="relative w-32 h-20 rounded-lg overflow-hidden border border-outline-variant">
-                  <img src={src} alt={`Banner ${i + 1}`} className="w-full h-full object-cover" />
+                  <img src={resolveAssetUrl(src)} alt={`Banner ${i + 1}`} className="w-full h-full object-cover" />
                   <button
                     type="button"
                     onClick={() => setMain((m) => ({ ...m, banners: m.banners.filter((_, idx) => idx !== i) }))}
@@ -363,6 +425,14 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
               )}
             </div>
             <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={addBanner} />
+
+          <div className="pt-4 mt-4 border-t border-outline-variant">
+            <CourseCategorySelect
+              type={page.type}
+              value={courseCategories}
+              onChange={setCourseCategories}
+            />
+          </div>
           </FormGroup>
           {SaveBar}
         </Card>
@@ -454,12 +524,16 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
           <h4 className="text-sm font-bold text-on-surface mb-1">Gallery</h4>
           <p className="text-xs text-on-surface-variant mb-4">
             Campus and classroom photos shown as a grid on your public page. Add a caption to each.
+            {' '}{MEDIA_RULES.gallery.label}, max {MEDIA_RULES.gallery.maxMB}MB each.
           </p>
+          {mediaError && (
+            <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 mt-0 mb-4">{mediaError}</p>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
             {gallery.map((img, i) => (
               <div key={img.id} className="rounded-xl border border-outline-variant overflow-hidden">
                 <div className="relative h-24">
-                  <img src={img.url} alt={img.caption || `Gallery ${i + 1}`} className="w-full h-full object-cover" />
+                  <img src={resolveAssetUrl(img.url)} alt={img.caption || `Gallery ${i + 1}`} className="w-full h-full object-cover" />
                   <button
                     type="button"
                     onClick={() => setGallery((g) => g.filter((x) => x.id !== img.id))}

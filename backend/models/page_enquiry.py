@@ -47,6 +47,13 @@ class PageEnquiry(Base):
     course_name = Column(String)
     specialization = Column(String)
 
+    # What the enquirer picked from the institute's declared course categories
+    # (pages.course_categories). Free of `course_id`: the enquiry form offers
+    # these from the moment a page exists, whereas a Course row may never have
+    # been created. An enquiry may carry either, both, or only the category.
+    course_category = Column(String)
+    course_subcategory = Column(String)
+
     status = Column(String, default="New", nullable=False, index=True)
     # Institute Admin's private working notes / response log.
     note = Column(String)
@@ -66,6 +73,8 @@ class PageEnquiryCreate(BaseModel):
     course_id: Optional[str] = None
     course_name: Optional[str] = None
     specialization: Optional[str] = None
+    course_category: Optional[str] = None
+    course_subcategory: Optional[str] = None
 
 
 class PageEnquiryUpdate(BaseModel):
@@ -85,6 +94,8 @@ class PageEnquiryResponse(BaseModel):
     course_id: Optional[str] = None
     course_name: Optional[str] = None
     specialization: Optional[str] = None
+    course_category: Optional[str] = None
+    course_subcategory: Optional[str] = None
     status: str
     note: Optional[str] = None
     created_at: Optional[Any] = None
