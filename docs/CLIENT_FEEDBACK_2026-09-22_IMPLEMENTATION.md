@@ -69,19 +69,43 @@ Two requests in one line. The second was the serious one.
 
 ### 2a. Sizes and dimensions
 
-`MEDIA_RULES` in `InstitutePageEditor.jsx` is now the single source for all
-three:
+*Revised 22 Sep after client review: "size & dimension nowhere we are showing.
+on click there should be modal and all info should be there." The first pass
+only touched the Institute Console's editor — the screen the client was looking
+at is the **Platform Admin's** institute editor
+(`components/InstituteFullDetailsModal.jsx`), which is a separate component and
+was untouched. It now has all of this, as do the other two upload surfaces.*
 
-| | Dimensions | Max size | Min edge |
-|---|---|---|---|
-| Logo | 512 × 512 px (square) | 1 MB | 200 px |
-| Header banner | 1600 × 500 px (wide) | 2 MB | 800 px |
-| Gallery | 1200 × 800 px | 2 MB | 600 px |
+`frontend/src/constants/mediaSpecs.js` is the single source for all three:
 
-They are stated in each field's label **and enforced on selection** — the file's
-real pixel dimensions are read before upload and an oversized or too-small image
-is refused with a message naming the actual numbers. A recommendation nobody
-checks is how a 9 MB phone photo becomes a banner.
+| | Dimensions | Aspect | Max size | Min edge | Formats |
+|---|---|---|---|---|---|
+| Logo | 512 × 512 px | Square (1:1) | 1 MB | 200 px | JPG, PNG, SVG, WebP |
+| Header banner | 1600 × 500 px | Wide (16:5) | 2 MB | 800 px | JPG, PNG, WebP |
+| Gallery photo | 1200 × 800 px | Landscape (3:2) | 2 MB | 600 px | JPG, PNG, WebP |
+
+Surfaced three ways:
+
+1. **In every field label** — "Logo Image — 512 × 512 px, max 1MB".
+2. **In a dialog**, opened from an "ⓘ Size & dimensions" link beside each
+   upload field (`components/ui/ImageSpecHelp.jsx`). It lists all three types,
+   not just the one clicked — someone checking the logo size is usually about
+   to upload a banner too — with dimensions, aspect ratio, size limit, accepted
+   formats, where the image appears on the page, and a practical tip. The type
+   that was clicked is highlighted.
+3. **Enforced on selection** — the file's real pixel dimensions are read before
+   upload, and an oversized or too-small image is refused with a message naming
+   the actual numbers. A recommendation nobody checks is how a 9 MB phone photo
+   becomes a banner.
+
+Present on all four upload surfaces:
+
+| Screen | Component |
+|---|---|
+| Platform Admin → institute editor | `components/InstituteFullDetailsModal.jsx` |
+| Institute Console → Profile & Branding | `pages/InstitutePageEditor.jsx` |
+| Create Institute Page (user flow) | `pages/CreateInstitutePage.jsx` |
+| Admin → Create Institute popup | n/a — logo/banner removed, see §1 |
 
 ### 2b. The bug
 
@@ -105,6 +129,12 @@ never survived:
 
 The local-preview fallback is gone on purpose. If an upload fails, the honest
 outcome is a visible error — not a picture that looks saved and is not.
+
+**The same three defects existed in the Platform Admin's editor**
+(`InstituteFullDetailsModal.jsx`) — it is a second copy of the same screen and
+had the identical `uploaded?.url` bug, saving a blob URL over the real upload at
+its line 562. Fixed there too, on the second pass. Anyone uploading a logo from
+`/admin/pages/:id` was hitting exactly the bug the client reported.
 
 ---
 

@@ -5,6 +5,8 @@ import Badge from './ui/Badge';
 import { Input, FormGroup, Select } from './ui/Field';
 import StateCitySelect from './ui/StateCitySelect';
 import AdsTab from './AdsTab';
+import ImageSpecHelp from './ui/ImageSpecHelp';
+import { validateImage, specSummary } from '../constants/mediaSpecs';
 import { pageDisplayUrl } from '../utils/pageUrl';
 import {
   fetchPage,
@@ -190,6 +192,7 @@ export default function InstituteFullDetailsModal({
   const [tagline, setTagline] = useState('');
   const [isEnabled, setIsEnabled] = useState(true);
   const [logoUrl, setLogoUrl] = useState('');
+  const [mediaError, setMediaError] = useState('');
   const [banners, setBanners] = useState([]);
 
   // Contact
@@ -391,58 +394,66 @@ export default function InstituteFullDetailsModal({
 
   if (!open || !institute) return null;
 
+  /**
+   * Upload one image and take the stored URL from the response.
+   *
+   * POST /pages/{id}/media returns the updated **Page**, not `{ url }`. The
+   * three handlers here each tested `uploaded?.url` — always undefined — and
+   * fell through to `URL.createObjectURL(file)`. That put a `blob:` URL into
+   * state, and Save Changes then wrote that blob URL to the database,
+   * overwriting the `/uploads/...` path the upload had just stored. The blob
+   * dies with the tab, so the logo was invisible on the live page ever after.
+   * Client feedback 22 Sep 2026, row 2: "Not visible on live page."
+   *
+   * The same fix landed in pages/InstitutePageEditor.jsx; this editor is the
+   * Platform Admin's copy of the same screen and had the identical defect.
+   *
+   * There is no local-preview fallback any more, on purpose: if the upload
+   * failed, the honest outcome is an error, not a picture that looks saved and
+   * is not.
+   */
+  const uploadImage = async (kind, file) => {
+    setMediaError('');
+    const invalid = await validateImage(file, kind);
+    if (invalid) {
+      setMediaError(invalid);
+      return null;
+    }
+    if (!institute.id) {
+      setMediaError('This page is not saved yet — reload and try again.');
+      return null;
+    }
+    try {
+      return await uploadPageMedia(institute.id, kind, file);
+    } catch (err) {
+      console.warn(`Upload ${kind} error:`, err);
+      setMediaError(err?.message || `Could not upload that ${kind}. Please try again.`);
+      return null;
+    }
+  };
+
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (institute.id) {
-      try {
-        const uploaded = await uploadPageMedia(institute.id, 'logo', file);
-        if (uploaded?.url) {
-          setLogoUrl(uploaded.url);
-          return;
-        }
-      } catch (err) {
-        console.warn('Logo upload error:', err);
-      }
-    }
-    setLogoUrl(URL.createObjectURL(file));
+    const updated = await uploadImage('logo', file);
+    if (updated) setLogoUrl(updated.logo_url || '');
   };
 
   const handleBannerUpload = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (institute.id) {
-      try {
-        const uploaded = await uploadPageMedia(institute.id, 'banner', file);
-        if (uploaded?.url) {
-          setBanners((b) => [...b, uploaded.url].slice(0, 3));
-          return;
-        }
-      } catch (err) {
-        console.warn('Banner upload error:', err);
-      }
-    }
-    setBanners((b) => [...b, URL.createObjectURL(file)].slice(0, 3));
+    const updated = await uploadImage('banner', file);
+    if (updated) setBanners(updated.banners || []);
   };
 
   const handleGalleryUpload = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (institute.id) {
-      try {
-        const uploaded = await uploadPageMedia(institute.id, 'gallery', file);
-        if (uploaded?.url) {
-          setGallery((g) => [...g, { id: `img-${Date.now()}`, url: uploaded.url, caption: '' }]);
-          return;
-        }
-      } catch (err) {
-        console.warn('Gallery upload error:', err);
-      }
-    }
-    setGallery((g) => [...g, { id: `img-${Date.now()}`, url: URL.createObjectURL(file), caption: '' }]);
+    const updated = await uploadImage('gallery', file);
+    if (updated) setGallery(updated.gallery || []);
   };
 
   // Dynamic Adders with API synchronization
@@ -750,7 +761,11 @@ export default function InstituteFullDetailsModal({
                   </FormGroup>
                 </div>
 
-                <FormGroup label="Logo Image">
+                {mediaError && (
+                  <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{mediaError}</p>
+                )}
+
+                <FormGroup label={`Logo Image — ${specSummary('logo')}`}>
                   <div className="flex items-center gap-4">
                     <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-outline-variant flex items-center justify-center overflow-hidden shrink-0 bg-surface-container-low">
                       {logoUrl ? (
@@ -763,12 +778,15 @@ export default function InstituteFullDetailsModal({
                       <Button size="sm" variant="outline" type="button" onClick={() => logoInputRef.current?.click()}>
                         {logoUrl ? 'Change Logo' : 'Upload Logo'}
                       </Button>
+                      <div className="mt-2">
+                        <ImageSpecHelp kind="logo" />
+                      </div>
                       <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
                     </div>
                   </div>
                 </FormGroup>
 
-                <FormGroup label="Banner Images (up to 3)">
+                <FormGroup label={`Banner Images (up to 3) — ${specSummary('banner')}`}>
                   <div className="flex flex-wrap gap-3">
                     {banners.map((url, i) => (
                       <div key={i} className="relative w-36 h-20 rounded-xl overflow-hidden border border-outline-variant">
@@ -792,6 +810,9 @@ export default function InstituteFullDetailsModal({
                         <span className="text-[10px]">Add banner</span>
                       </button>
                     )}
+                  </div>
+                  <div className="mt-2">
+                    <ImageSpecHelp kind="banner" />
                   </div>
                   <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={handleBannerUpload} />
                 </FormGroup>
@@ -1209,13 +1230,20 @@ export default function InstituteFullDetailsModal({
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-bold text-on-surface m-0">Campus Gallery</h3>
-                    <p className="text-xs text-on-surface-variant m-0">Upload photos with captions.</p>
+                    <p className="text-xs text-on-surface-variant m-0 mb-1">
+                      Upload photos with captions. {specSummary('gallery')}.
+                    </p>
+                    <ImageSpecHelp kind="gallery" />
                   </div>
                   <Button size="sm" icon="add_photo_alternate" onClick={() => galleryInputRef.current?.click()}>
                     Add Photo
                   </Button>
                   <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handleGalleryUpload} />
                 </div>
+
+                {mediaError && (
+                  <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 m-0">{mediaError}</p>
+                )}
 
                 <div className="grid grid-cols-3 gap-4">
                   {gallery.map((g, idx) => (

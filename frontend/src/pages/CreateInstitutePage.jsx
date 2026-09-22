@@ -6,6 +6,8 @@ import Badge from '../components/ui/Badge';
 import { Input, Textarea, FormGroup } from '../components/ui/Field';
 import { INSTITUTE_TYPES, addPage } from './mockData';
 import PageHeader from './PageHeader';
+import ImageSpecHelp from '../components/ui/ImageSpecHelp';
+import { specSummary } from '../constants/mediaSpecs';
 import { useAuth } from '../context/AuthContext';
 import { pagePath, pageDisplayUrl } from '../utils/pageUrl';
 
@@ -130,7 +132,7 @@ export default function CreateInstitutePage() {
               <Input value={form.tagline} onChange={set('tagline')} placeholder="e.g. Where Ambition Meets Achievement" />
             </FormGroup>
 
-            <FormGroup label="Logo (square, recommended 512×512px)">
+            <FormGroup label={`Logo Image — ${specSummary('logo')}`}>
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -147,10 +149,11 @@ export default function CreateInstitutePage() {
                   {form.logoUrl ? 'Change Logo' : 'Upload Logo'}
                 </Button>
               </div>
+              <div className="mt-2"><ImageSpecHelp kind="logo" /></div>
               <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={setLogo} />
             </FormGroup>
 
-            <FormGroup label="Header Banner Images (2–3, recommended 1600×500px)">
+            <FormGroup label={`Header Banner Images (up to 3) — ${specSummary('banner')}`}>
               <div className="flex flex-wrap gap-3">
                 {form.banners.map((src, i) => (
                   <div key={i} className="relative w-28 h-16 rounded-lg overflow-hidden border border-outline-variant">
@@ -174,6 +177,7 @@ export default function CreateInstitutePage() {
                   </button>
                 )}
               </div>
+              <div className="mt-2"><ImageSpecHelp kind="banner" /></div>
               <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={addBanner} />
             </FormGroup>
 

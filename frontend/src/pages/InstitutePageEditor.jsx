@@ -17,6 +17,8 @@ import { useInstitute } from '../context/InstituteContext';
 import { updatePage, uploadPageMedia, resolveAssetUrl } from '../Api/Api';
 import InstituteFullDetailsModal from '../components/InstituteFullDetailsModal';
 import CourseCategorySelect from '../components/ui/CourseCategorySelect';
+import ImageSpecHelp from '../components/ui/ImageSpecHelp';
+import { validateImage, specSummary } from '../constants/mediaSpecs';
 import { pagePath } from '../utils/pageUrl';
 
 
@@ -32,49 +34,6 @@ const TABS = [
   { key: 'campus', label: 'Campus Life', icon: 'diversity_3' },
   { key: 'achievements', label: 'Achievements', icon: 'military_tech' },
 ];
-
-/**
- * Client feedback 22 Sep 2026, row 2: "Kindly mention Logo / images Size &
- * Dimensions". Stated in the field label AND enforced on selection — a
- * recommendation nobody checks is how a 9MB phone photo ends up as a banner.
- */
-const MEDIA_RULES = {
-  logo: { label: 'Square, 512 x 512 px recommended', maxMB: 1, minPx: 200 },
-  banner: { label: '1600 x 500 px recommended (wide)', maxMB: 2, minPx: 800 },
-  gallery: { label: '1200 x 800 px recommended', maxMB: 2, minPx: 600 },
-};
-
-/** Reads the real pixel size of a picked file before it is uploaded. */
-function readImageSize(file) {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(null);
-    };
-    img.src = url;
-  });
-}
-
-/** Returns an error string, or null when the file is acceptable. */
-async function validateImage(file, kind) {
-  const rule = MEDIA_RULES[kind];
-  if (!file.type.startsWith('image/')) return 'That file is not an image.';
-  const mb = file.size / (1024 * 1024);
-  if (mb > rule.maxMB) {
-    return `That image is ${mb.toFixed(1)}MB — the limit is ${rule.maxMB}MB. ${rule.label}.`;
-  }
-  const size = await readImageSize(file);
-  if (size && Math.max(size.width, size.height) < rule.minPx) {
-    return `That image is only ${size.width}x${size.height}px — too small to stay sharp. ${rule.label}.`;
-  }
-  return null;
-}
 
 const SOCIAL_FIELDS = [
   { key: 'facebook', label: 'Facebook', placeholder: 'facebook.com/yourinstitute' },
@@ -381,7 +340,7 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
               />
             </FormGroup>
           </div>
-          <FormGroup label={`Logo — ${MEDIA_RULES.logo.label}, max ${MEDIA_RULES.logo.maxMB}MB`}>
+          <FormGroup label={`Logo Image — ${specSummary('logo')}`}>
             <div className="flex items-center gap-3 mb-4">
               <button
                 type="button"
@@ -398,9 +357,10 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
                 {main.logoUrl ? 'Change Logo' : 'Upload Logo'}
               </Button>
             </div>
+            <div className="mb-1"><ImageSpecHelp kind="logo" /></div>
             <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={setLogo} />
           </FormGroup>
-          <FormGroup label={`Header Banners (2-3) — ${MEDIA_RULES.banner.label}, max ${MEDIA_RULES.banner.maxMB}MB each`}>
+          <FormGroup label={`Header Banners (up to 3) — ${specSummary('banner')}`}>
             <div className="flex flex-wrap gap-3 mb-2">
               {main.banners.map((src, i) => (
                 <div key={i} className="relative w-32 h-20 rounded-lg overflow-hidden border border-outline-variant">
@@ -424,7 +384,8 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
                 </button>
               )}
             </div>
-            <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={addBanner} />
+            <div className="mb-1"><ImageSpecHelp kind="banner" /></div>
+          <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={addBanner} />
 
           <div className="pt-4 mt-4 border-t border-outline-variant">
             <CourseCategorySelect
@@ -524,7 +485,7 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
           <h4 className="text-sm font-bold text-on-surface mb-1">Gallery</h4>
           <p className="text-xs text-on-surface-variant mb-4">
             Campus and classroom photos shown as a grid on your public page. Add a caption to each.
-            {' '}{MEDIA_RULES.gallery.label}, max {MEDIA_RULES.gallery.maxMB}MB each.
+            {' '}{specSummary('gallery')}.
           </p>
           {mediaError && (
             <p className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2 mt-0 mb-4">{mediaError}</p>
@@ -562,6 +523,7 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
               <span className="text-[11px]">Add photo</span>
             </button>
           </div>
+          <ImageSpecHelp kind="gallery" />
           <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={addGalleryImage} />
           {SaveBar}
         </Card>
