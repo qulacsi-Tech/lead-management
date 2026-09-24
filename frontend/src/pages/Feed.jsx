@@ -255,7 +255,7 @@ function OpportunityCard({ opportunity: o, page }) {
 
       <Badge tone={badge.tone} className="mb-2">{badge.label}</Badge>
       <h4 className="text-sm font-bold text-on-surface mb-1">{o.title}</h4>
-      {o.description && <p className="text-sm text-on-surface-variant mb-3">{o.description}</p>}
+      {o.description && <p className="text-sm text-on-surface-variant mb-3 whitespace-pre-line">{o.description}</p>}
 
       <div className="grid grid-cols-2 gap-y-1 text-xs text-on-surface-variant mb-3">
         {o.type === 'admission' ? (

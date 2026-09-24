@@ -18,7 +18,7 @@ function AdSlide({ ad }) {
   const isJob = ad.type === 'job';
 
   return (
-    <article className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
+    <article className="rounded-xl border border-outline-variant border-l-4 border-l-amber-400 bg-surface-container-lowest p-4">
       <span
         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold mb-2 ${
           isJob
@@ -66,7 +66,10 @@ export default function SponsoredAdRail({ ads = [], city, intervalMs = 6000 }) {
 
   return (
     <section aria-label="Sponsored" className="px-1">
-      <p className="text-xs text-on-surface-variant m-0 mb-1.5">
+      <p className="flex items-center gap-1.5 text-xs text-on-surface-variant m-0 mb-1.5">
+        <span className="px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 text-[10px] font-extrabold tracking-wider">
+          AD
+        </span>
         Sponsored{city ? ' · near you' : ''}
       </p>
 

@@ -414,3 +414,18 @@ export const fetchPublicPapers = async ({
  *  Requires a session — the count is of distinct people, not clicks. */
 export const downloadPaper = async (paperId) =>
   apiFetch(`/papers/${paperId}/download`, { method: 'POST' });
+
+// --- Ad description templates (PLATFORM-owned) -----------------------------
+// Anyone signed in can read the list; only a Main Admin can change it.
+
+export const fetchAdDescriptionTemplates = async (section) =>
+  apiFetch(`/ad-templates/descriptions${section ? `?section=${encodeURIComponent(section)}` : ''}`);
+
+export const createAdDescriptionTemplate = async ({ section, text }) =>
+  apiFetch('/ad-templates/descriptions', { method: 'POST', body: { section, text } });
+
+export const updateAdDescriptionTemplate = async (id, patch) =>
+  apiFetch(`/ad-templates/descriptions/${id}`, { method: 'PATCH', body: patch });
+
+export const deleteAdDescriptionTemplate = async (id) =>
+  apiFetch(`/ad-templates/descriptions/${id}`, { method: 'DELETE' });

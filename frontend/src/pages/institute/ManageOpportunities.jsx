@@ -503,7 +503,7 @@ export default function ManageOpportunities({ type }) {
             {viewing.description && (
               <div className="mb-4">
                 <Label small>Description</Label>
-                <p className="text-sm text-on-surface-variant m-0">{viewing.description}</p>
+                <p className="text-sm text-on-surface-variant m-0 whitespace-pre-line">{viewing.description}</p>
               </div>
             )}
 

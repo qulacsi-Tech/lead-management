@@ -18,6 +18,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/admin/pages', label: 'Institute Pages', icon: 'storefront' },
       { to: '/admin/taxonomy', label: 'Types & Categories', icon: 'category' },
+      { to: '/admin/ad-descriptions', label: 'Ad Descriptions', icon: 'edit_note' },
       { to: '/admin/settings', label: 'Platform Settings', icon: 'settings' },
     ],
   },

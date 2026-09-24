@@ -486,6 +486,7 @@ export default function AdsTab({ pageId, pageName, section }) {
                 onTitleChange={(v) => setEditing((d) => ({ ...d, title: v }))}
                 onDescriptionChange={(v) => setEditing((d) => ({ ...d, description: v }))}
                 instituteName={pageName}
+                manageLink={canGoPlatformWide ? "/admin/ad-descriptions" : undefined}
                 titleLabel="Paper Title (one line)"
               />
 
@@ -610,6 +611,7 @@ export default function AdsTab({ pageId, pageName, section }) {
                 onTitleChange={(v) => setEditing((d) => ({ ...d, title: v }))}
                 onDescriptionChange={(v) => setEditing((d) => ({ ...d, description: v }))}
                 instituteName={pageName}
+                manageLink={canGoPlatformWide ? "/admin/ad-descriptions" : undefined}
               />
 
               <VisibilityControl

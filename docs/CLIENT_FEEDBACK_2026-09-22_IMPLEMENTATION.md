@@ -239,6 +239,29 @@ Consequences worth noting:
 **The wording in these lists is a first draft for the client to review.** The
 mechanism is done; swapping the copy is a one-file edit.
 
+### Follow-up, 24 Sep 2026 — descriptions made customisable
+
+> "Ads Hiring description … multi select check box format, max 3 can be selected"
+> "make Ad Description customizable as per requirement, make those editable or add custom format"
+
+> "each option item for desc should be single line not 3lines"
+
+- `AD_DESCRIPTION_OPTIONS` moved out of the frontend into the
+  `ad_description_templates` table (alembic `0009`). **Each template is one
+  line** — the 18 three-line texts were split into 18 one-line options per ad
+  type. API: `GET/POST /api/ad-templates/descriptions`,
+  `PATCH/DELETE /api/ad-templates/descriptions/{id}` — any signed-in user reads,
+  Main Admin only writes. Tests: `backend/tests/test_ad_templates.py`.
+- Platform Admin → **Ad Descriptions** (`/admin/ad-descriptions`) adds, edits,
+  reorders and deletes them per ad type.
+- The description field is now a checklist of one-line options: tick up to 3
+  (all ad types), which become the ad's 3-line description. A ticked line can
+  be **Customised** for that ad, or the institute can **write its own line**;
+  each counts towards the 3. Lines are stored in the one `description` column,
+  newline-separated.
+- Ads still store the filled-in text, so editing or deleting a template never
+  changes a published ad.
+
 ---
 
 ## 6. Apply without leaving the page

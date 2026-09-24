@@ -36,6 +36,14 @@
   --color-on-surface-variant: #424751;
   --color-outline: #727782;
   --color-outline-variant: #c2c6d3;
+
+  /* Ad ticker on the public institute page — components/AdMarquee.jsx.
+     The track holds the items twice, so -50% lands on an identical frame. */
+  --animate-marquee: marquee var(--marquee-duration, 40s) linear infinite;
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
 }
 
 body {

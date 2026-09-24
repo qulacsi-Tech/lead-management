@@ -30,6 +30,7 @@ import ManagePages from './pages/admin/ManagePages';
 import InstituteDetails from './pages/admin/InstituteDetails';
 import PlatformTaxonomy from './pages/admin/PlatformTaxonomy';
 import AdminSettings from './pages/admin/AdminSettings';
+import AdDescriptions from './pages/admin/AdDescriptions';
 
 import InstituteAdminLayout from './layouts/InstituteAdminLayout';
 import InstituteDashboard from './pages/institute/InstituteDashboard';
@@ -167,6 +168,7 @@ function AppRoutes() {
         <Route path="mentors" element={<ManageMentors />} />
         <Route path="enquiries" element={<ManageEnquiries />} />
         <Route path="taxonomy" element={<PlatformTaxonomy />} />
+        <Route path="ad-descriptions" element={<AdDescriptions />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -6,12 +6,13 @@ import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import { Input, FormGroup, Select } from '../components/ui/Field';
 import { COURSE_SPECIALIZATIONS } from './mockData';
-import { pageDisplayUrl } from '../utils/pageUrl';
+import { pagePath } from '../utils/pageUrl';
 import { KEY_HIGHLIGHTS_OPTIONS, FACILITIES_OPTIONS, buildAboutParagraph } from './pageBuilderContent';
 import { useAuth } from '../context/AuthContext';
 import { useLoginPrompt } from '../context/LoginPrompt';
 import PageHeader from './PageHeader';
 import SponsoredAdRail from '../components/SponsoredAdRail';
+import AdMarquee from '../components/AdMarquee';
 import StudyMaterialSection from '../components/StudyMaterialSection';
 import ApplyModal from '../components/ApplyModal';
 import {
@@ -363,6 +364,8 @@ export default function InstitutePage() {
   // page." The default is resolved below, after the lists have loaded, so the
   // page never opens on an empty tab.
   const [adTab, setAdTab] = useState(null);
+  // The ad banner scrolls here when one of this institute's own items is clicked.
+  const adsSectionRef = useRef(null);
   const [applyTo, setApplyTo] = useState(null);
   // Opportunity ids the visitor has already applied to, so the button can say
   // so instead of failing on submit with a duplicate.
@@ -454,9 +457,12 @@ export default function InstitutePage() {
       .then(([oppRes, pageRes, paperRes]) => {
         if (cancelled) return;
 
-        const nameById = Object.fromEntries(
+        const pageById = Object.fromEntries(
           (pageRes.status === 'fulfilled' && Array.isArray(pageRes.value) ? pageRes.value : [])
-            .map((pg) => [pg.id, pg.name]),
+            .map((pg) => [pg.id, pg]),
+        );
+        const nameById = Object.fromEntries(
+          Object.values(pageById).map((pg) => [pg.id, pg.name]),
         );
 
         if (paperRes.status === 'fulfilled' && Array.isArray(paperRes.value)) {
@@ -473,7 +479,14 @@ export default function InstitutePage() {
         const ordered = [...oppRes.value].sort((a, b) => Number(isNear(b)) - Number(isNear(a)));
 
         setSponsored(
-          ordered.slice(0, 4).map((o) => ({ ...o, org: nameById[o.page_id], near: isNear(o) })),
+          ordered.slice(0, 4).map((o) => ({
+            ...o,
+            org: nameById[o.page_id],
+            near: isNear(o),
+            // Without an external apply link, send the visitor to the
+            // advertiser's own page, where the ad lives with its Apply button.
+            href: o.apply_url || pagePath(pageById[o.page_id]),
+          })),
         );
       })
       .catch(() => {});
@@ -540,6 +553,47 @@ export default function InstitutePage() {
   const activeAdTab =
     visibleAdTabs.find((t) => t.key === adTab)?.key || visibleAdTabs[0]?.key || null;
 
+  // --- Ad banner ---------------------------------------------------------
+  // The institute's own notices, vacancies and papers, then ads from other
+  // institutes. Own items jump to their tab below; sponsored ones go to the
+  // advertiser.
+  const showAdTab = (key) => {
+    setAdTab(key);
+    adsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  const marqueeItems = [
+    ...notices.map((op) => ({
+      id: op.id, kind: 'admission', text: op.title, onClick: () => showAdTab('admission'),
+    })),
+    ...vacancies.map((op) => ({
+      id: op.id, kind: 'job', text: `We Are Hiring – ${op.position || op.title}`, onClick: () => showAdTab('job'),
+    })),
+    ...papers.map((p) => ({
+      id: p.id, kind: 'paper', text: p.title, onClick: () => showAdTab('paper'),
+    })),
+    ...sponsored.map((o) => ({
+      id: `sponsored-${o.id}`,
+      kind: o.type === 'job' ? 'job' : 'admission',
+      text: o.type === 'job' ? `We Are Hiring – ${o.position || o.title}` : o.title,
+      org: o.org,
+      href: o.href,
+      external: !!o.apply_url,
+    })),
+    ...sharedPapers.map((p) => ({
+      id: `shared-${p.id}`, kind: 'paper', text: p.title, org: p.org, onClick: () => showAdTab('paper'),
+    })),
+  ];
+
+  const sponsoredSlides = sponsored.map((o) => ({
+    id: o.id,
+    type: o.type,
+    title: o.type === 'job' ? `We Are Hiring – ${o.position || o.title}` : o.title,
+    org: o.org,
+    meta: [o.location, o.experience].filter(Boolean).join(' · '),
+    href: o.href,
+    external: !!o.apply_url,
+  }));
+
   const declaredCategories = page.course_categories || [];
 
   const content = page.content || {};
@@ -553,12 +607,9 @@ export default function InstitutePage() {
 
   return (
     <div>
-      <PageHeader
-        title={isMyPage ? 'Institute Page' : page.name}
-        subtitle={pageDisplayUrl(page)}
-      />
-
-      {/* Cover + logo */}
+      {/* Cover + logo. No page title/URL header above it — the card already
+          carries the name, and the client wanted the page to open on the
+          institute itself (feedback 24 Sep 2026). */}
       <Card className="overflow-hidden mb-5">
         <div className="h-28 md:h-36 bg-gradient-to-r from-primary to-tertiary" />
         {banners.length > 0 && (
@@ -621,6 +672,12 @@ export default function InstitutePage() {
           </div>
         </div>
       </Card>
+
+      {marqueeItems.length > 0 && (
+        <div className="mb-5">
+          <AdMarquee items={marqueeItems} />
+        </div>
+      )}
 
       <div className="grid md:grid-cols-3 gap-5">
         <div className="md:col-span-2 space-y-5">
@@ -690,17 +747,7 @@ export default function InstitutePage() {
               institute's own content — see SponsoredAdRail.jsx. */}
           <SponsoredAdRail
             city={sponsored.some((o) => o.near) ? page.city : null}
-            ads={sponsored.map((o) => ({
-              id: o.id,
-              type: o.type,
-              title: o.type === 'job'
-                ? `We Are Hiring – ${o.position || o.title}`
-                : o.title,
-              org: o.org,
-              meta: [o.location, o.experience].filter(Boolean).join(' · '),
-              href: o.apply_url || '/',
-              external: !!o.apply_url,
-            }))}
+            ads={sponsoredSlides}
           />
 
           {normalizeAchievements(content.achievements).length > 0 && (
@@ -800,7 +847,7 @@ export default function InstitutePage() {
               section rather than three stacked cards — client feedback
               22 Sep 2026, row 5. */}
           {activeAdTab && (
-            <Card className="p-5">
+            <Card className="p-5 scroll-mt-4" ref={adsSectionRef}>
               <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
                 <div className="flex flex-wrap gap-2">
                   {visibleAdTabs.map((t) => (
@@ -984,8 +1031,28 @@ export default function InstitutePage() {
               </Button>
             </div>
           </Card>
+
+          {/* A second ad placement that stays in view while the visitor
+              scrolls. Reversed so it leads with a different ad from the rail
+              in the main column. */}
+          {sponsoredSlides.length > 0 && (
+            <div className="md:sticky md:top-4">
+              <SponsoredAdRail
+                city={sponsored.some((o) => o.near) ? page.city : null}
+                ads={[...sponsoredSlides].reverse()}
+              />
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Second banner at the foot of the page, reversed so it doesn't simply
+          repeat the one at the top. */}
+      {marqueeItems.length > 0 && (
+        <div className="mt-5">
+          <AdMarquee items={[...marqueeItems].reverse()} />
+        </div>
+      )}
 
       {/* Public course detail — the enquiry funnel's entry point from a course */}
       <Modal open={!!courseDetail} onClose={() => setCourseDetail(null)} width={440}>
