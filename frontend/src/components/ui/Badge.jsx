@@ -1,10 +1,10 @@
 export default function Badge({ tone = 'neutral', children, className = '' }) {
   const tones = {
-    neutral: 'bg-surface-container text-on-surface-variant',
-    primary: 'bg-surface-container-high text-primary',
-    success: 'bg-secondary-container text-on-secondary-container',
+    neutral: 'bg-slate-100 text-slate-700',
+    primary: 'bg-blue-100 text-blue-700',
+    success: 'bg-emerald-100 text-emerald-700',
     error: 'bg-error-container text-on-error-container',
-    tertiary: 'bg-tertiary-fixed text-tertiary',
+    tertiary: 'bg-indigo-100 text-indigo-700',
   };
   return (
     <span

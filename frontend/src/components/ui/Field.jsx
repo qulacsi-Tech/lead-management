@@ -1,12 +1,12 @@
 const inputClass =
-  'w-full bg-surface-container-low border border-outline-variant rounded-lg px-3.5 py-2.5 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all';
+  'w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all';
 
 const errorClass = 'border-error focus:ring-error/20 focus:border-error';
 
 export function Label({ children, small }) {
   return (
     <label
-      className={`block font-semibold text-on-surface-variant mb-1.5 ${
+      className={`block font-semibold text-slate-800 mb-1.5 ${
         small ? 'text-xs' : 'text-sm'
       }`}
     >

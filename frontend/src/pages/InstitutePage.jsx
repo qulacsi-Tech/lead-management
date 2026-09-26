@@ -325,7 +325,7 @@ function FloatingEnquiryButton({ onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="hidden md:flex fixed right-6 top-1/2 -translate-y-1/2 z-30 items-center gap-2 bg-primary text-on-primary font-bold text-sm px-4 py-3 rounded-full shadow-lg hover:opacity-90 transition-all cursor-pointer"
+      className="hidden md:flex fixed right-6 top-1/2 -translate-y-1/2 z-30 items-center gap-2 bg-blue-600 text-white font-bold text-sm px-4 py-3 rounded-full shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-all cursor-pointer border-none"
     >
       <span className="material-symbols-outlined text-[20px]">edit_note</span>
       Submit Enquiry
@@ -611,7 +611,11 @@ export default function InstitutePage() {
           carries the name, and the client wanted the page to open on the
           institute itself (feedback 24 Sep 2026). */}
       <Card className="overflow-hidden mb-5">
-        <div className="h-28 md:h-36 bg-gradient-to-r from-primary to-tertiary" />
+        <div className="relative h-28 md:h-40 overflow-hidden bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600">
+          <span className="absolute -right-10 -top-16 w-56 h-56 rounded-full bg-white/10" aria-hidden="true" />
+          <span className="absolute right-40 top-12 w-24 h-24 rounded-full bg-white/10" aria-hidden="true" />
+          <span className="absolute left-1/3 -bottom-16 w-40 h-40 rounded-full bg-white/5" aria-hidden="true" />
+        </div>
         {banners.length > 0 && (
           <div className="grid grid-cols-3 gap-1 px-5 -mt-1">
             {banners.map((src, i) => (
@@ -620,7 +624,7 @@ export default function InstitutePage() {
           </div>
         )}
         <div className="p-5 pt-0">
-          <div className="w-20 h-20 -mt-10 mb-3 rounded-2xl border-4 border-surface-container-lowest shadow-sm flex items-center justify-center text-xl font-bold text-primary bg-surface-container-high overflow-hidden">
+          <div className="relative w-24 h-24 -mt-12 mb-3 rounded-3xl ring-4 ring-white shadow-md flex items-center justify-center text-2xl font-extrabold text-blue-700 bg-blue-50 overflow-hidden">
             {page.logo_url
               ? <img src={resolveAssetUrl(page.logo_url)} alt={page.name} className="w-full h-full object-cover" />
               : initials(page.name)}
@@ -628,7 +632,7 @@ export default function InstitutePage() {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-bold text-on-surface m-0">{page.name}</h1>
+                <h1 className="font-display text-2xl font-extrabold text-slate-900 m-0">{page.name}</h1>
                 <Badge tone="primary">{page.type}</Badge>
               </div>
               {page.tagline && <p className="text-sm text-on-surface-variant italic mb-0.5">{page.tagline}</p>}
@@ -857,8 +861,8 @@ export default function InstitutePage() {
                       onClick={() => setAdTab(t.key)}
                       className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
                         activeAdTab === t.key
-                          ? 'bg-primary text-on-primary border-primary'
-                          : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/20'
+                          : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400'
                       }`}
                     >
                       <span className="material-symbols-outlined text-[16px]">{t.icon}</span>

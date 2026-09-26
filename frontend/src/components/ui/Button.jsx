@@ -1,14 +1,14 @@
 const VARIANTS = {
   primary:
-    'bg-primary text-on-primary hover:opacity-90 shadow-sm',
+    'bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-600/20',
   secondary:
     'bg-secondary text-on-secondary hover:opacity-90 shadow-sm',
   soft:
-    'bg-surface-container-high text-primary hover:bg-surface-container-highest',
+    'bg-blue-50 text-blue-700 hover:bg-blue-100',
   outline:
-    'bg-transparent border border-outline-variant text-on-surface-variant hover:bg-surface-container-low',
+    'bg-white border border-slate-300 text-slate-700 hover:border-blue-400 hover:text-blue-700',
   ghost:
-    'bg-transparent text-primary hover:bg-surface-container-low',
+    'bg-transparent text-blue-700 hover:bg-blue-50',
   danger:
     'bg-transparent text-error hover:bg-error-container',
 };

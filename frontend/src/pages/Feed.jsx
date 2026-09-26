@@ -8,6 +8,7 @@ import {
   resolveAssetUrl,
   fetchPublicPages,
   fetchPublicOpportunities,
+  fetchPosts,
   fetchMyFollows,
   followPage,
   unfollowPage,
@@ -15,7 +16,9 @@ import {
   unlikeOpportunity,
 } from '../Api/Api';
 import { pagePath } from '../utils/pageUrl';
-import FeedBackdrop from '../components/FeedBackdrop';
+import Panel from '../components/feed/Panel';
+import PostCard from '../components/feed/PostCard';
+import PostComposer from '../components/feed/PostComposer';
 
 // Orange for admissions and green for jobs — the same pair the landing page
 // uses for its signposts and ad tags.
@@ -53,15 +56,6 @@ function daysUntil(value) {
   if (Number.isNaN(d.getTime())) return null;
   const diff = Math.ceil((d - Date.now()) / 86400000);
   return diff >= 0 ? diff : null;
-}
-
-/** A white rounded panel — the feed's card, in the landing page's shape. */
-function Panel({ className = '', children }) {
-  return (
-    <section className={`bg-white rounded-3xl border border-slate-200 shadow-sm ${className}`}>
-      {children}
-    </section>
-  );
 }
 
 function Avatar({ page, size = 'w-11 h-11', text = 'text-sm' }) {
@@ -195,55 +189,6 @@ function ClosingSoonRail({ opportunities, pageById }) {
             </Link>
           );
         })}
-      </div>
-    </Panel>
-  );
-}
-
-function Composer({ name }) {
-  const { auth } = useSession();
-  const { openLogin } = useLoginPrompt();
-
-  const guard = (e) => {
-    if (!auth) {
-      e.preventDefault();
-      openLogin('Sign in to post.');
-    }
-  };
-
-  const actions = [
-    { to: '/institute/notices', icon: 'campaign', label: 'Admission Notice', tone: 'text-orange-600 bg-orange-50' },
-    { to: '/institute/jobs', icon: 'work', label: 'Job Vacancy', tone: 'text-emerald-600 bg-emerald-50' },
-  ];
-
-  return (
-    <Panel className="p-4 sm:p-5">
-      <div className="flex items-center gap-3">
-        <span className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-500 text-white font-bold flex items-center justify-center shrink-0">
-          {initials(name)}
-        </span>
-        <Link
-          to="/institute/notices"
-          onClick={guard}
-          className="flex-1 px-5 py-3 rounded-full bg-slate-50 border border-slate-200 text-sm text-slate-500 hover:border-blue-400 no-underline transition-colors"
-        >
-          Start a post, notice or vacancy...
-        </Link>
-      </div>
-      <div className="flex flex-wrap gap-2 mt-3 sm:pl-14">
-        {actions.map((a) => (
-          <Link
-            key={a.label}
-            to={a.to}
-            onClick={guard}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 no-underline"
-          >
-            <span className={`w-6 h-6 rounded-lg flex items-center justify-center ${a.tone}`}>
-              <span className="material-symbols-outlined text-[16px]">{a.icon}</span>
-            </span>
-            {a.label}
-          </Link>
-        ))}
       </div>
     </Panel>
   );
@@ -598,6 +543,7 @@ function greeting() {
 
 const FILTERS = [
   { key: 'all', label: 'All', icon: 'dynamic_feed' },
+  { key: 'post', label: 'Posts', icon: 'forum' },
   { key: 'admission', label: 'Admissions', icon: 'campaign' },
   { key: 'job', label: 'Jobs', icon: 'work' },
 ];
@@ -642,10 +588,9 @@ function WelcomeBanner({ name, counts }) {
 /**
  * The feed, for signed-in members (anonymous visitors get the landing page).
  *
- * Everything shown is real: published admission notices and vacancies from
- * /api/opportunities, and enabled institutes from /api/pages/public. Member
- * posts are not here because there is no Post entity yet — see
- * docs/SEO_PUBLIC_SURFACE_PLAN_2026-08-23.md step 4.
+ * Everything shown is real: member posts from /api/posts, published
+ * admission notices and vacancies from /api/opportunities, and enabled
+ * institutes from /api/pages/public — posts and notices interleaved by date.
  *
  * Styled to match the landing page (client request, 26 Sep 2026).
  */
@@ -654,6 +599,7 @@ export default function Feed() {
   const { pages: administered } = useMyPages();
 
   const [opportunities, setOpportunities] = useState([]);
+  const [posts, setPosts] = useState([]);
   const [pages, setPages] = useState([]);
   const [followedIds, setFollowedIds] = useState(() => new Set());
   const [followBusyId, setFollowBusyId] = useState(null);
@@ -665,15 +611,17 @@ export default function Feed() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [oppRes, pageRes] = await Promise.allSettled([
+      const [oppRes, pageRes, postRes] = await Promise.allSettled([
         fetchPublicOpportunities({ limit: 30 }),
         fetchPublicPages(),
+        fetchPosts({ limit: 30 }),
       ]);
       if (cancelled) return;
       setOpportunities(oppRes.status === 'fulfilled' ? oppRes.value : []);
       setPages(pageRes.status === 'fulfilled' ? pageRes.value : []);
+      setPosts(postRes.status === 'fulfilled' ? postRes.value : []);
       setError(
-        oppRes.status === 'rejected' || pageRes.status === 'rejected'
+        [oppRes, pageRes, postRes].some((r) => r.status === 'rejected')
           ? 'Some of the feed could not be loaded.'
           : '',
       );
@@ -724,17 +672,32 @@ export default function Feed() {
     }
   }, [followedIds]);
 
+  // Member posts and institutes' notices/vacancies in one stream, newest first.
+  const stream = useMemo(() => {
+    const items = [
+      ...posts.map((p) => ({ key: `post-${p.id}`, kind: 'post', at: p.created_at, post: p })),
+      ...opportunities.map((o) => ({ key: `opp-${o.id}`, kind: o.type, at: o.published_at || o.created_at, opportunity: o })),
+    ];
+    return items.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
+  }, [posts, opportunities]);
+
   const counts = {
-    all: opportunities.length,
+    all: stream.length,
+    post: posts.length,
     admission: opportunities.filter((o) => o.type === 'admission').length,
     job: opportunities.filter((o) => o.type === 'job').length,
     pages: pages.length,
   };
-  const visible = filter === 'all' ? opportunities : opportunities.filter((o) => o.type === filter);
+  const visible = filter === 'all' ? stream : stream.filter((item) => item.kind === filter);
+
+  const addPost = (post) => {
+    setPosts((list) => [post, ...list]);
+    // Show it: a new post under the Jobs tab would look like it vanished.
+    if (filter !== 'all' && filter !== 'post') setFilter('all');
+  };
+  const removePost = (id) => setPosts((list) => list.filter((p) => p.id !== id));
 
   return (
-    <>
-    <FeedBackdrop />
     <div className="relative z-10 grid lg:grid-cols-[260px_1fr_280px] xl:grid-cols-[312px_1fr_336px] gap-5 items-start">
       <div className={RAIL}>
         {auth ? <ProfileRail name={name} headline={profile?.headline} /> : <GuestRail />}
@@ -744,7 +707,7 @@ export default function Feed() {
 
       <div className="space-y-4 min-w-0">
         <WelcomeBanner name={auth ? name : ''} counts={counts} />
-        <Composer name={name} />
+        <PostComposer onPosted={addPost} />
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Filter the feed">
           {FILTERS.map((f) => {
@@ -782,9 +745,11 @@ export default function Feed() {
         {loading ? (
           <Panel className="p-10 text-center text-sm text-slate-500">Loading feed…</Panel>
         ) : visible.length > 0 ? (
-          visible.map((o) => (
-            <OpportunityCard key={o.id} opportunity={o} page={pageById[o.page_id]} />
-          ))
+          visible.map((item) => (item.kind === 'post' ? (
+            <PostCard key={item.key} post={item.post} onDeleted={removePost} />
+          ) : (
+            <OpportunityCard key={item.key} opportunity={item.opportunity} page={pageById[item.opportunity.page_id]} />
+          )))
         ) : (
           <Panel className="p-10 text-center">
             <span className="w-14 h-14 mx-auto rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -796,7 +761,7 @@ export default function Feed() {
                 ? 'Job vacancies published by institutes appear here.'
                 : filter === 'admission'
                   ? 'Admission notices published by institutes appear here.'
-                  : 'Admission notices and job vacancies published by institutes appear here.'}
+                  : 'Be the first — start a post above, or ask the community a question.'}
             </p>
           </Panel>
         )}
@@ -825,6 +790,5 @@ export default function Feed() {
         </div>
       </div>
     </div>
-    </>
   );
 }

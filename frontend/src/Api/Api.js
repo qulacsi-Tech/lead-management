@@ -434,3 +434,36 @@ export const updateAdDescriptionTemplate = async (id, patch) =>
 
 export const deleteAdDescriptionTemplate = async (id) =>
   apiFetch(`/ad-templates/descriptions/${id}`, { method: 'DELETE' });
+
+// --- Member posts (feed) ----------------------------------------------------
+// Any signed-in member can post; replies may be made as an institute the
+// caller administers (`asPageId`). See backend/routers/posts.py.
+
+export const fetchPosts = async ({ before, limit = 20 } = {}) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (before) params.set('before', before);
+  return apiFetch(`/posts?${params}`);
+};
+
+export const createPost = async ({ kind, body }) =>
+  apiFetch('/posts', { method: 'POST', body: { kind, body } });
+
+export const deletePost = async (postId) =>
+  apiFetch(`/posts/${postId}`, { method: 'DELETE' });
+
+export const likePost = async (postId) =>
+  apiFetch(`/posts/${postId}/like`, { method: 'POST' });
+
+export const unlikePost = async (postId) =>
+  apiFetch(`/posts/${postId}/like`, { method: 'DELETE' });
+
+export const fetchPostComments = async (postId) => apiFetch(`/posts/${postId}/comments`);
+
+export const createPostComment = async (postId, { body, asPageId }) =>
+  apiFetch(`/posts/${postId}/comments`, {
+    method: 'POST',
+    body: { body, as_page_id: asPageId || null },
+  });
+
+export const deletePostComment = async (postId, commentId) =>
+  apiFetch(`/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });

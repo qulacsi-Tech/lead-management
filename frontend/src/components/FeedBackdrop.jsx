@@ -1,6 +1,7 @@
 /**
- * The decorative layer behind the feed: tinted colour washes, a faint dot
- * grid, and education icons drifting in the side gutters.
+ * The decorative layer behind every member screen (rendered by AppLayout):
+ * tinted colour washes, a faint dot grid, and education icons drifting in the
+ * side gutters.
  *
  * Client request, 26 Sep 2026: the empty space at the far left and right
  * should get "some animations … with some different background shades for a

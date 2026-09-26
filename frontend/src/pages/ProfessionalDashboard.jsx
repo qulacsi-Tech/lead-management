@@ -66,13 +66,13 @@ function AccountTab() {
         { icon: 'history', label: 'Desired History', desc: 'History of your desired job / admission posts.' },
         { icon: 'redeem', label: 'Referral Code', desc: 'Share your referral code and earn credits.' },
       ].map((c) => (
-        <Card key={c.label} className="p-4 flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary shrink-0">
+        <Card key={c.label} className="p-5 flex items-start gap-4 hover:shadow-md hover:border-blue-200 transition-all">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
             <span className="material-symbols-outlined">{c.icon}</span>
           </div>
           <div>
-            <p className="text-sm font-bold text-on-surface mb-0.5">{c.label}</p>
-            <p className="text-xs text-on-surface-variant mb-0">{c.desc}</p>
+            <p className="text-base font-bold text-slate-900 mb-0.5">{c.label}</p>
+            <p className="text-sm text-slate-500 mb-0">{c.desc}</p>
           </div>
         </Card>
       ))}
@@ -382,8 +382,8 @@ export default function ProfessionalDashboard() {
             onClick={() => setTab(t.key)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border transition-all cursor-pointer ${
               tab === t.key
-                ? 'bg-primary text-on-primary border-primary'
-                : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/20'
+                : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400'
             }`}
           >
             <span className="material-symbols-outlined text-[18px]">{t.icon}</span>

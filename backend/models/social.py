@@ -64,6 +64,7 @@ NOTIFICATION_TYPES = [
     "enquiry_received",    # someone enquired on a page you administer
     "profile_unlocked",    # an institute unlocked your profile
     "page_admin_assigned", # you were made an admin of a page
+    "post_comment",        # someone replied to your post
     "system",
 ]
 

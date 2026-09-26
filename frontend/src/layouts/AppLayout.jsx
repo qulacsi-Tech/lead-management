@@ -5,6 +5,7 @@ import { useMyPages } from '../hooks/useMyPages';
 import { isInstitutePath } from '../utils/pageUrl';
 import { useLoginPrompt } from '../context/LoginPrompt';
 import Logo from '../components/landing/Logo';
+import FeedBackdrop from '../components/FeedBackdrop';
 import {
   fetchNotifications,
   fetchUnreadCount,
@@ -27,6 +28,7 @@ const NOTIFICATION_ICONS = {
   enquiry_received: 'contact_mail',
   profile_unlocked: 'lock_open',
   page_admin_assigned: 'shield_person',
+  post_comment: 'forum',
   system: 'notifications',
 };
 
@@ -387,7 +389,10 @@ export default function AppLayout() {
         </div>
       </header>
 
-      <main className={`${width} mx-auto w-full px-4 sm:px-6 py-8`}>
+      {/* Tinted edges and slow shapes behind every member screen. */}
+      <FeedBackdrop />
+
+      <main className={`relative z-10 ${width} mx-auto w-full px-4 sm:px-6 py-8`}>
         <Outlet />
       </main>
     </div>

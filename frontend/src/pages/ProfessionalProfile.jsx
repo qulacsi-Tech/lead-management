@@ -409,8 +409,8 @@ function MarketplaceTab() {
               onClick={() => toggleAffiliation(p.slug)}
               className={`flex items-center gap-2 px-3 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
                 isFollowing(p.slug)
-                  ? 'bg-primary text-on-primary border-primary'
-                  : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/20'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400'
               }`}
             >
               <span className="material-symbols-outlined text-[16px]">
@@ -605,7 +605,9 @@ export default function ProfessionalProfile() {
       />
 
       <Card className="overflow-hidden mb-5">
-        <div className="relative h-24 md:h-32 bg-gradient-to-r from-tertiary to-primary">
+        <div className="relative h-24 md:h-36 overflow-hidden bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600">
+          <span className="absolute -right-10 -top-16 w-56 h-56 rounded-full bg-white/10" aria-hidden="true" />
+          <span className="absolute right-44 top-12 w-24 h-24 rounded-full bg-white/10" aria-hidden="true" />
           {coverPhotoUrl && (
             <img src={coverPhotoUrl} alt="Cover" className="absolute inset-0 w-full h-full object-cover" />
           )}
@@ -619,7 +621,7 @@ export default function ProfessionalProfile() {
           </div>
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="min-w-[200px]">
-              <h3 className="text-lg font-bold text-on-surface">{name}</h3>
+              <h3 className="font-display text-2xl font-extrabold text-slate-900 m-0">{name}</h3>
               <p className="text-sm text-on-surface-variant mb-1">{form.headline || 'Add a headline in the Overview tab'}</p>
               {profile?.category && <Badge tone="primary">{profile.category}</Badge>}
             </div>
@@ -635,8 +637,8 @@ export default function ProfessionalProfile() {
             onClick={() => setTab(t.key)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border transition-all cursor-pointer ${
               tab === t.key
-                ? 'bg-primary text-on-primary border-primary'
-                : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/20'
+                : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400'
             }`}
           >
             <span className="material-symbols-outlined text-[18px]">{t.icon}</span>
@@ -681,7 +683,7 @@ export default function ProfessionalProfile() {
                   onChange={() => setConfirmOrgOpen(true)}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary peer-disabled:opacity-60" />
+                <div className="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-60" />
               </label>
             </div>
             {isOrg ? (
