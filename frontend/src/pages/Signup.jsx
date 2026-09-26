@@ -1,21 +1,29 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import Badge from '../components/ui/Badge';
-import { Input, FormGroup } from '../components/ui/Field';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useSession } from '../context/useSession';
+import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../Api/Api';
+import AuthLayout, { AuthField, AuthSubmit, AuthError } from '../components/auth/AuthLayout';
+import { afterSignIn, authPath } from '../utils/authRedirect';
 
 export default function Signup() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const { signup } = useSession();
+  const { role, initializing } = useAuth();
+  const next = params.get('next');
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  if (initializing) return null;
+  if (role) return <Navigate to={afterSignIn(role, next)} replace />;
+
+  const set = (key) => (e) => {
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+    setError('');
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -25,94 +33,79 @@ export default function Signup() {
       // Account type (Professional/Student), category and Institute Page are
       // all set up afterwards, from the Profile screen — not asked here.
       await signup({ name: form.name, email: form.email, password: form.password });
-      navigate('/profile');
+      navigate('/profile', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Unable to create your account. Please try again.');
-    } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
-      <header className="border-b border-outline-variant bg-surface-container-lowest">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">E</div>
-            <span className="text-lg font-bold text-on-surface">Connectedus</span>
-          </div>
-          <span className="text-xs text-on-surface-variant">UI Prototype — static demo, no real account is created</span>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-xl mx-auto w-full px-6 py-12">
-        <Card className="p-8">
-          <h2 className="text-lg font-bold text-on-surface mb-1">Create your account</h2>
-          <p className="text-xs text-on-surface-variant mb-5">
-            Just the basics for now — you'll set your account type (Professional / Student),
-            category, and Institute Page from your profile after signing in.
-          </p>
-
-          <form onSubmit={submit} className="space-y-5">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <FormGroup label="Full name">
-                <Input required value={form.name} onChange={set('name')} placeholder="Your name" />
-              </FormGroup>
-              <FormGroup label="Phone">
-                <Input value={form.phone} onChange={set('phone')} placeholder="+91-XXXXXXXXXX" />
-              </FormGroup>
-            </div>
-
-            <FormGroup label="Email">
-              <Input
-                type="email"
-                required
-                value={form.email}
-                onChange={(e) => {
-                  setForm((f) => ({ ...f, email: e.target.value }));
-                  setError('');
-                }}
-                placeholder="name@example.com"
-              />
-            </FormGroup>
-
-            <FormGroup label="Password">
-              <Input
-                type="password"
-                required
-                value={form.password}
-                onChange={set('password')}
-                placeholder="••••••••"
-              />
-            </FormGroup>
-
-            {error && <p className="text-error text-xs mb-0">{error}</p>}
-
-            <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating account...' : 'Create Account'}
-            </Button>
-
-            <div className="flex items-center gap-3 text-xs text-on-surface-variant">
-              <div className="flex-1 h-px bg-outline-variant" />
-              or
-              <div className="flex-1 h-px bg-outline-variant" />
-            </div>
-            <Button type="button" variant="outline" className="w-full" icon="mail">Sign up with OTP</Button>
-            <Button type="button" variant="outline" className="w-full" icon="account_circle">Sign up with Google</Button>
-          </form>
-
-          <p className="text-sm text-on-surface-variant mt-5 pt-4 border-t border-outline-variant mb-0">
-            Already have an account?{' '}
-            <Link to="/" className="text-primary font-semibold hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </Card>
-
-        <div className="mt-4 flex justify-center">
-          <Badge tone="neutral">User types per client requirement doc — profile details are filled in after signup</Badge>
-        </div>
-      </main>
-    </div>
+    <AuthLayout
+      title="Create your account"
+      subtitle="Just the basics — you'll set up your profile right after."
+      pitch={{
+        title: 'Search, Discover,',
+        highlight: 'Connect',
+        body: 'Join the network that brings students, teachers and institutes together — all in one place.',
+        points: [
+          'Find colleges, coaching, schools and universities',
+          'Send enquiries and track the responses',
+          'Build your profile and create an Institute Page',
+        ],
+      }}
+      footer={
+        <>
+          Already have an account?{' '}
+          <Link to={authPath('/login', { next })} className="font-bold text-blue-600 hover:underline">
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-4">
+        <AuthField
+          label="Full name"
+          icon="person"
+          required
+          autoComplete="name"
+          autoFocus
+          value={form.name}
+          onChange={set('name')}
+          placeholder="Your name"
+        />
+        <AuthField
+          label="Email"
+          icon="mail"
+          type="email"
+          required
+          autoComplete="email"
+          value={form.email}
+          onChange={set('email')}
+          placeholder="name@example.com"
+        />
+        <AuthField
+          label="Phone (optional)"
+          icon="call"
+          type="tel"
+          autoComplete="tel"
+          value={form.phone}
+          onChange={set('phone')}
+          placeholder="+91 XXXXX XXXXX"
+        />
+        <AuthField
+          label="Password"
+          icon="lock"
+          type="password"
+          required
+          autoComplete="new-password"
+          value={form.password}
+          onChange={set('password')}
+          placeholder="Choose a password"
+        />
+        <AuthError>{error}</AuthError>
+        <AuthSubmit busy={isSubmitting} busyLabel="Creating account…">Create account</AuthSubmit>
+      </form>
+    </AuthLayout>
   );
 }

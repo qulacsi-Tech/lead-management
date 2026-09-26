@@ -177,8 +177,13 @@ export const fetchPage = async (pageId) => apiFetch(`/pages/${pageId}`);
 
 /** Enabled institutes, readable without a session — backs the public feed's
  *  suggestions rail and names the institute behind each notice. */
-export const fetchPublicPages = async (q) =>
-  apiFetch(`/pages/public${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+export const fetchPublicPages = async (q, { limit } = {}) => {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (limit) params.set('limit', String(limit));
+  const qs = params.toString();
+  return apiFetch(`/pages/public${qs ? `?${qs}` : ''}`);
+};
 
 /** Published admission notices and job vacancies across every enabled
  *  institute. Public: the feed is readable without an account. */

@@ -68,7 +68,7 @@ export default function StudyMaterialSection({
       window.open(resolveAssetUrl(res.file_url), '_blank', 'noopener');
     } catch (err) {
       // 401 is the expected path for a signed-out reader — send them to the
-      // sign-in dialog instead of showing them an error they cannot act on.
+      // sign-in page instead of showing them an error they cannot act on.
       if (err instanceof ApiError && err.status === 401) {
         onRequireLogin?.('Sign in to download study material.');
       } else {

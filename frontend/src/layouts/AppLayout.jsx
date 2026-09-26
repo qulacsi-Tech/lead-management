@@ -4,6 +4,7 @@ import { useSession } from '../context/useSession';
 import { useMyPages } from '../hooks/useMyPages';
 import { isInstitutePath } from '../utils/pageUrl';
 import { useLoginPrompt } from '../context/LoginPrompt';
+import Logo from '../components/landing/Logo';
 import {
   fetchNotifications,
   fetchUnreadCount,
@@ -11,7 +12,7 @@ import {
 } from '../Api/Api';
 
 const NAV_ICONS = [
-  { to: '/', icon: 'home', label: 'Home', end: true },
+  { to: '/feed', icon: 'home', label: 'Home', end: true },
   { to: '/search', icon: 'travel_explore', label: 'Search' },
   { to: '/dashboard', icon: 'space_dashboard', label: 'Dashboard' },
 ];
@@ -143,7 +144,7 @@ function NotificationBell() {
       <button
         type="button"
         onClick={toggleOpen}
-        className="relative flex flex-col items-center px-3 py-1.5 rounded-lg text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container-low cursor-pointer"
+        className="relative flex flex-col items-center px-3 py-1.5 rounded-xl text-[11px] font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 bg-transparent border-none cursor-pointer"
       >
         <span className="relative">
           <span className="material-symbols-outlined text-[22px]">notifications</span>
@@ -157,7 +158,7 @@ function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg overflow-hidden">
+        <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-outline-variant">
             <p className="text-sm font-bold text-on-surface mb-0">Notifications</p>
           </div>
@@ -220,6 +221,10 @@ export default function AppLayout() {
   //
   // See docs/CLIENT_FEEDBACK_2026-09-01.md, Section 5.
   const bareHeader = isInstitutePath(pathname);
+  // The feed runs 20% wider than other screens so its three columns fill
+  // more of a large monitor (client request, 26 Sep 2026); the header
+  // matches so its edges line up with the columns below.
+  const width = pathname === '/feed' ? 'max-w-[1384px]' : 'max-w-6xl';
 
   // Wait for the session-restore check (getMe() against the stored token) to
   // finish before deciding there is no session — otherwise every hard refresh
@@ -238,35 +243,38 @@ export default function AppLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-surface">
-      <header className="sticky top-0 z-40 border-b border-outline-variant bg-surface-container-lowest">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center gap-4">
-          <NavLink to="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">E</div>
-            <span className="text-lg font-bold text-on-surface hidden sm:inline">Connectedus</span>
-          </NavLink>
+    <div className="min-h-screen bg-slate-50">
+      {/* Same brand, colours and shapes as the landing page (client request,
+          26 Sep 2026: the feed "should match the vibe"). */}
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className={`${width} mx-auto px-4 sm:px-6 h-[72px] flex items-center gap-4`}>
+          <Logo compact />
 
-          <div
-            className={`flex-1 max-w-sm ${bareHeader ? 'hidden' : 'hidden md:flex'} items-center gap-2 bg-surface-container-low border border-outline-variant rounded-full px-4 py-2`}
+          <Link
+            to="/search"
+            className={`flex-1 max-w-md ${bareHeader ? 'hidden' : 'hidden md:flex'} items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-full pl-4 pr-1.5 py-1.5 no-underline hover:border-blue-400 transition-colors`}
           >
-            <span className="material-symbols-outlined text-on-surface-variant text-[18px]">search</span>
-            <span className="text-sm text-on-surface-variant">Search people, pages, courses...</span>
-          </div>
+            <span className="material-symbols-outlined text-slate-400 text-[20px]">search</span>
+            <span className="text-sm text-slate-500 flex-1">Search people, pages, courses...</span>
+            <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center">
+              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </span>
+          </Link>
 
           {!auth ? (
             <nav className="flex items-center gap-2 ml-auto">
               <button
                 type="button"
                 onClick={() => openLogin()}
-                className="px-4 py-2 rounded-full text-sm font-semibold text-on-surface-variant hover:bg-surface-container-low bg-transparent border-none cursor-pointer"
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-blue-700 bg-white border border-blue-600 cursor-pointer hover:bg-blue-50"
               >
-                Sign in
+                Login
               </button>
               <Link
                 to="/signup"
-                className="px-4 py-2 rounded-full text-sm font-semibold bg-primary text-on-primary hover:opacity-90 no-underline"
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 no-underline shadow-sm"
               >
-                Join now
+                Create Account
               </Link>
             </nav>
           ) : bareHeader ? null : (
@@ -277,7 +285,9 @@ export default function AppLayout() {
                   to={item.to}
                   end={item.end}
                   className={({ isActive }) =>
-                    `flex flex-col items-center px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${isActive ? 'text-primary' : 'text-on-surface-variant hover:bg-surface-container-low'
+                    `relative flex flex-col items-center px-3 py-1.5 rounded-xl text-[11px] font-semibold no-underline transition-all ${isActive
+                      ? 'text-blue-600 bg-blue-50'
+                      : 'text-slate-600 hover:text-blue-600 hover:bg-blue-50'
                     }`
                   }
                 >
@@ -292,16 +302,16 @@ export default function AppLayout() {
                 <button
                   type="button"
                   onClick={() => setMenuOpen((o) => !o)}
-                  className="flex flex-col items-center px-3 py-1.5 rounded-lg text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container-low cursor-pointer"
+                  className="flex flex-col items-center px-3 py-1.5 rounded-xl text-[11px] font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 bg-transparent border-none cursor-pointer"
                 >
-                  <div className="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center text-[11px] font-bold text-primary">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-[11px] font-bold text-white">
                     {(name || 'U')[0]}
                   </div>
                   <span className="hidden sm:inline">Me</span>
                 </button>
                 {menuOpen && (
                   <div
-                    className="absolute right-0 mt-2 w-56 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-2"
+                    className="absolute right-0 mt-2 w-60 bg-white border border-slate-200 rounded-2xl shadow-xl p-2"
                     onMouseLeave={() => setMenuOpen(false)}
                   >
                     <p className="px-3 py-2 text-xs text-on-surface-variant">
@@ -377,7 +387,7 @@ export default function AppLayout() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto w-full px-6 py-8">
+      <main className={`${width} mx-auto w-full px-4 sm:px-6 py-8`}>
         <Outlet />
       </main>
     </div>

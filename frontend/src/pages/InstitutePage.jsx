@@ -662,11 +662,11 @@ export default function InstitutePage() {
                   {following ? 'Following' : 'Follow'}
                 </Button>
               ) : (
-                /* Following needs an account, so an anonymous visitor is sent
-                   to sign in rather than shown a button that cannot work. */
-                <Link to="/">
-                  <Button size="sm" icon="add">Sign in to follow</Button>
-                </Link>
+                /* Following needs an account; the sign-in page brings the
+                   visitor back to this institute afterwards. */
+                <Button size="sm" icon="add" onClick={() => openLogin('Sign in to follow this institute.')}>
+                  Sign in to follow
+                </Button>
               )}
             </div>
           </div>

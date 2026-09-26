@@ -1,18 +1,35 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import { Input, FormGroup } from '../components/ui/Field';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useSession } from '../context/useSession';
+import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../Api/Api';
+import AuthLayout, { AuthField, AuthSubmit, AuthError } from '../components/auth/AuthLayout';
+import { afterSignIn, authPath } from '../utils/authRedirect';
 
+/**
+ * The one place anyone signs in. Every "Sign in to …" button in the app sends
+ * the visitor here with `next` (where to return) and `reason` (why they were
+ * asked) — see context/LoginPrompt.jsx. There is no sign-in dialog any more
+ * (client request, 26 Sep 2026: "change the login modal into a separate page,
+ * every time navigate to there only").
+ */
 export default function Login() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const { login } = useSession();
+  const { role, initializing } = useAuth();
+
+  const next = params.get('next');
+  const reason = params.get('reason');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (initializing) return null;
+  // Already signed in (a bookmark, or the back button after signing in).
+  if (role) return <Navigate to={afterSignIn(role, next)} replace />;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -20,113 +37,62 @@ export default function Login() {
     setIsSubmitting(true);
     try {
       const user = await login(email, password);
-      const role = (user?.role || '').toLowerCase();
-      if (role === 'admin') {
-        navigate('/admin');
-      } else if (role === 'institute') {
-        navigate('/institute');
-      } else {
-        navigate('/');
-      }
-
+      navigate(afterSignIn((user?.role || '').toLowerCase(), next), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.');
-    } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
-      <header className="border-b border-outline-variant bg-surface-container-lowest">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">E</div>
-            <span className="text-lg font-bold text-on-surface">Connectedus</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-12 grid md:grid-cols-2 gap-12 items-center">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-on-surface leading-tight mb-4">
-            The professional network<br /> built for education.
-          </h1>
-          <p className="text-on-surface-variant mb-6 max-w-md">
-            Teachers, faculty and institutes — build your profile, create your Institute Page, post
-            admissions &amp; jobs, and connect. Just like LinkedIn, made for the education industry.
-          </p>
-          <ul className="space-y-2 text-sm text-on-surface-variant">
-            <li className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>
-              Create an Institute Page and manage admins
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>
-              Post Admission Notices &amp; Job Vacancies
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>
-              Search &amp; unlock candidate / admission leads with credits
-            </li>
-          </ul>
-        </div>
-
-        <Card className="p-8">
-          <h2 className="text-lg font-bold text-on-surface mb-1">Sign in</h2>
-          <p className="text-xs text-on-surface-variant mb-5">
-            One login for everyone — your role is resolved from your account, admin included.
-          </p>
-
-          <form onSubmit={submit} className="space-y-4">
-            <FormGroup label="Email">
-              <Input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setError('');
-                }}
-                placeholder="name@example.com"
-              />
-            </FormGroup>
-            <FormGroup label="Password">
-              <Input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
-            </FormGroup>
-
-            {error && <p className="text-error text-xs mb-0">{error}</p>}
-
-            <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-              {isSubmitting ? 'Signing in...' : 'Sign In'}
-            </Button>
-
-            <div className="flex items-center gap-3 text-xs text-on-surface-variant">
-              <div className="flex-1 h-px bg-outline-variant" />
-              or
-              <div className="flex-1 h-px bg-outline-variant" />
-            </div>
-
-            <Button type="button" variant="outline" className="w-full" icon="mail">Continue with OTP</Button>
-            <Button type="button" variant="outline" className="w-full" icon="account_circle">Continue with Google</Button>
-          </form>
-
-          <div className="mt-5 pt-4 border-t border-outline-variant">
-            <p className="text-sm text-on-surface-variant mb-0">
-              New here?{' '}
-              <Link to="/signup" className="text-primary font-semibold hover:underline">
-                Join now
-              </Link>
-            </p>
-          </div>
-        </Card>
-      </main>
-    </div>
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Sign in to continue your education journey."
+      reason={reason}
+      pitch={{
+        title: 'Your Education Journey,',
+        highlight: 'Made Simple',
+        body: 'One login for students, teachers, institutes and admins — your role is picked up from your account.',
+        points: [
+          'Follow institutes and get their latest notices',
+          'Apply to admissions and teaching jobs',
+          'Download free guess papers and study material',
+        ],
+      }}
+      footer={
+        <>
+          New to ConnectEDus?{' '}
+          <Link to={authPath('/signup', { next })} className="font-bold text-blue-600 hover:underline">
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-4">
+        <AuthField
+          label="Email"
+          icon="mail"
+          type="email"
+          required
+          autoComplete="email"
+          autoFocus
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setError(''); }}
+          placeholder="name@example.com"
+        />
+        <AuthField
+          label="Password"
+          icon="lock"
+          type="password"
+          required
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setError(''); }}
+          placeholder="Your password"
+        />
+        <AuthError>{error}</AuthError>
+        <AuthSubmit busy={isSubmitting} busyLabel="Signing in…">Sign in</AuthSubmit>
+      </form>
+    </AuthLayout>
   );
 }

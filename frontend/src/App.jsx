@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useMyPages } from './hooks/useMyPages';
-import { LoginPromptProvider, useLoginPrompt } from './context/LoginPrompt';
+import { LoginPromptProvider } from './context/LoginPrompt';
+import { authPath } from './utils/authRedirect';
 import { DataProvider } from './context/DataContext';
 import { ToastProvider } from './context/ToastContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -12,6 +12,7 @@ import Signup from './pages/Signup';
 
 import AppLayout from './layouts/AppLayout';
 import Feed from './pages/Feed';
+import Landing from './pages/Landing';
 import CreateInstitutePage from './pages/CreateInstitutePage';
 import InstitutePage from './pages/InstitutePage';
 import LegacySlugRedirect from './pages/LegacySlugRedirect';
@@ -50,19 +51,17 @@ function RequireAdmin({ children }) {
 
 /** Gate for member-only screens.
  *
- * Sends an anonymous visitor to the public feed and opens the sign-in dialog
- * over it, rather than to a dead-end login page — the feed is public now, so
- * there is always something to land on. */
+ * Sends an anonymous visitor to the sign-in page, which brings them back to
+ * the screen they asked for once they are signed in. */
 function RequireSignedIn({ children }) {
   const { role, initializing } = useAuth();
-  const { openLogin } = useLoginPrompt();
-
-  useEffect(() => {
-    if (!initializing && !role) openLogin('Sign in to continue.');
-  }, [initializing, role, openLogin]);
+  const location = useLocation();
 
   if (initializing) return null;
-  if (!role) return <Navigate to="/" replace />;
+  if (!role) {
+    const here = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={authPath('/login', { next: here, reason: 'Sign in to continue.' })} replace />;
+  }
   return children;
 }
 
@@ -82,17 +81,22 @@ function AppRoutes() {
     <Routes>
       {/* Common feed + profile experience — Professional and Student roles
           both live here (see docs/EDUCATION_NETWORK_ROADMAP.md). */}
-      {/* `/login` stays a real page for deep links and bookmarks; day to day
-          the same form opens as a dialog over whatever you were reading. */}
+      {/* The only place to sign in or register — every "Sign in to …" button
+          navigates here (context/LoginPrompt.jsx) and comes back via `next`. */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
 
-      <Route path="/" element={<AppLayout />}>
-        {/* PUBLIC. The feed is the front door: an anonymous visitor lands here
-            rather than on a login wall, and signs in from the header when they
-            want to act. /feed keeps older links working. */}
-        <Route index element={<Feed />} />
-        <Route path="feed" element={<Navigate to="/" replace />} />
+      {/* PUBLIC front door. Client requirement, 26 Sep 2026: a landing page
+          first, and the feed after signing in. Landing redirects a signed-in
+          visitor on to the feed (or their console), so signing in from it
+          lands them there without any extra wiring. It has its own header and
+          footer, so it sits outside AppLayout. */}
+      <Route path="/" element={<Landing />} />
+
+      <Route element={<AppLayout />}>
+        {/* The feed, for members. An anonymous visitor is sent back to the
+            sign-in page, and returned here afterwards (RequireSignedIn). */}
+        <Route path="feed" element={<RequireSignedIn><Feed /></RequireSignedIn>} />
 
         {/* Member-only from here down. */}
         <Route path="create-page" element={<RequireSignedIn><CreateInstitutePage /></RequireSignedIn>} />

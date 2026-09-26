@@ -22,8 +22,8 @@ import { PROFESSIONAL_CATEGORIES } from '../constants/taxonomy';
  *
  * The one case that cannot be handled inline is an email that already has an
  * account — applying as them without authentication would be impersonation.
- * The backend answers 409 and the dialog asks them to sign in, still without
- * navigating away.
+ * The backend answers 409 and the dialog offers to sign in, which goes to the
+ * sign-in page and returns to this institute afterwards.
  */
 export default function ApplyModal({ open, onClose, opportunity, pageName, onApplied, onRequireLogin }) {
   const { user, loginFromToken } = useAuth();
