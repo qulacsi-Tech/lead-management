@@ -25,6 +25,7 @@ from routers.applications import router as applications_router, page_router as p
 from routers.credits import router as credits_router
 from routers.ad_templates import router as ad_templates_router
 from routers.posts import router as posts_router
+from routers.taxonomy import router as taxonomy_router
 from routers.seo import router as seo_router, render_public_html, legacy_slug_redirect
 
 UPLOAD_ROOT = os.path.join(os.path.dirname(__file__), "uploads")
@@ -98,6 +99,7 @@ app.include_router(notification_router, prefix="/api")
 app.include_router(credits_router, prefix="/api")
 app.include_router(ad_templates_router, prefix="/api")
 app.include_router(posts_router, prefix="/api")
+app.include_router(taxonomy_router, prefix="/api")
 
 
 @app.get("/api/ping")

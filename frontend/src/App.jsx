@@ -5,6 +5,7 @@ import { LoginPromptProvider } from './context/LoginPrompt';
 import { authPath } from './utils/authRedirect';
 import { DataProvider } from './context/DataContext';
 import { ToastProvider } from './context/ToastContext';
+import { TaxonomyProvider } from './context/TaxonomyContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 
 import Login from './pages/Login';
@@ -186,13 +187,15 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <DataProvider>
-          <ToastProvider>
-            <BrowserRouter>
-              <LoginPromptProvider>
-                <AppRoutes />
-              </LoginPromptProvider>
-            </BrowserRouter>
-          </ToastProvider>
+          <TaxonomyProvider>
+            <ToastProvider>
+              <BrowserRouter>
+                <LoginPromptProvider>
+                  <AppRoutes />
+                </LoginPromptProvider>
+              </BrowserRouter>
+            </ToastProvider>
+          </TaxonomyProvider>
         </DataProvider>
       </AuthProvider>
     </ErrorBoundary>

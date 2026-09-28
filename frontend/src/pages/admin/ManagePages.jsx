@@ -9,7 +9,6 @@ import DataTable, { RowAction } from '../../components/ui/DataTable';
 import { Input, Label, FormGroup } from '../../components/ui/Field';
 import { INSTITUTE_TYPES, AFFILIATION_OPTIONS, slugify } from '../../constants/taxonomy';
 import StateCitySelect from '../../components/ui/StateCitySelect';
-import CourseCategorySelect from '../../components/ui/CourseCategorySelect';
 import { pagePath, pageDisplayUrl } from '../../utils/pageUrl';
 import {
   ApiError,
@@ -428,14 +427,6 @@ export default function ManagePages() {
             {affiliation.mode === 'na' && (
               <p className="text-xs text-on-surface-variant mb-0 mt-1.5">Not applicable for {form.type} pages.</p>
             )}
-          </div>
-
-          <div className="pt-3 border-t border-outline-variant">
-            <CourseCategorySelect
-              type={form.type}
-              value={form.courseCategories}
-              onChange={(courseCategories) => setForm((f) => ({ ...f, courseCategories }))}
-            />
           </div>
 
           <div className="pt-3 border-t border-outline-variant">

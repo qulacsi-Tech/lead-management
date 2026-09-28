@@ -467,3 +467,55 @@ export const createPostComment = async (postId, { body, asPageId }) =>
 
 export const deletePostComment = async (postId, commentId) =>
   apiFetch(`/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });
+
+// ---------------------------------------------------------------------------
+// Dynamic Platform Taxonomy (Course Hierarchy, Levels, Affiliations)
+// ---------------------------------------------------------------------------
+
+export const fetchTaxonomy = async () => apiFetch('/taxonomy', { auth: false });
+
+export const addTaxonomyCategory = async ({ instituteType, category, subcategories = [] }) =>
+  apiFetch('/taxonomy/category', {
+    method: 'POST',
+    body: { institute_type: instituteType, category, subcategories },
+  });
+
+export const addTaxonomySubcategory = async ({ instituteType, category, subcategory }) =>
+  apiFetch('/taxonomy/subcategory', {
+    method: 'POST',
+    body: { institute_type: instituteType, category, subcategory },
+  });
+
+export const deleteTaxonomyCategory = async (instituteType, category) => {
+  const params = new URLSearchParams({ institute_type: instituteType, category });
+  return apiFetch(`/taxonomy/category?${params}`, { method: 'DELETE' });
+};
+
+export const deleteTaxonomySubcategory = async (instituteType, category, subcategory) => {
+  const params = new URLSearchParams({ institute_type: instituteType, category, subcategory });
+  return apiFetch(`/taxonomy/subcategory?${params}`, { method: 'DELETE' });
+};
+
+export const addTaxonomyLevel = async (level) =>
+  apiFetch('/taxonomy/level', {
+    method: 'POST',
+    body: { level },
+  });
+
+export const deleteTaxonomyLevel = async (level) => {
+  const params = new URLSearchParams({ level });
+  return apiFetch(`/taxonomy/level?${params}`, { method: 'DELETE' });
+};
+
+export const updateFullTaxonomyHierarchy = async (hierarchy) =>
+  apiFetch('/taxonomy/course-hierarchy', {
+    method: 'PUT',
+    body: { hierarchy },
+  });
+
+export const addTaxonomyHierarchyItem = async ({ instituteType, level, category, subcategories = [] }) =>
+  apiFetch('/taxonomy/hierarchy-item', {
+    method: 'POST',
+    body: { institute_type: instituteType, level, category, subcategories },
+  });
+

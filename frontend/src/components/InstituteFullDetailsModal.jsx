@@ -15,7 +15,9 @@ import {
   resolveAssetUrl,
   addSectionItem,
   deleteSectionItem,
+  fetchPageCourses,
 } from '../Api/Api';
+import CourseCategorySelect from './ui/CourseCategorySelect';
 
 
 
@@ -97,6 +99,7 @@ const TABS = [
   { key: 'main', label: 'Main & Identity', icon: 'storefront' },
   { key: 'contact', label: 'Contact & Social', icon: 'contact_page' },
   { key: 'about', label: 'About Us', icon: 'school' },
+  { key: 'courses', label: 'Courses Offered', icon: 'menu_book' },
   { key: 'why', label: 'Why Choose Us', icon: 'auto_awesome' },
   { key: 'highlights', label: 'Key Highlights', icon: 'military_tech' },
   { key: 'facilities', label: 'Facilities', icon: 'apartment' },
@@ -256,6 +259,8 @@ export default function InstituteFullDetailsModal({
 
   // Gallery
   const [gallery, setGallery] = useState([]);
+  const [courseCategories, setCourseCategories] = useState([]);
+  const [coursesList, setCoursesList] = useState([]);
 
   const logoInputRef = useRef(null);
   const bannerInputRef = useRef(null);
@@ -282,6 +287,7 @@ export default function InstituteFullDetailsModal({
     setPhone(data.contact || data.phone || '');
     setEmail(data.email || '');
     setAffiliation(data.affiliation || '');
+    setCourseCategories(Array.isArray(data.course_categories) ? data.course_categories : []);
 
     if (data.social_links || data.socialLinks) {
       setSocialLinks({
@@ -384,6 +390,14 @@ export default function InstituteFullDetailsModal({
         .catch((err) => {
           console.warn('Could not fetch fresh page data:', err);
         });
+
+      fetchPageCourses(targetId)
+        .then((res) => {
+          if (isMounted && Array.isArray(res)) {
+            setCoursesList(res);
+          }
+        })
+        .catch(() => {});
 
       return () => {
         isMounted = false;
@@ -578,6 +592,7 @@ export default function InstituteFullDetailsModal({
       website,
       contact: phone,
       affiliation,
+      course_categories: courseCategories,
       about: generatedIntro,
       social_links: socialLinks,
       gallery,
@@ -972,6 +987,48 @@ export default function InstituteFullDetailsModal({
                     {generateAboutParagraph(aboutState, allAboutFieldDefs, name)}
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* TAB: COURSES OFFERED */}
+            {tab === 'courses' && (
+              <div className="max-w-3xl space-y-6">
+                <div>
+                  <h3 className="text-sm font-bold text-on-surface m-0 mb-1">Courses &amp; Streams Offered</h3>
+                  <p className="text-xs text-on-surface-variant m-0">
+                    Select the course categories and subcategories offered by this institute. These appear on the public page and in the student enquiry form.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-xl border border-outline-variant bg-surface-container-low">
+                  <CourseCategorySelect
+                    type={type}
+                    value={courseCategories}
+                    onChange={setCourseCategories}
+                  />
+                </div>
+
+                {coursesList.length > 0 && (
+                  <div className="space-y-3 pt-3 border-t border-outline-variant">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant m-0">
+                        Detailed Course Catalogue ({coursesList.length})
+                      </h4>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {coursesList.map((c) => (
+                        <div key={c.id || c.name} className="p-3 rounded-xl border border-outline-variant bg-surface-container-lowest">
+                          <p className="font-bold text-xs text-on-surface m-0">{c.name}</p>
+                          <div className="flex items-center gap-2 mt-1 text-[11px] text-on-surface-variant">
+                            {c.category && <span className="bg-surface-container-high px-1.5 py-0.5 rounded">{c.category}</span>}
+                            {c.duration && <span>{c.duration}</span>}
+                            {c.fees && <span className="font-medium text-primary">₹{c.fees}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

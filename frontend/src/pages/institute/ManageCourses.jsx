@@ -17,6 +17,9 @@ import {
 import {
   COURSE_CATEGORIES,
   COURSE_LEVELS,
+} from '../../constants/taxonomy';
+import { useTaxonomy } from '../../context/TaxonomyContext';
+import {
   upsertCourse,
   removeCourse,
 } from '../mockData';
@@ -69,8 +72,29 @@ export default function ManageCourses() {
 
   const set = (key) => (e) => setEditing((f) => ({ ...f, [key]: e.target.value }));
 
-  const openCreate = () => { setEditing({ ...emptyCourse }); setSpecInput(''); };
+  const { courseCategoriesFor, courseSubcategoriesFor, levels: dynamicLevels } = useTaxonomy();
+  const availableLevels = dynamicLevels?.length > 0 ? dynamicLevels : COURSE_LEVELS;
+  const typeCategories = page?.type ? courseCategoriesFor(page.type) : [];
+  const availableCategories = typeCategories.length > 0 ? typeCategories : COURSE_CATEGORIES;
+  const currentCategory = editing?.category || availableCategories[0];
+  const availableSubcategories = courseSubcategoriesFor(page?.type, currentCategory);
+
+  const openCreate = () => {
+    setEditing({
+      ...emptyCourse,
+      category: availableCategories[0] || COURSE_CATEGORIES[0],
+    });
+    setSpecInput('');
+  };
   const openEdit = (course) => { setEditing({ ...course }); setSpecInput(''); };
+
+  const handleCategoryChange = (e) => {
+    const newCat = e.target.value;
+    setEditing((f) => ({
+      ...f,
+      category: newCat,
+    }));
+  };
 
   const addSpecialization = () => {
     const value = specInput.trim();
@@ -249,9 +273,8 @@ export default function ManageCourses() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-1 text-xs font-semibold rounded-md border-none cursor-pointer transition-all ${
-                tab === t ? 'bg-surface-container-lowest text-primary shadow-xs' : 'bg-transparent text-on-surface-variant'
-              }`}
+              className={`px-3 py-1 text-xs font-semibold rounded-md border-none cursor-pointer transition-all ${tab === t ? 'bg-surface-container-lowest text-primary shadow-xs' : 'bg-transparent text-on-surface-variant'
+                }`}
             >
               {t}
               {t !== 'All' && (
@@ -296,17 +319,43 @@ export default function ManageCourses() {
               </FormGroup>
 
               <div className="grid grid-cols-2 gap-3">
-                <FormGroup label="Category">
-                  <Select value={editing.category} onChange={set('category')}>
-                    {COURSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                <FormGroup label="Category / Stream">
+                  <Select value={editing.category} onChange={handleCategoryChange}>
+                    {availableCategories.map((c) => <option key={c} value={c}>{c}</option>)}
                   </Select>
                 </FormGroup>
                 <FormGroup label="Level / Program Type">
                   <Select value={editing.level} onChange={set('level')}>
-                    {COURSE_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                    {availableLevels.map((l) => <option key={l} value={l}>{l}</option>)}
                   </Select>
                 </FormGroup>
               </div>
+
+              {availableSubcategories.length > 0 && (
+                <FormGroup label="Sub Category / Branch (Select to add specialization)">
+                  <Select
+                    value=""
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) return;
+                      setEditing((f) => ({
+                        ...f,
+                        specializations: f.specializations?.includes(val)
+                          ? f.specializations
+                          : [...(f.specializations || []), val],
+                      }));
+                    }}
+                  >
+                    <option value="">Select subcategory to add…</option>
+                    {availableSubcategories.map((sub) => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                  </Select>
+                  <p className="text-[11px] text-on-surface-variant mt-1 mb-0">
+                    Showing subcategories for {editing.category} (e.g. {availableSubcategories.slice(0, 3).join(', ')}).
+                  </p>
+                </FormGroup>
+              )}
 
               <div className="grid grid-cols-3 gap-3">
                 <FormGroup label="Duration">

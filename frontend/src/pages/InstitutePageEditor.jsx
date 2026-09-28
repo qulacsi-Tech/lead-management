@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -26,13 +26,14 @@ import { pagePath } from '../utils/pageUrl';
 const TABS = [
   { key: 'main', label: 'Main', icon: 'storefront' },
   { key: 'about', label: 'About Us', icon: 'info' },
-  { key: 'contact', label: 'Contact & Social', icon: 'contact_page' },
-  { key: 'gallery', label: 'Gallery', icon: 'photo_library' },
+  { key: 'courses', label: 'Courses Offered', icon: 'menu_book' },
   { key: 'why', label: 'Why Choose Us', icon: 'stars' },
   { key: 'highlights', label: 'Key Highlights', icon: 'insights' },
   { key: 'facilities', label: 'Facilities', icon: 'apartment' },
   { key: 'campus', label: 'Campus Life', icon: 'diversity_3' },
   { key: 'achievements', label: 'Achievements', icon: 'military_tech' },
+  { key: 'gallery', label: 'Gallery', icon: 'photo_library' },
+  { key: 'contact', label: 'Contact & Social', icon: 'contact_page' },
 ];
 
 const SOCIAL_FIELDS = [
@@ -61,11 +62,10 @@ function ChipMultiSelect({ options, selected, onChange, suggestedMax }) {
             key={opt}
             type="button"
             onClick={() => toggle(opt)}
-            className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer text-left ${
-              selected.includes(opt)
-                ? 'bg-primary text-on-primary border-primary'
-                : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
-            }`}
+            className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer text-left ${selected.includes(opt)
+              ? 'bg-primary text-on-primary border-primary'
+              : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+              }`}
           >
             {opt}
           </button>
@@ -94,9 +94,8 @@ function NumberedPicker({ options, selected, onChange, checkboxLabel = 'Availabl
         return (
           <div
             key={opt.key}
-            className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
-              active ? 'border-primary bg-primary-container/20' : 'border-outline-variant'
-            }`}
+            className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${active ? 'border-primary bg-primary-container/20' : 'border-outline-variant'
+              }`}
           >
             <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
               <input type="checkbox" className="w-4 h-4 shrink-0" checked={active} onChange={() => toggle(opt.key)} />
@@ -310,11 +309,10 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border transition-all cursor-pointer ${
-              tab === t.key
-                ? 'bg-primary text-on-primary border-primary'
-                : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
-            }`}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border transition-all cursor-pointer ${tab === t.key
+              ? 'bg-primary text-on-primary border-primary'
+              : 'bg-transparent text-on-surface-variant border-outline-variant hover:bg-surface-container-low'
+              }`}
           >
             <span className="material-symbols-outlined text-[18px]">{t.icon}</span>
             {t.label}
@@ -385,15 +383,7 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
               )}
             </div>
             <div className="mb-1"><ImageSpecHelp kind="banner" /></div>
-          <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={addBanner} />
-
-          <div className="pt-4 mt-4 border-t border-outline-variant">
-            <CourseCategorySelect
-              type={page.type}
-              value={courseCategories}
-              onChange={setCourseCategories}
-            />
-          </div>
+            <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={addBanner} />
           </FormGroup>
           {SaveBar}
         </Card>
@@ -418,6 +408,30 @@ function InstitutePageEditorForm({ page, navigate, commit }) {
               {buildAboutParagraph(main.name, aboutStats) || 'Fill in a few fields above to see the generated paragraph.'}
             </p>
           </div>
+          {SaveBar}
+        </Card>
+      )}
+
+      {tab === 'courses' && (
+        <Card className="p-5 max-w-3xl">
+          <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-outline-variant">
+            <div>
+              <h4 className="text-sm font-bold text-on-surface m-0">Courses &amp; Streams Offered</h4>
+              <p className="text-xs text-on-surface-variant m-0 mt-0.5">
+                Pick the main categories and subcategories you teach. These are featured on your public page and drive the student enquiry form.
+              </p>
+            </div>
+            <Link to="/institute/courses" className="no-underline shrink-0">
+              <Button size="sm" variant="outline" icon="list_alt">
+                Full Course Catalogue
+              </Button>
+            </Link>
+          </div>
+          <CourseCategorySelect
+            type={page.type}
+            value={courseCategories}
+            onChange={setCourseCategories}
+          />
           {SaveBar}
         </Card>
       )}
