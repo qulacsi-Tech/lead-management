@@ -23,7 +23,7 @@ from typing import Optional
 import uuid
 
 from pydantic import BaseModel, Field
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Index
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.sql import func
 
 from core.database import Base
@@ -34,6 +34,32 @@ AD_TEMPLATE_SECTIONS = ["admission", "job", "paper"]
 
 # One line each; an ad's description is up to three of them, one per line.
 AD_TEMPLATE_MAX_LENGTH = 200
+AD_GROUP_NAME_MAX_LENGTH = 60
+
+
+class AdDescriptionGroup(Base):
+    """A named group of description lines inside one ad type — "Teaching" and
+    "Non-teaching" under Hiring, say.
+
+    Client request, 29 Sep 2026: the admin screen's tabs should be dynamic so
+    "user can add more variety". The ad types themselves stay fixed (they are
+    what an institute can publish); groups are the variety inside each one.
+    Lines with no group are shown as "General".
+    """
+
+    __tablename__ = "ad_description_groups"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    section = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_by = Column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("section", "name", name="uq_ad_description_group_name"),
+    )
 
 
 class AdDescriptionTemplate(Base):
@@ -44,6 +70,9 @@ class AdDescriptionTemplate(Base):
     text = Column(String, nullable=False)
     # Display order within a section; new templates are appended.
     sort_order = Column(Integer, nullable=False, default=0)
+    # Optional group inside the section. Deleting the group moves its lines
+    # back to "General" rather than deleting them.
+    group_id = Column(String, ForeignKey("ad_description_groups.id", ondelete="SET NULL"), nullable=True)
 
     created_by = Column(String, ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -61,11 +90,14 @@ class AdDescriptionTemplate(Base):
 class AdDescriptionTemplateCreate(BaseModel):
     section: str
     text: str = Field(min_length=1, max_length=AD_TEMPLATE_MAX_LENGTH)
+    group_id: Optional[str] = None
 
 
 class AdDescriptionTemplateUpdate(BaseModel):
     text: Optional[str] = Field(default=None, min_length=1, max_length=AD_TEMPLATE_MAX_LENGTH)
     sort_order: Optional[int] = None
+    # Send null to move a line back to "General".
+    group_id: Optional[str] = None
 
 
 class AdDescriptionTemplateResponse(BaseModel):
@@ -73,8 +105,29 @@ class AdDescriptionTemplateResponse(BaseModel):
     section: str
     text: str
     sort_order: int
+    group_id: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AdDescriptionGroupCreate(BaseModel):
+    section: str
+    name: str = Field(min_length=1, max_length=AD_GROUP_NAME_MAX_LENGTH)
+
+
+class AdDescriptionGroupUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=AD_GROUP_NAME_MAX_LENGTH)
+    sort_order: Optional[int] = None
+
+
+class AdDescriptionGroupResponse(BaseModel):
+    id: str
+    section: str
+    name: str
+    sort_order: int
 
     class Config:
         from_attributes = True

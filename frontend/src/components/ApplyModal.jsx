@@ -20,13 +20,14 @@ import { PROFESSIONAL_CATEGORIES } from '../constants/taxonomy';
  * in on the spot. They finish where they started, on the institute's page,
  * logged in and with their application filed.
  *
- * The one case that cannot be handled inline is an email that already has an
- * account — applying as them without authentication would be impersonation.
- * The backend answers 409 and the dialog offers to sign in, which goes to the
- * sign-in page and returns to this institute afterwards.
+ * An email that already has an account cannot apply without signing in —
+ * that would be impersonation, and the backend answers 409. That is handled
+ * in this dialog too: it switches to "welcome back", asks for the account's
+ * password, signs in and files the application in one step. Sending them to
+ * the sign-in page instead was exactly the redirect row 5 rules out.
  */
-export default function ApplyModal({ open, onClose, opportunity, pageName, onApplied, onRequireLogin }) {
-  const { user, loginFromToken } = useAuth();
+export default function ApplyModal({ open, onClose, opportunity, pageName, onApplied }) {
+  const { user, login, loginFromToken } = useAuth();
   const isJob = opportunity?.type === 'job';
 
   const [form, setForm] = useState({
@@ -68,20 +69,31 @@ export default function ApplyModal({ open, onClose, opportunity, pageName, onApp
     e.preventDefault();
     setSaving(true);
     setError('');
-    setNeedsSignIn(false);
+    // Snapshot: signing in below refreshes `user`, and the prefill effect
+    // would then overwrite what was typed before it is sent.
+    const data = { ...form };
+    const signingIn = needsSignIn && !user;
     try {
+      if (signingIn) {
+        try {
+          await login(data.email, data.password);
+        } catch (err) {
+          setError(err instanceof ApiError ? err.message : 'Could not sign you in.');
+          return;
+        }
+      }
       const res = await applyToOpportunity(opportunity.id, {
-        name: form.name || undefined,
-        email: form.email || undefined,
+        name: data.name || undefined,
+        email: data.email || undefined,
         // Only sent by a visitor creating their profile here.
-        password: user ? undefined : form.password || undefined,
-        phone: form.phone || undefined,
-        city: form.city || undefined,
-        state: form.state || undefined,
-        qualification: isJob ? form.qualification || undefined : undefined,
-        experience: isJob ? form.experience || undefined : undefined,
-        current_institute: isJob ? form.current_institute || undefined : undefined,
-        message: form.message || undefined,
+        password: user || signingIn ? undefined : data.password || undefined,
+        phone: data.phone || undefined,
+        city: data.city || undefined,
+        state: data.state || undefined,
+        qualification: isJob ? data.qualification || undefined : undefined,
+        experience: isJob ? data.experience || undefined : undefined,
+        current_institute: isJob ? data.current_institute || undefined : undefined,
+        message: data.message || undefined,
       });
 
       // Applying created the account: adopt the session so the visitor stays
@@ -91,11 +103,13 @@ export default function ApplyModal({ open, onClose, opportunity, pageName, onApp
         loginFromToken({ access_token: res.access_token, user: res.user });
       }
       setSubmitted(true);
+      setNeedsSignIn(false);
       onApplied?.(res.application);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409 && !user) {
+      if (err instanceof ApiError && err.status === 409 && !user && !signingIn) {
+        // The email has an account: ask for its password, right here.
         setNeedsSignIn(true);
-        setError(err.message);
+        setForm((f) => ({ ...f, password: '' }));
       } else {
         setError(err instanceof ApiError ? err.message : 'Could not submit your application.');
       }
@@ -128,11 +142,20 @@ export default function ApplyModal({ open, onClose, opportunity, pageName, onApp
             <p className="text-xs text-on-surface-variant m-0">{pageName}</p>
           </div>
 
-          {!user && (
-            <p className="text-[11px] text-on-surface-variant bg-surface-container-low rounded-lg px-3 py-2 mt-0 mb-3">
+          {!user && !needsSignIn && (
+            <p className="text-[11px] text-slate-600 bg-slate-50 rounded-xl px-3 py-2 mt-0 mb-3">
               No account yet? Fill this in and your profile is created as you apply — you stay right
               here.
             </p>
+          )}
+          {!user && needsSignIn && (
+            <div className="flex items-start gap-2 text-xs text-blue-900 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 mt-0 mb-3">
+              <span className="material-symbols-outlined text-[18px] text-blue-600" aria-hidden="true">waving_hand</span>
+              <span>
+                <strong>Welcome back!</strong> {form.email} already has an account. Enter its password and
+                we&apos;ll sign you in and send your application — you stay on this page.
+              </span>
+            </div>
           )}
 
           <form onSubmit={submit} className="space-y-3">
@@ -142,17 +165,20 @@ export default function ApplyModal({ open, onClose, opportunity, pageName, onApp
               type="email"
               placeholder="Email Address"
               value={form.email}
-              onChange={set('email')}
+              onChange={(e) => { set('email')(e); setNeedsSignIn(false); }}
               disabled={!!user}
             />
             {!user && (
               <Input
                 required
                 type="password"
-                placeholder="Choose a password (min. 6 characters)"
+                placeholder={needsSignIn ? 'Your password' : 'Choose a password (min. 6 characters)'}
+                aria-label={needsSignIn ? 'Your password' : 'Choose a password'}
+                autoComplete={needsSignIn ? 'current-password' : 'new-password'}
                 value={form.password}
                 onChange={set('password')}
-                minLength={6}
+                minLength={needsSignIn ? undefined : 6}
+                autoFocus={needsSignIn}
               />
             )}
             <Input placeholder="Mobile Number" value={form.phone} onChange={set('phone')} />
@@ -191,20 +217,11 @@ export default function ApplyModal({ open, onClose, opportunity, pageName, onApp
             {error && (
               <div className="text-xs text-error bg-error-container/40 rounded-lg px-3 py-2">
                 <p className="m-0">{error}</p>
-                {needsSignIn && (
-                  <button
-                    type="button"
-                    onClick={() => { close(); onRequireLogin?.('Sign in to apply.'); }}
-                    className="bg-transparent border-none p-0 mt-1 text-primary font-semibold cursor-pointer text-xs"
-                  >
-                    Sign in and continue
-                  </button>
-                )}
               </div>
             )}
 
             <Button type="submit" className="w-full" disabled={saving}>
-              {saving ? 'Submitting…' : 'Submit Application'}
+              {saving ? 'Submitting…' : needsSignIn && !user ? 'Sign in & apply' : 'Submit Application'}
             </Button>
           </form>
         </>

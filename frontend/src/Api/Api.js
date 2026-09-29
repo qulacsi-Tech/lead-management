@@ -426,8 +426,11 @@ export const downloadPaper = async (paperId) =>
 export const fetchAdDescriptionTemplates = async (section) =>
   apiFetch(`/ad-templates/descriptions${section ? `?section=${encodeURIComponent(section)}` : ''}`);
 
-export const createAdDescriptionTemplate = async ({ section, text }) =>
-  apiFetch('/ad-templates/descriptions', { method: 'POST', body: { section, text } });
+export const createAdDescriptionTemplate = async ({ section, text, groupId }) =>
+  apiFetch('/ad-templates/descriptions', {
+    method: 'POST',
+    body: { section, text, group_id: groupId || null },
+  });
 
 export const updateAdDescriptionTemplate = async (id, patch) =>
   apiFetch(`/ad-templates/descriptions/${id}`, { method: 'PATCH', body: patch });
@@ -519,3 +522,17 @@ export const addTaxonomyHierarchyItem = async ({ instituteType, level, category,
     body: { institute_type: instituteType, level, category, subcategories },
   });
 
+
+// Groups inside an ad type ("Teaching" under Hiring, say). Same rules as the
+// lines: anyone signed in reads, only a Main Admin writes.
+export const fetchAdDescriptionGroups = async (section) =>
+  apiFetch(`/ad-templates/groups${section ? `?section=${encodeURIComponent(section)}` : ''}`);
+
+export const createAdDescriptionGroup = async ({ section, name }) =>
+  apiFetch('/ad-templates/groups', { method: 'POST', body: { section, name } });
+
+export const updateAdDescriptionGroup = async (id, patch) =>
+  apiFetch(`/ad-templates/groups/${id}`, { method: 'PATCH', body: patch });
+
+export const deleteAdDescriptionGroup = async (id) =>
+  apiFetch(`/ad-templates/groups/${id}`, { method: 'DELETE' });

@@ -334,6 +334,60 @@ function FloatingEnquiryButton({ onClick }) {
 }
 
 /**
+ * Phone-only action bar pinned to the bottom of the screen.
+ *
+ * Client feedback 22 Sep 2026, row 10: "Mobile View Enquiry Tab Missing,
+ * Follow Tab Missing". The floating Submit Enquiry button is desktop-only, the
+ * Quick Enquiry card sits at the very end of the page on a phone, and Follow
+ * scrolls away with the header — so on a phone there was nothing to act on.
+ * This keeps Enquire, Follow and (when the institute has a number) Call in
+ * reach the whole way down.
+ */
+function MobileActionBar({ onEnquire, follow, phone }) {
+  const tel = phone ? phone.replace(/[^\d+]/g, '') : '';
+  const item = 'flex-1 flex flex-col items-center justify-center gap-0.5 py-2 rounded-2xl text-[11px] font-bold no-underline border-none cursor-pointer transition-colors disabled:opacity-50';
+
+  return (
+    <nav
+      aria-label="Institute actions"
+      className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200 px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(15,23,42,0.08)]"
+    >
+      <div className="flex items-stretch gap-2">
+        <button type="button" onClick={onEnquire} className={`${item} flex-[1.4] flex-row gap-2 text-sm text-white bg-blue-600 hover:bg-blue-700`}>
+          <span className="material-symbols-outlined text-[20px]" aria-hidden="true">edit_note</span>
+          Enquire
+        </button>
+        {follow && (
+          follow.to ? (
+            <Link to={follow.to} className={`${item} text-slate-700 bg-slate-100`}>
+              <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{follow.icon}</span>
+              {follow.label}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={follow.onClick}
+              disabled={follow.busy}
+              aria-pressed={follow.active}
+              className={`${item} ${follow.active ? 'text-blue-700 bg-blue-50' : 'text-slate-700 bg-slate-100'}`}
+            >
+              <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{follow.icon}</span>
+              {follow.label}
+            </button>
+          )
+        )}
+        {tel && (
+          <a href={`tel:${tel}`} className={`${item} text-emerald-700 bg-emerald-50`}>
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">call</span>
+            Call
+          </a>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+/**
  * An institute's public page, at connectedus.in/college/sait/indore.
  *
  * PUBLIC and path-driven: it reads GET /pages/resolve?path=..., which serves
@@ -606,7 +660,8 @@ export default function InstitutePage() {
     : COURSE_SPECIALIZATIONS[course] || [];
 
   return (
-    <div>
+    // Bottom padding on phones keeps the last card clear of MobileActionBar.
+    <div className="pb-20 md:pb-0">
       {/* Cover + logo. No page title/URL header above it — the card already
           carries the name, and the client wanted the page to open on the
           institute itself (feedback 24 Sep 2026). */}
@@ -685,6 +740,93 @@ export default function InstitutePage() {
 
       <div className="grid md:grid-cols-3 gap-5">
         <div className="md:col-span-2 space-y-5">
+          {/* Admission notices, vacancies and guess papers as three tabs of one
+              section rather than three stacked cards — client feedback
+              22 Sep 2026, row 5. First in the column, straight under the
+              header and ad banner: it is what most visitors come for, and
+              further down it sat behind ~2,000px of scrolling on a phone. */}
+          {activeAdTab && (
+            <Card className="p-5 scroll-mt-4" ref={adsSectionRef}>
+              <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                <div className="flex flex-wrap gap-2">
+                  {visibleAdTabs.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setAdTab(t.key)}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                        activeAdTab === t.key
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/20'
+                          : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">{t.icon}</span>
+                      {t.label}
+                      {t.count > 0 && (
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            activeAdTab === t.key ? 'bg-on-primary/20' : 'bg-surface-container-high'
+                          }`}
+                        >
+                          {t.count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {isMyPage && (
+                  <Link to={activeAdTab === 'job' ? '/institute/jobs' : '/institute/notices'}>
+                    <Button size="sm" variant="ghost" icon="tune">Manage</Button>
+                  </Link>
+                )}
+              </div>
+
+              {activeAdTab === 'admission' && (
+                <div className="space-y-3">
+                  {notices.length > 0 ? (
+                    notices.map((op) => (
+                      <OpportunityCard
+                        key={op.id}
+                        op={op}
+                        onApply={() => setApplyTo(op)}
+                        applied={appliedIds.has(op.id)}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-sm text-on-surface-variant mb-0">No admission notices yet.</p>
+                  )}
+                </div>
+              )}
+
+              {activeAdTab === 'job' && (
+                <div className="space-y-3">
+                  {vacancies.length > 0 ? (
+                    vacancies.map((op) => (
+                      <OpportunityCard
+                        key={op.id}
+                        op={op}
+                        onApply={() => setApplyTo(op)}
+                        applied={appliedIds.has(op.id)}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-sm text-on-surface-variant mb-0">No vacancies posted yet.</p>
+                  )}
+                </div>
+              )}
+
+              {activeAdTab === 'paper' && (
+                <StudyMaterialSection
+                  papers={papers}
+                  sharedPapers={sharedPapers}
+                  isMyPage={isMyPage}
+                  onRequireLogin={openLogin}
+                  bare
+                />
+              )}
+            </Card>
+          )}
+
           <Card className="p-5">
             <h2 className="text-sm font-bold text-on-surface mb-2">About</h2>
             <p className="text-sm text-on-surface-variant mb-0">
@@ -846,91 +988,6 @@ export default function InstitutePage() {
               <p className="text-sm text-on-surface-variant mb-0">No courses listed yet.</p>
             )}
           </Card>
-
-          {/* Admission notices, vacancies and guess papers as three tabs of one
-              section rather than three stacked cards — client feedback
-              22 Sep 2026, row 5. */}
-          {activeAdTab && (
-            <Card className="p-5 scroll-mt-4" ref={adsSectionRef}>
-              <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-                <div className="flex flex-wrap gap-2">
-                  {visibleAdTabs.map((t) => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => setAdTab(t.key)}
-                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                        activeAdTab === t.key
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/20'
-                          : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[16px]">{t.icon}</span>
-                      {t.label}
-                      {t.count > 0 && (
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                            activeAdTab === t.key ? 'bg-on-primary/20' : 'bg-surface-container-high'
-                          }`}
-                        >
-                          {t.count}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-                {isMyPage && (
-                  <Link to={activeAdTab === 'job' ? '/institute/jobs' : '/institute/notices'}>
-                    <Button size="sm" variant="ghost" icon="tune">Manage</Button>
-                  </Link>
-                )}
-              </div>
-
-              {activeAdTab === 'admission' && (
-                <div className="space-y-3">
-                  {notices.length > 0 ? (
-                    notices.map((op) => (
-                      <OpportunityCard
-                        key={op.id}
-                        op={op}
-                        onApply={() => setApplyTo(op)}
-                        applied={appliedIds.has(op.id)}
-                      />
-                    ))
-                  ) : (
-                    <p className="text-sm text-on-surface-variant mb-0">No admission notices yet.</p>
-                  )}
-                </div>
-              )}
-
-              {activeAdTab === 'job' && (
-                <div className="space-y-3">
-                  {vacancies.length > 0 ? (
-                    vacancies.map((op) => (
-                      <OpportunityCard
-                        key={op.id}
-                        op={op}
-                        onApply={() => setApplyTo(op)}
-                        applied={appliedIds.has(op.id)}
-                      />
-                    ))
-                  ) : (
-                    <p className="text-sm text-on-surface-variant mb-0">No vacancies posted yet.</p>
-                  )}
-                </div>
-              )}
-
-              {activeAdTab === 'paper' && (
-                <StudyMaterialSection
-                  papers={papers}
-                  sharedPapers={sharedPapers}
-                  isMyPage={isMyPage}
-                  onRequireLogin={openLogin}
-                  bare
-                />
-              )}
-            </Card>
-          )}
 
           {/* Gallery — INSTITUTE-OWNED, managed at /institute/profile */}
           {gallery.length > 0 && (
@@ -1107,6 +1164,25 @@ export default function InstitutePage() {
       </Modal>
 
       <FloatingEnquiryButton onClick={() => openEnquiry()} />
+      <MobileActionBar
+        onEnquire={() => openEnquiry()}
+        phone={page.contact}
+        follow={
+          isMyPage
+            ? { to: '/institute', icon: 'tune', label: 'Manage' }
+            : isPlatformAdmin
+              ? { to: `/admin/pages/${page.id}`, icon: 'shield_person', label: 'Admin' }
+              : user
+                ? {
+                  onClick: toggleFollow,
+                  busy: followBusy,
+                  active: following,
+                  icon: following ? 'check' : 'add',
+                  label: following ? 'Following' : 'Follow',
+                }
+                : { onClick: () => openLogin('Sign in to follow this institute.'), icon: 'add', label: 'Follow' }
+        }
+      />
       <EnquiryModal
         open={enquiryOpen}
         onClose={() => setEnquiryOpen(false)}
@@ -1125,7 +1201,6 @@ export default function InstitutePage() {
         onApplied={(application) =>
           setAppliedIds((prev) => new Set(prev).add(application.opportunity_id))
         }
-        onRequireLogin={openLogin}
       />
     </div>
   );

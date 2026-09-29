@@ -1,9 +1,9 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { fetchAdDescriptionTemplates } from '../Api/Api';
+import { fetchAdDescriptionTemplates, fetchAdDescriptionGroups } from '../Api/Api';
 
 /**
- * The platform's ad description templates, all sections, from
- * `/ad-templates/descriptions`.
+ * The platform's ad description lines and the groups they are filed under,
+ * all sections, from `/ad-templates/descriptions` and `/ad-templates/groups`.
  *
  * A shared store (same shape as useMyPages) so every open ad form reads one
  * request, and so the Platform Admin's Ad Descriptions screen can call
@@ -13,7 +13,7 @@ import { fetchAdDescriptionTemplates } from '../Api/Api';
 
 const listeners = new Set();
 
-let state = { templates: [], loaded: false, error: null, promise: null };
+let state = { templates: [], groups: [], loaded: false, error: null, promise: null };
 
 function setState(patch) {
   state = { ...state, ...patch };
@@ -30,9 +30,9 @@ function getSnapshot() {
 }
 
 export function reloadAdDescriptionTemplates() {
-  const promise = fetchAdDescriptionTemplates()
-    .then((templates) => {
-      if (state.promise === promise) setState({ templates, loaded: true, error: null, promise: null });
+  const promise = Promise.all([fetchAdDescriptionTemplates(), fetchAdDescriptionGroups()])
+    .then(([templates, groups]) => {
+      if (state.promise === promise) setState({ templates, groups, loaded: true, error: null, promise: null });
       return templates;
     })
     .catch((err) => {
@@ -51,12 +51,11 @@ export default function useAdDescriptionTemplates(section) {
     if (!state.loaded && !state.promise) reloadAdDescriptionTemplates();
   }, []);
 
-  const templates = section
-    ? snapshot.templates.filter((t) => t.section === section)
-    : snapshot.templates;
+  const inSection = (item) => !section || item.section === section;
 
   return {
-    templates,
+    templates: snapshot.templates.filter(inSection),
+    groups: snapshot.groups.filter(inSection),
     loading: !snapshot.loaded,
     error: snapshot.error,
     reload: reloadAdDescriptionTemplates,

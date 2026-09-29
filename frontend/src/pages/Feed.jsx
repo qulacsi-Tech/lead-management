@@ -19,6 +19,7 @@ import { pagePath } from '../utils/pageUrl';
 import Panel from '../components/feed/Panel';
 import PostCard from '../components/feed/PostCard';
 import PostComposer from '../components/feed/PostComposer';
+import ApplyModal from '../components/ApplyModal';
 
 // Orange for admissions and green for jobs — the same pair the landing page
 // uses for its signposts and ad tags.
@@ -207,7 +208,7 @@ const CARD_ACTION =
   'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold bg-transparent border-none cursor-pointer transition-colors disabled:opacity-50';
 
 /** One published admission notice or job vacancy, from /api/opportunities. */
-function OpportunityCard({ opportunity: o, page }) {
+function OpportunityCard({ opportunity: o, page, onApply, applied }) {
   const { auth } = useSession();
   const { openLogin } = useLoginPrompt();
   const badge = TYPE_BADGE[o.type] || TYPE_BADGE.admission;
@@ -320,15 +321,28 @@ function OpportunityCard({ opportunity: o, page }) {
               </button>
             )}
           </div>
-          {page && (
-            <Link
-              to={pagePath(page)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 no-underline shadow-sm shadow-blue-600/20"
+          {/* Apply opens the form right here (client feedback 22 Sep 2026,
+              row 5: "we should not redirect them to any other page"); View
+              stays as the way to the institute's page. */}
+          <div className="flex items-center gap-2">
+            {page && (
+              <Link
+                to={pagePath(page)}
+                className="hidden sm:inline-flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-blue-700 hover:bg-blue-50 no-underline"
+              >
+                View
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => onApply(o, page)}
+              disabled={applied}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 border-none cursor-pointer shadow-sm shadow-blue-600/20 disabled:bg-emerald-600 disabled:cursor-default disabled:shadow-none"
             >
-              {o.type === 'admission' ? 'View Notice' : 'View Vacancy'}
-              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-            </Link>
-          )}
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{applied ? 'check' : 'send'}</span>
+              {applied ? 'Applied' : 'Apply'}
+            </button>
+          </div>
         </div>
       </div>
     </Panel>
@@ -606,6 +620,10 @@ export default function Feed() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
+  // The notice or vacancy being applied to from the feed, and what has been
+  // applied to this session (the institute page does the same).
+  const [applyTo, setApplyTo] = useState(null);
+  const [appliedIds, setAppliedIds] = useState(() => new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -748,7 +766,13 @@ export default function Feed() {
           visible.map((item) => (item.kind === 'post' ? (
             <PostCard key={item.key} post={item.post} onDeleted={removePost} />
           ) : (
-            <OpportunityCard key={item.key} opportunity={item.opportunity} page={pageById[item.opportunity.page_id]} />
+            <OpportunityCard
+              key={item.key}
+              opportunity={item.opportunity}
+              page={pageById[item.opportunity.page_id]}
+              applied={appliedIds.has(item.opportunity.id)}
+              onApply={(opportunity, page) => setApplyTo({ opportunity, page })}
+            />
           )))
         ) : (
           <Panel className="p-10 text-center">
@@ -789,6 +813,13 @@ export default function Feed() {
           © {new Date().getFullYear()} ConnectEDus · Nexus Intellect EdTech
         </div>
       </div>
+      <ApplyModal
+        open={!!applyTo}
+        onClose={() => setApplyTo(null)}
+        opportunity={applyTo?.opportunity}
+        pageName={applyTo?.page?.name || 'the institute'}
+        onApplied={(application) => setAppliedIds((prev) => new Set(prev).add(application.opportunity_id))}
+      />
     </div>
   );
 }

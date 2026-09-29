@@ -97,8 +97,19 @@ export default function AdCopyFields({
  * saved text is never silently dropped.
  */
 function DescriptionPicker({ section, description, onDescriptionChange, instituteName, max, manageLink }) {
-  const { templates, loading, error } = useAdDescriptionTemplates(section);
-  const options = templates.map((t) => ({ id: t.id, text: fillAdTemplate(t.text, instituteName) }));
+  const { templates, groups, loading, error } = useAdDescriptionTemplates(section);
+  const options = templates.map((t) => ({
+    id: t.id, groupId: t.group_id || '', text: fillAdTemplate(t.text, instituteName),
+  }));
+  // Lines under their admin-defined group headings ("General" for the rest).
+  // Headings only appear once there is more than one group to tell apart.
+  const sections = [
+    { id: '', name: 'General' },
+    ...groups.map((g) => ({ id: g.id, name: g.name })),
+  ]
+    .map((g) => ({ ...g, options: options.filter((o) => o.groupId === g.id) }))
+    .filter((g) => g.options.length > 0);
+  const showHeadings = sections.length > 1;
   const optionTexts = options.map((o) => o.text);
 
   const nextKey = useRef(0);
@@ -162,40 +173,47 @@ function DescriptionPicker({ section, description, onDescriptionChange, institut
           </p>
         )}
 
-        {options.map((option) => {
-          const checked = lines.some((l) => !isEditable(l) && l.text === option.text);
-          const disabled = !checked && atMax;
-          return (
-            <label
-              key={option.id}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors ${
-                checked ? 'border-primary bg-primary-container/10' : 'border-outline-variant'
-              } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-surface-container-low'}`}
-            >
-              <input
-                type="checkbox"
-                className="h-4 w-4 shrink-0 accent-primary"
-                checked={checked}
-                disabled={disabled}
-                onChange={() => toggleOption(option.text)}
-              />
-              <span className="text-xs text-on-surface flex-1 min-w-0">{option.text}</span>
-              {checked && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    customise(option.text);
-                  }}
-                  className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-primary bg-transparent border-none cursor-pointer p-0 hover:underline"
+        {sections.map((group) => (
+          <div key={group.id || 'general'} className="flex flex-col gap-1.5">
+            {showHeadings && (
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 m-0 mt-1">{group.name}</p>
+            )}
+            {group.options.map((option) => {
+              const checked = lines.some((l) => !isEditable(l) && l.text === option.text);
+              const disabled = !checked && atMax;
+              return (
+                <label
+                  key={option.id}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors ${
+                    checked ? 'border-primary bg-primary-container/10' : 'border-outline-variant'
+                  } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-surface-container-low'}`}
                 >
-                  <span className="material-symbols-outlined text-[14px]">edit</span>
-                  Customise
-                </button>
-              )}
-            </label>
-          );
-        })}
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 accent-primary"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={() => toggleOption(option.text)}
+                  />
+                  <span className="text-xs text-on-surface flex-1 min-w-0">{option.text}</span>
+                  {checked && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        customise(option.text);
+                      }}
+                      className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-primary bg-transparent border-none cursor-pointer p-0 hover:underline"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">edit</span>
+                      Customise
+                    </button>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        ))}
 
         {editable.map((l) => (
           <div key={l.key} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary bg-primary-container/10">

@@ -82,3 +82,61 @@ async def test_rejects_bad_section_duplicate_and_blank(app_client, world):
     assert (await app_client.post(BASE, headers=platform, json={
         "section": "paper", "text": "  \n  ",
     })).status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Groups inside an ad type
+# ---------------------------------------------------------------------------
+
+GROUPS = "/api/ad-templates/groups"
+
+
+@pytest.mark.asyncio
+async def test_groups_hold_lines_and_deleting_one_moves_them_to_general(app_client, world):
+    platform = world["platform"]
+    group = await app_client.post(GROUPS, headers=platform, json={"section": "job", "name": "  Non   teaching "})
+    assert group.status_code == 201, group.text
+    assert group.json()["name"] == "Non teaching"
+    gid = group.json()["id"]
+
+    line = await app_client.post(BASE, headers=platform, json={
+        "section": "job", "text": "Office staff wanted.", "group_id": gid,
+    })
+    assert line.status_code == 201, line.text
+    assert line.json()["group_id"] == gid
+
+    listed = (await app_client.get(GROUPS, params={"section": "job"}, headers=platform)).json()
+    assert [g["name"] for g in listed] == ["Non teaching"]
+
+    renamed = await app_client.patch(f"{GROUPS}/{gid}", headers=platform, json={"name": "Admin staff"})
+    assert renamed.json()["name"] == "Admin staff"
+
+    assert (await app_client.delete(f"{GROUPS}/{gid}", headers=platform)).status_code == 204
+    lines = (await app_client.get(BASE, params={"section": "job"}, headers=platform)).json()
+    moved = next(t for t in lines if t["id"] == line.json()["id"])
+    assert moved["group_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_group_rules(app_client, world):
+    platform, admin_a = world["platform"], world["admin_a"]
+    paper_group = (await app_client.post(GROUPS, headers=platform, json={"section": "paper", "name": "Class 12"})).json()
+
+    # A line cannot join another ad type's group, on create or on move.
+    assert (await app_client.post(BASE, headers=platform, json={
+        "section": "admission", "text": "Wrong group", "group_id": paper_group["id"],
+    })).status_code == 422
+    own = (await app_client.post(BASE, headers=platform, json={"section": "admission", "text": "Right place"})).json()
+    assert (await app_client.patch(f"{BASE}/{own['id']}", headers=platform, json={
+        "group_id": paper_group["id"],
+    })).status_code == 422
+
+    # Names are unique per ad type (case-insensitive), and "General" is reserved.
+    assert (await app_client.post(GROUPS, headers=platform, json={"section": "paper", "name": "class 12"})).status_code == 409
+    assert (await app_client.post(GROUPS, headers=platform, json={"section": "paper", "name": "General"})).status_code == 409
+    assert (await app_client.post(GROUPS, headers=platform, json={"section": "job", "name": "Class 12"})).status_code == 201
+
+    # Readable by a page admin, writable only by the Main Admin.
+    assert (await app_client.get(GROUPS, headers=admin_a)).status_code == 200
+    assert (await app_client.post(GROUPS, headers=admin_a, json={"section": "job", "name": "Mine"})).status_code == 403
+    assert (await app_client.delete(f"{GROUPS}/{paper_group['id']}", headers=admin_a)).status_code == 403

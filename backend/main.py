@@ -23,7 +23,7 @@ from routers.study_papers import router as study_papers_router, public_router as
 from routers.social import follow_router, notification_router
 from routers.applications import router as applications_router, page_router as page_applications_router
 from routers.credits import router as credits_router
-from routers.ad_templates import router as ad_templates_router
+from routers.ad_templates import router as ad_templates_router, groups_router as ad_groups_router
 from routers.posts import router as posts_router
 from routers.taxonomy import router as taxonomy_router
 from routers.seo import router as seo_router, render_public_html, legacy_slug_redirect
@@ -98,6 +98,7 @@ app.include_router(follow_router, prefix="/api")
 app.include_router(notification_router, prefix="/api")
 app.include_router(credits_router, prefix="/api")
 app.include_router(ad_templates_router, prefix="/api")
+app.include_router(ad_groups_router, prefix="/api")
 app.include_router(posts_router, prefix="/api")
 app.include_router(taxonomy_router, prefix="/api")
 
