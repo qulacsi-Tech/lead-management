@@ -1,521 +1,250 @@
 import { useState } from 'react';
-import { Label, Input } from './Field';
-import Button from './Button';
+import { Label } from './Field';
 import { useTaxonomy } from '../../context/TaxonomyContext';
 
 /**
- * CourseCategorySelect:
- * Streamlined 3-tier cascade:
- * Level (with Custom option) -> Category (with Custom option) -> Subcategory (with Custom option)
+ * CourseCategorySelect — pick an institute's courses from the master list.
  *
- * Each next tier is presented in an interactive nested multi-select checkbox format.
+ * Level -> Category -> Subcategory, as nested checkboxes. SELECT ONLY: the
+ * levels, categories and branches are the ones the Platform Admin keeps in
+ * Types & Categories (per level), and nothing new can be added from here
+ * (client request, 30 Sep 2026: "only can be selected, whatever added there
+ * in master page"). Used on the institute details page, in "Assign to
+ * Institute", and in the institute's own page editor.
  *
  * Value shape on `pages.course_categories`:
  *   [
- *     { level: 'Undergraduate (UG)', category: 'Engineering', subcategories: ['Computer Science (CSE)', 'Mechanical'] },
- *     { level: 'Postgraduate (PG)', category: 'MBA / Management', subcategories: ['Marketing', 'Finance'] }
+ *     { level: 'UG', category: 'B.Tech', subcategories: ['CSE', 'Mechanical'] },
+ *     { level: 'PG', category: 'MBA', subcategories: ['Marketing', 'Finance'] }
  *   ]
  */
-export default function CourseCategorySelect({
-  type = 'College',
-  value = [],
-  onChange,
-  disabled = false,
-}) {
-  const {
-    levels: platformLevels = [],
-    commonCategories = {},
-    courseCategoriesFor,
-    courseSubcategoriesFor,
-    addHierarchyItem,
-  } = useTaxonomy();
+export default function CourseCategorySelect({ value = [], onChange, disabled = false }) {
+  const { levels: platformLevels = [], levelHierarchy = {}, commonCategories = {} } = useTaxonomy();
 
-  const standardCategories = courseCategoriesFor ? courseCategoriesFor() : Object.keys(commonCategories);
+  // Each level offers its own categories and branches. Only when no per-level
+  // tree exists at all does every level fall back to the old pooled list.
+  const hasLevelTree = Object.values(levelHierarchy).some((cats) => Object.keys(cats || {}).length > 0);
+  const categoriesFor = (lvl) => (hasLevelTree ? levelHierarchy[lvl] || {} : commonCategories);
 
-  // Expanded toggles for levels and categories
   const [expandedLevels, setExpandedLevels] = useState(() => new Set());
   const [expandedCategories, setExpandedCategories] = useState(() => new Set());
 
-  // Inline custom adder states
-  const [showCustomLevelInput, setShowCustomLevelInput] = useState(false);
-  const [customLevelText, setCustomLevelText] = useState('');
+  // Master levels, plus any level an existing assignment still names (a level
+  // renamed or removed since), so that assignment can be unticked.
+  const allLevels = Array.from(new Set([...platformLevels, ...value.map((v) => v.level).filter(Boolean)]));
 
-  const [activeCustomCatLevel, setActiveCustomCatLevel] = useState(null);
-  const [customCatText, setCustomCatText] = useState('');
+  const matches = (v, lvl, cat) => (v.level ? v.level === lvl : true) && v.category === cat;
+  const findEntry = (lvl, cat) => value.find((v) => matches(v, lvl, cat));
 
-  const [activeCustomSubKey, setActiveCustomSubKey] = useState(null); // `${level}:::${category}`
-  const [customSubText, setCustomSubText] = useState('');
-
-  // Local extra custom options added during this session
-  const [localCustomLevels, setLocalCustomLevels] = useState([]);
-  const [localCustomCategoriesByLevel, setLocalCustomCategoriesByLevel] = useState({});
-  const [localCustomSubsByKey, setLocalCustomSubsByKey] = useState({});
-
-  // All available levels (platform + custom added)
-  const allLevels = Array.from(new Set([...platformLevels, ...localCustomLevels]));
-  if (allLevels.length === 0) allLevels.push('Undergraduate (UG)', 'Postgraduate (PG)', 'Diploma');
-
-  // Helper to find existing assignment for level + category
-  const findEntry = (lvl, cat) =>
-    value.find((v) => (v.level ? v.level === lvl : true) && v.category === cat);
-
-  // Toggle category under a level
   const toggleCategory = (lvl, cat) => {
     if (disabled) return;
-    const existing = findEntry(lvl, cat);
-    if (existing) {
-      onChange(value.filter((v) => !( (v.level ? v.level === lvl : true) && v.category === cat )));
+    if (findEntry(lvl, cat)) {
+      onChange(value.filter((v) => !matches(v, lvl, cat)));
     } else {
       onChange([...value, { level: lvl, category: cat, subcategories: [] }]);
-      // auto expand category
       setExpandedCategories((prev) => new Set(prev).add(`${lvl}:::${cat}`));
     }
   };
 
-  // Toggle a single subcategory
   const toggleSubcategory = (lvl, cat, sub) => {
     if (disabled) return;
     const existing = findEntry(lvl, cat);
     if (!existing) {
-      // If category wasn't checked yet, check it with this subcategory
       onChange([...value, { level: lvl, category: cat, subcategories: [sub] }]);
       return;
     }
-
-    const currentSubs = existing.subcategories || [];
-    const newSubs = currentSubs.includes(sub)
-      ? currentSubs.filter((s) => s !== sub)
-      : [...currentSubs, sub];
-
-    onChange(
-      value.map((v) => {
-        if ((v.level ? v.level === lvl : true) && v.category === cat) {
-          return { ...v, level: lvl, subcategories: newSubs };
-        }
-        return v;
-      }),
-    );
+    const current = existing.subcategories || [];
+    const next = current.includes(sub) ? current.filter((s) => s !== sub) : [...current, sub];
+    onChange(value.map((v) => (matches(v, lvl, cat) ? { ...v, level: lvl, subcategories: next } : v)));
   };
 
-  // Select all / Deselect all subcategories for a category
   const selectAllSubcategories = (lvl, cat, allSubs) => {
     if (disabled) return;
     const existing = findEntry(lvl, cat);
-    const currentSubs = existing?.subcategories || [];
-    const allSelected = allSubs.length > 0 && allSubs.every((s) => currentSubs.includes(s));
-
+    const current = existing?.subcategories || [];
+    const allSelected = allSubs.length > 0 && allSubs.every((s) => current.includes(s));
     if (!existing) {
       onChange([...value, { level: lvl, category: cat, subcategories: [...allSubs] }]);
       return;
     }
-
-    onChange(
-      value.map((v) => {
-        if ((v.level ? v.level === lvl : true) && v.category === cat) {
-          return { ...v, level: lvl, subcategories: allSelected ? [] : [...allSubs] };
-        }
-        return v;
-      }),
-    );
+    onChange(value.map((v) => (
+      matches(v, lvl, cat) ? { ...v, level: lvl, subcategories: allSelected ? [] : [...allSubs] } : v
+    )));
   };
 
-  // Handle adding custom Level
-  const handleAddCustomLevel = async () => {
-    const lvl = customLevelText.trim();
-    if (!lvl) return;
-    if (!allLevels.includes(lvl)) {
-      setLocalCustomLevels((prev) => [...prev, lvl]);
-    }
-    // Auto-expand this new level
-    setExpandedLevels((prev) => new Set(prev).add(lvl));
-    setCustomLevelText('');
-    setShowCustomLevelInput(false);
-  };
-
-  // Handle adding custom Category under a Level
-  const handleAddCustomCategory = async (lvl) => {
-    const cat = customCatText.trim();
-    if (!cat) return;
-    setLocalCustomCategoriesByLevel((prev) => ({
-      ...prev,
-      [lvl]: Array.from(new Set([...(prev[lvl] || []), cat])),
-    }));
-    // Auto check this new category under this level
-    onChange([...value, { level: lvl, category: cat, subcategories: [] }]);
-    setExpandedCategories((prev) => new Set(prev).add(`${lvl}:::${cat}`));
-    setCustomCatText('');
-    setActiveCustomCatLevel(null);
-
-    // Also persist to taxonomy if helper is available
-    if (addHierarchyItem) {
-      addHierarchyItem({ level: lvl, category: cat, subcategories: [] }).catch(() => {});
-    }
-  };
-
-  // Handle adding custom Subcategory under Level & Category
-  const handleAddCustomSubcategory = async (lvl, cat) => {
-    const sub = customSubText.trim();
-    if (!sub) return;
-    const key = `${lvl}:::${cat}`;
-    setLocalCustomSubsByKey((prev) => ({
-      ...prev,
-      [key]: Array.from(new Set([...(prev[key] || []), sub])),
-    }));
-
-    // Auto toggle this subcategory
-    toggleSubcategory(lvl, cat, sub);
-    setCustomSubText('');
-    setActiveCustomSubKey(null);
-
-    // Persist to taxonomy backend
-    if (addHierarchyItem) {
-      addHierarchyItem({ level: lvl, category: cat, subcategories: [sub] }).catch(() => {});
-    }
-  };
+  const toggleOpen = (setter, key) => setter((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
 
   const totalAssignedCategories = value.length;
   const totalAssignedSubs = value.reduce((sum, v) => sum + (v.subcategories?.length || 0), 0);
 
   return (
     <div className="space-y-3">
-      {/* Header and counter summary */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-outline-variant/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[20px]">account_tree</span>
-            <Label className="m-0 font-bold">Course Hierarchy Assignment (Nested Multi-Select)</Label>
+            <span className="material-symbols-outlined text-blue-600 text-[20px]">account_tree</span>
+            <Label className="m-0 font-bold">Course Hierarchy Assignment</Label>
           </div>
-          <p className="text-[11px] text-on-surface-variant m-0 mt-0.5">
-            Level (UG, PG...) &rarr; Category (Engineering, MBA...) &rarr; Subcategory (Specializations). Custom options can be added at each level.
+          <p className="text-[11px] text-slate-500 m-0 mt-0.5">
+            Tick the levels, categories and branches this institute offers. The options come from
+            Platform Admin → Types &amp; Categories.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[11px] font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
-            {totalAssignedCategories} streams, {totalAssignedSubs} specializations assigned
-          </span>
-          {!showCustomLevelInput && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              icon="add"
-              onClick={() => setShowCustomLevelInput(true)}
-              className="text-xs py-1"
-            >
-              Custom Level
-            </Button>
-          )}
-        </div>
+        <span className="shrink-0 text-[11px] font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
+          {totalAssignedCategories} streams, {totalAssignedSubs} specializations assigned
+        </span>
       </div>
 
-      {/* Inline Add Custom Level Box */}
-      {showCustomLevelInput && (
-        <div className="p-3 rounded-xl border border-primary/40 bg-primary/5 flex items-center gap-2">
-          <Input
-            value={customLevelText}
-            onChange={(e) => setCustomLevelText(e.target.value)}
-            placeholder="Enter custom level (e.g. Executive Fellowship, Vocational Diploma)..."
-            className="text-xs"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleAddCustomLevel();
-              }
-            }}
-          />
-          <Button size="sm" variant="primary" onClick={handleAddCustomLevel}>
-            Add Level
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setShowCustomLevelInput(false);
-              setCustomLevelText('');
-            }}
-          >
-            Cancel
-          </Button>
-        </div>
+      {allLevels.length === 0 && (
+        <p className="text-xs text-slate-500 italic m-0 py-4 text-center">
+          No levels set up yet. Add them in Platform Admin → Types &amp; Categories.
+        </p>
       )}
 
-      {/* NESTED HIERARCHY TREE */}
       <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
         {allLevels.map((lvl) => {
           const isLvlOpen = expandedLevels.has(lvl);
-          const levelAssignedEntries = value.filter((v) => (v.level ? v.level === lvl : true));
-          const levelHasSelections = levelAssignedEntries.length > 0;
-
-          // Combine standard categories with local custom categories for this level
-          const customCategories = localCustomCategoriesByLevel[lvl] || [];
-          const levelCategories = Array.from(new Set([...standardCategories, ...customCategories]));
+          const levelAssigned = value.filter((v) => (v.level ? v.level === lvl : true));
+          const levelTree = categoriesFor(lvl);
+          // This level's categories, plus any still assigned here that the
+          // master list no longer has, so they can be unticked.
+          const levelCategories = Array.from(new Set([
+            ...Object.keys(levelTree),
+            ...value.filter((v) => v.level === lvl).map((v) => v.category),
+          ]));
 
           return (
             <div
               key={lvl}
               className={`rounded-2xl border transition-all ${
-                levelHasSelections
-                  ? 'border-primary/40 bg-surface-container-lowest shadow-xs'
-                  : 'border-outline-variant/60 bg-surface-container-lowest/50'
+                levelAssigned.length > 0 ? 'border-blue-300 bg-white shadow-sm' : 'border-slate-200 bg-white'
               }`}
             >
-              {/* LEVEL HEADER */}
-              <div className="flex items-center justify-between p-3 bg-surface-container-low/60 rounded-t-2xl">
-                <div
-                  className="flex items-center gap-2.5 flex-1 cursor-pointer select-none"
-                  onClick={() =>
-                    setExpandedLevels((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(lvl)) next.delete(lvl);
-                      else next.add(lvl);
-                      return next;
-                    })
-                  }
-                >
-                  <button
-                    type="button"
-                    className="p-1 rounded-md hover:bg-surface-container text-on-surface-variant flex items-center border-none bg-transparent cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">
-                      {isLvlOpen ? 'expand_more' : 'chevron_right'}
-                    </span>
-                  </button>
-
-                  <span className="font-bold text-xs text-on-surface flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-primary" />
-                    {lvl}
+              <button
+                type="button"
+                onClick={() => toggleOpen(setExpandedLevels, lvl)}
+                aria-expanded={isLvlOpen}
+                className="w-full flex items-center gap-2.5 p-3 bg-slate-50 rounded-t-2xl border-none cursor-pointer text-left"
+              >
+                <span className="material-symbols-outlined text-[18px] text-slate-500">
+                  {isLvlOpen ? 'expand_more' : 'chevron_right'}
+                </span>
+                <span className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                  {lvl}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {levelCategories.length} categor{levelCategories.length === 1 ? 'y' : 'ies'}
+                </span>
+                {levelAssigned.length > 0 && (
+                  <span className="text-[10px] bg-blue-600 text-white font-bold px-2 py-0.5 rounded-full">
+                    {levelAssigned.length} selected
                   </span>
+                )}
+              </button>
 
-                  {levelHasSelections && (
-                    <span className="text-[10px] bg-primary text-on-primary font-bold px-2 py-0.5 rounded-full">
-                      {levelAssignedEntries.length} categories active
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveCustomCatLevel(activeCustomCatLevel === lvl ? null : lvl);
-                      setCustomCatText('');
-                      // open level
-                      setExpandedLevels((prev) => new Set(prev).add(lvl));
-                    }}
-                    className="text-[11px] text-primary font-semibold hover:underline flex items-center gap-0.5 bg-transparent border-none cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-[14px]">add</span>
-                    Custom Category
-                  </button>
-                </div>
-              </div>
-
-              {/* LEVEL CONTENT (CATEGORIES) */}
               {isLvlOpen && (
-                <div className="p-3.5 space-y-2.5 border-t border-outline-variant/40">
-                  {/* Inline Add Custom Category */}
-                  {activeCustomCatLevel === lvl && (
-                    <div className="p-2.5 rounded-xl border border-secondary/40 bg-secondary/5 flex items-center gap-2 mb-2">
-                      <Input
-                        value={customCatText}
-                        onChange={(e) => setCustomCatText(e.target.value)}
-                        placeholder={`New stream/category under ${lvl} (e.g. Artificial Intelligence, Aviation)...`}
-                        className="text-xs"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddCustomCategory(lvl);
-                          }
-                        }}
-                      />
-                      <Button size="sm" variant="primary" onClick={() => handleAddCustomCategory(lvl)}>
-                        Add
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setActiveCustomCatLevel(null);
-                          setCustomCatText('');
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
+                <div className="p-3.5 border-t border-slate-200">
+                  {levelCategories.length === 0 ? (
+                    <p className="text-[11px] text-slate-500 italic m-0">
+                      Nothing under {lvl} yet — add categories in Platform Admin → Types &amp; Categories.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                      {levelCategories.map((cat) => {
+                        const entry = findEntry(lvl, cat);
+                        const isCatSelected = !!entry;
+                        const catKey = `${lvl}:::${cat}`;
+                        const isCatOpen = expandedCategories.has(catKey);
+                        const allSubs = Array.from(new Set([...(levelTree[cat] || []), ...(entry?.subcategories || [])]));
+                        const selectedSubsCount = entry?.subcategories?.length || 0;
+                        const allSubsSelected = allSubs.length > 0 && selectedSubsCount === allSubs.length;
 
-                  {/* Categories Grid under this Level */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                    {levelCategories.map((cat) => {
-                      const entry = findEntry(lvl, cat);
-                      const isCatSelected = !!entry;
-                      const catKey = `${lvl}:::${cat}`;
-                      const isCatOpen = expandedCategories.has(catKey);
-
-                      // Standard subs + local custom subs
-                      const standardSubs = courseSubcategoriesFor ? courseSubcategoriesFor(cat) : [];
-                      const customSubs = localCustomSubsByKey[catKey] || [];
-                      const allSubs = Array.from(new Set([...standardSubs, ...customSubs]));
-                      const selectedSubsCount = entry?.subcategories?.length || 0;
-                      const allSubsSelected = allSubs.length > 0 && selectedSubsCount === allSubs.length;
-
-                      return (
-                        <div
-                          key={cat}
-                          className={`rounded-xl border transition-all ${
-                            isCatSelected
-                              ? 'border-primary/50 bg-primary/5'
-                              : 'border-outline-variant/60 bg-surface-container-lowest'
-                          }`}
-                        >
-                          {/* CATEGORY ROW */}
-                          <div className="flex items-center justify-between p-2.5 gap-2">
-                            <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
-                              <input
-                                type="checkbox"
-                                checked={isCatSelected}
-                                onChange={() => toggleCategory(lvl, cat)}
-                                disabled={disabled}
-                                className="w-4 h-4 accent-primary cursor-pointer rounded"
-                              />
-                              <span
-                                className={`text-xs font-bold truncate ${
-                                  isCatSelected ? 'text-primary' : 'text-on-surface'
-                                }`}
-                              >
-                                {cat}
-                              </span>
-                            </label>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {isCatSelected && allSubs.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => selectAllSubcategories(lvl, cat, allSubs)}
+                        return (
+                          <div
+                            key={cat}
+                            className={`rounded-xl border transition-all ${
+                              isCatSelected ? 'border-blue-400 bg-blue-50/50' : 'border-slate-200 bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between p-2.5 gap-2">
+                              <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={isCatSelected}
+                                  onChange={() => toggleCategory(lvl, cat)}
                                   disabled={disabled}
-                                  className="text-[10px] text-primary hover:underline bg-transparent border-none cursor-pointer font-medium"
-                                >
-                                  {allSubsSelected ? 'Deselect' : 'Select all'}
-                                </button>
-                              )}
+                                  className="w-4 h-4 accent-blue-600 cursor-pointer rounded"
+                                />
+                                <span className={`text-xs font-bold truncate ${isCatSelected ? 'text-blue-700' : 'text-slate-900'}`}>
+                                  {cat}
+                                </span>
+                              </label>
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedCategories((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(catKey)) next.delete(catKey);
-                                    else next.add(catKey);
-                                    return next;
-                                  })
-                                }
-                                className="bg-surface-container-high border-none cursor-pointer text-[10px] text-on-surface-variant font-semibold px-2 py-0.5 rounded-full flex items-center gap-0.5 hover:bg-surface-container-highest"
-                              >
-                                <span>
-                                  {isCatSelected ? `${selectedSubsCount}/` : ''}
-                                  {allSubs.length}
-                                </span>
-                                <span className="material-symbols-outlined text-[13px]">
-                                  {isCatOpen ? 'expand_less' : 'expand_more'}
-                                </span>
-                              </button>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {isCatSelected && allSubs.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => selectAllSubcategories(lvl, cat, allSubs)}
+                                    disabled={disabled}
+                                    className="text-[10px] text-blue-700 hover:underline bg-transparent border-none cursor-pointer font-medium"
+                                  >
+                                    {allSubsSelected ? 'Deselect' : 'Select all'}
+                                  </button>
+                                )}
+                                {allSubs.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleOpen(setExpandedCategories, catKey)}
+                                    aria-expanded={isCatOpen}
+                                    aria-label={`${isCatOpen ? 'Hide' : 'Show'} branches of ${cat}`}
+                                    className="bg-slate-100 border-none cursor-pointer text-[10px] text-slate-600 font-semibold px-2 py-0.5 rounded-full flex items-center gap-0.5 hover:bg-slate-200"
+                                  >
+                                    <span>{isCatSelected ? `${selectedSubsCount}/` : ''}{allSubs.length}</span>
+                                    <span className="material-symbols-outlined text-[13px]">
+                                      {isCatOpen ? 'expand_less' : 'expand_more'}
+                                    </span>
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          </div>
 
-                          {/* SUBCATEGORIES EXPANDED */}
-                          {isCatOpen && (
-                            <div className="p-3 pt-1 border-t border-outline-variant/40 bg-surface-container-lowest/80 rounded-b-xl space-y-2">
-                              {/* Subcategories checklist */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {isCatOpen && allSubs.length > 0 && (
+                              <div className="p-3 pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                                 {allSubs.map((sub) => {
-                                  const isSubSelected = entry?.subcategories?.includes(sub);
+                                  const isSubSelected = !!entry?.subcategories?.includes(sub);
                                   return (
                                     <label
                                       key={sub}
                                       className={`flex items-center gap-2 p-1.5 px-2 rounded-lg border text-xs cursor-pointer transition-colors ${
                                         isSubSelected
-                                          ? 'bg-primary/10 border-primary text-primary font-medium'
-                                          : 'bg-surface-container-low border-outline-variant/60 text-on-surface-variant hover:bg-surface-container-high'
+                                          ? 'bg-blue-50 border-blue-400 text-blue-800 font-medium'
+                                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                                       }`}
                                     >
                                       <input
                                         type="checkbox"
-                                        checked={!!isSubSelected}
+                                        checked={isSubSelected}
                                         onChange={() => toggleSubcategory(lvl, cat, sub)}
                                         disabled={disabled}
-                                        className="w-3.5 h-3.5 accent-primary cursor-pointer rounded"
+                                        className="w-3.5 h-3.5 accent-blue-600 cursor-pointer rounded"
                                       />
                                       <span className="truncate">{sub}</span>
                                     </label>
                                   );
                                 })}
                               </div>
-
-                              {allSubs.length === 0 && (
-                                <p className="text-[11px] text-on-surface-variant m-0 italic">
-                                  No subcategories defined yet. Add a custom branch below.
-                                </p>
-                              )}
-
-                              {/* Add Custom Subcategory under this Category */}
-                              <div className="pt-1.5 border-t border-outline-variant/30 flex items-center justify-between">
-                                {activeCustomSubKey === catKey ? (
-                                  <div className="flex items-center gap-1.5 w-full">
-                                    <Input
-                                      value={customSubText}
-                                      onChange={(e) => setCustomSubText(e.target.value)}
-                                      placeholder="Branch / Specialization name"
-                                      className="text-xs py-1"
-                                      autoFocus
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.preventDefault();
-                                          handleAddCustomSubcategory(lvl, cat);
-                                        }
-                                      }}
-                                    />
-                                    <Button
-                                      size="sm"
-                                      variant="primary"
-                                      onClick={() => handleAddCustomSubcategory(lvl, cat)}
-                                      className="px-2 py-1 text-xs"
-                                    >
-                                      Save
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        setActiveCustomSubKey(null);
-                                        setCustomSubText('');
-                                      }}
-                                      className="px-2 py-1 text-xs"
-                                    >
-                                      Cancel
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveCustomSubKey(catKey);
-                                      setCustomSubText('');
-                                    }}
-                                    className="text-[11px] text-primary font-semibold flex items-center gap-1 bg-transparent border-none cursor-pointer hover:underline p-0"
-                                  >
-                                    <span className="material-symbols-outlined text-[13px]">add</span>
-                                    Custom Specialization / Branch
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -523,10 +252,9 @@ export default function CourseCategorySelect({
         })}
       </div>
 
-      {/* Summary Footer */}
-      <p className="text-[11px] text-on-surface-variant mt-2 mb-0">
+      <p className="text-[11px] text-slate-500 mt-2 mb-0">
         {value.length === 0
-          ? 'No streams selected. Check any level & category to assign to this institute.'
+          ? 'No streams selected. Tick a category under any level to assign it to this institute.'
           : `${totalAssignedCategories} categories and ${totalAssignedSubs} specializations assigned.`}
       </p>
     </div>

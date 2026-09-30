@@ -8,6 +8,19 @@ import {
   addTaxonomyLevel,
   deleteTaxonomyLevel,
   addTaxonomyHierarchyItem,
+  addTaxonomyLevelItems,
+  addTaxonomyLevelSubcategory,
+  renameTaxonomyLevel,
+  renameTaxonomyLevelCategory,
+  renameTaxonomyLevelSubcategory,
+  deleteTaxonomyLevelCategory,
+  deleteTaxonomyLevelSubcategory,
+  addTaxonomyLocation,
+  renameTaxonomyLocation,
+  deleteTaxonomyLocation,
+  addTaxonomyAffiliation,
+  renameTaxonomyAffiliation,
+  deleteTaxonomyAffiliation,
 } from '../Api/Api';
 import {
   COURSE_CATEGORIES_BY_TYPE as DEFAULT_COURSE_CATEGORIES_BY_TYPE,
@@ -21,6 +34,9 @@ const TaxonomyContext = createContext(null);
 
 export function TaxonomyProvider({ children }) {
   const [hierarchy, setHierarchy] = useState(DEFAULT_COURSE_CATEGORIES_BY_TYPE);
+  // Level -> Category -> Subcategories, the source of truth once the backend
+  // provides it (null until then, so the legacy per-type pool is used).
+  const [levelHierarchy, setLevelHierarchy] = useState(null);
   const [levels, setLevels] = useState(DEFAULT_COURSE_LEVELS);
   const [types, setTypes] = useState(DEFAULT_INSTITUTE_TYPES);
   const [affiliations, setAffiliations] = useState(DEFAULT_AFFILIATION_OPTIONS);
@@ -32,6 +48,7 @@ export function TaxonomyProvider({ children }) {
       const res = await fetchTaxonomy();
       if (res) {
         if (res.course_hierarchy) setHierarchy(res.course_hierarchy);
+        if (res.level_hierarchy) setLevelHierarchy(res.level_hierarchy);
         if (res.course_levels) setLevels(res.course_levels);
         if (res.institute_types) setTypes(res.institute_types);
         if (res.affiliations) setAffiliations(res.affiliations);
@@ -48,10 +65,12 @@ export function TaxonomyProvider({ children }) {
     loadTaxonomy();
   }, [loadTaxonomy]);
 
-  // Unified Common Pool of categories and subcategories across all institute types
+  // Unified pool of categories and subcategories, for the institute-facing
+  // pickers: every level's categories merged (or, before the per-level tree
+  // exists, every institute type's).
   const commonCategories = useMemo(() => {
     const pool = {};
-    Object.values(hierarchy || {}).forEach((byType) => {
+    Object.values(levelHierarchy || hierarchy || {}).forEach((byType) => {
       if (typeof byType === 'object' && byType !== null) {
         Object.entries(byType).forEach(([cat, subs]) => {
           if (!pool[cat]) pool[cat] = [];
@@ -64,7 +83,7 @@ export function TaxonomyProvider({ children }) {
       }
     });
     return pool;
-  }, [hierarchy]);
+  }, [hierarchy, levelHierarchy]);
 
   // Common pool getters: available to ANY institute regardless of type
   const courseCategoriesFor = useCallback(
@@ -113,6 +132,7 @@ export function TaxonomyProvider({ children }) {
   const deleteLevel = async (level) => {
     const updated = await deleteTaxonomyLevel(level);
     if (updated?.course_levels) setLevels(updated.course_levels);
+    if (updated?.level_hierarchy) setLevelHierarchy(updated.level_hierarchy);
     return updated;
   };
 
@@ -123,9 +143,37 @@ export function TaxonomyProvider({ children }) {
     return updated;
   };
 
+  // Apply a full-taxonomy response from any of the per-level endpoints.
+  const applyTaxonomy = (updated) => {
+    if (updated?.level_hierarchy) setLevelHierarchy(updated.level_hierarchy);
+    if (updated?.course_levels) setLevels(updated.course_levels);
+    if (updated?.course_hierarchy) setHierarchy(updated.course_hierarchy);
+    if (updated?.locations) setLocations(updated.locations);
+    if (updated?.affiliations) setAffiliations(updated.affiliations);
+    return updated;
+  };
+
+  const levelActions = {
+    addLocation: async (name) => applyTaxonomy(await addTaxonomyLocation(name)),
+    renameLocation: async (payload) => applyTaxonomy(await renameTaxonomyLocation(payload)),
+    deleteLocation: async (name) => applyTaxonomy(await deleteTaxonomyLocation(name)),
+    addAffiliation: async (payload) => applyTaxonomy(await addTaxonomyAffiliation(payload)),
+    renameAffiliation: async (payload) => applyTaxonomy(await renameTaxonomyAffiliation(payload)),
+    deleteAffiliation: async (payload) => applyTaxonomy(await deleteTaxonomyAffiliation(payload)),
+    addLevelItems: async (payload) => applyTaxonomy(await addTaxonomyLevelItems(payload)),
+    addLevelSubcategory: async (payload) => applyTaxonomy(await addTaxonomyLevelSubcategory(payload)),
+    renameLevel: async (payload) => applyTaxonomy(await renameTaxonomyLevel(payload)),
+    renameLevelCategory: async (payload) => applyTaxonomy(await renameTaxonomyLevelCategory(payload)),
+    renameLevelSubcategory: async (payload) => applyTaxonomy(await renameTaxonomyLevelSubcategory(payload)),
+    deleteLevelCategory: async (payload) => applyTaxonomy(await deleteTaxonomyLevelCategory(payload)),
+    deleteLevelSubcategory: async (payload) => applyTaxonomy(await deleteTaxonomyLevelSubcategory(payload)),
+  };
+
   const value = {
     loading,
     hierarchy,
+    levelHierarchy: levelHierarchy || {},
+    ...levelActions,
     commonCategories,
     levels,
     types,

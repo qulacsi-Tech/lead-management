@@ -536,3 +536,56 @@ export const updateAdDescriptionGroup = async (id, patch) =>
 
 export const deleteAdDescriptionGroup = async (id) =>
   apiFetch(`/ad-templates/groups/${id}`, { method: 'DELETE' });
+
+// Per-level hierarchy: Level -> Category -> Subcategories. Each call edits one
+// level only (backend/routers/taxonomy.py, "level-hierarchy"); all return the
+// full taxonomy.
+export const addTaxonomyLevelItems = async ({ levels, category, subcategories = [] }) =>
+  apiFetch('/taxonomy/level-hierarchy/items', { method: 'POST', body: { levels, category, subcategories } });
+
+export const addTaxonomyLevelSubcategory = async ({ level, category, subcategory }) =>
+  apiFetch('/taxonomy/level-hierarchy/subcategory', { method: 'POST', body: { level, category, subcategory } });
+
+export const renameTaxonomyLevel = async ({ level, newName }) =>
+  apiFetch('/taxonomy/level-hierarchy/level', { method: 'PATCH', body: { level, new_name: newName } });
+
+export const renameTaxonomyLevelCategory = async ({ level, category, newName }) =>
+  apiFetch('/taxonomy/level-hierarchy/category', { method: 'PATCH', body: { level, category, new_name: newName } });
+
+export const renameTaxonomyLevelSubcategory = async ({ level, category, subcategory, newName }) =>
+  apiFetch('/taxonomy/level-hierarchy/subcategory', {
+    method: 'PATCH',
+    body: { level, category, subcategory, new_name: newName },
+  });
+
+export const deleteTaxonomyLevelCategory = async ({ level, category }) =>
+  apiFetch(`/taxonomy/level-hierarchy/category?${new URLSearchParams({ level, category })}`, { method: 'DELETE' });
+
+export const deleteTaxonomyLevelSubcategory = async ({ level, category, subcategory }) =>
+  apiFetch(`/taxonomy/level-hierarchy/subcategory?${new URLSearchParams({ level, category, subcategory })}`, {
+    method: 'DELETE',
+  });
+
+// Serviced locations and per-institute-type affiliations (Main Admin writes).
+export const addTaxonomyLocation = async (name) =>
+  apiFetch('/taxonomy/locations', { method: 'POST', body: { name } });
+
+export const renameTaxonomyLocation = async ({ name, newName }) =>
+  apiFetch('/taxonomy/locations', { method: 'PATCH', body: { name, new_name: newName } });
+
+export const deleteTaxonomyLocation = async (name) =>
+  apiFetch(`/taxonomy/locations?${new URLSearchParams({ name })}`, { method: 'DELETE' });
+
+export const addTaxonomyAffiliation = async ({ instituteType, name }) =>
+  apiFetch('/taxonomy/affiliations', { method: 'POST', body: { institute_type: instituteType, name } });
+
+export const renameTaxonomyAffiliation = async ({ instituteType, name, newName }) =>
+  apiFetch('/taxonomy/affiliations', {
+    method: 'PATCH',
+    body: { institute_type: instituteType, name, new_name: newName },
+  });
+
+export const deleteTaxonomyAffiliation = async ({ instituteType, name }) =>
+  apiFetch(`/taxonomy/affiliations?${new URLSearchParams({ institute_type: instituteType, name })}`, {
+    method: 'DELETE',
+  });

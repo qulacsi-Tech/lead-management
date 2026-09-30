@@ -7,6 +7,7 @@ Allows Main Admin to dynamically manage:
   - Affiliation options and locations
 """
 
+import copy
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -25,6 +26,15 @@ from models.taxonomy import (
     DeleteLevelRequest,
     AddHierarchyItemRequest,
     FullHierarchyUpdateRequest,
+    LevelItemsRequest,
+    LevelSubcategoryRequest,
+    RenameLevelRequest,
+    RenameCategoryRequest,
+    RenameSubcategoryRequest,
+    LocationRequest,
+    RenameLocationRequest,
+    AffiliationRequest,
+    RenameAffiliationRequest,
     TaxonomyResponse,
     DEFAULT_COURSE_HIERARCHY,
     DEFAULT_COURSE_LEVELS,
@@ -67,8 +77,15 @@ async def get_taxonomy(db: AsyncSession = Depends(get_db)):
     affiliations_rec = await _get_or_create_record(db, "affiliations", DEFAULT_AFFILIATIONS)
     locations_rec = await _get_or_create_record(db, "locations", DEFAULT_LOCATIONS)
 
+    level_rec = await _get_or_create_record(db, "level_hierarchy", {})
+    course_levels = levels_rec.data if levels_rec.data is not None else []
+    level_hierarchy = dict(level_rec.data or {})
+    # Every level appears, even one with nothing under it yet.
+    level_hierarchy = {lvl: level_hierarchy.get(lvl, {}) for lvl in course_levels}
+
     return TaxonomyResponse(
         course_hierarchy=hierarchy_rec.data if hierarchy_rec.data is not None else {},
+        level_hierarchy=level_hierarchy,
         course_levels=levels_rec.data if levels_rec.data is not None else [],
         institute_types=INSTITUTE_TYPES,
         affiliations=affiliations_rec.data if affiliations_rec.data is not None else DEFAULT_AFFILIATIONS,
@@ -230,6 +247,11 @@ async def delete_course_level(
     rec = await _get_or_create_record(db, "course_levels", DEFAULT_COURSE_LEVELS)
     current_levels = [l for l in (rec.data or DEFAULT_COURSE_LEVELS) if l != level]
     rec.data = current_levels
+    lh_rec = await _get_or_create_record(db, "level_hierarchy", {})
+    lh = copy.deepcopy(lh_rec.data or {})
+    if level in lh:
+        lh.pop(level)
+        lh_rec.data = lh
     await db.commit()
     await db.refresh(rec)
 
@@ -297,4 +319,297 @@ async def add_hierarchy_item(
         rec.data = hierarchy
         await db.commit()
 
+    return await get_taxonomy(db)
+
+
+# ---------------------------------------------------------------------------
+# Per-level hierarchy (Level -> Category -> Subcategories)
+#
+# Everything below edits ONE level at a time: a category or branch added,
+# renamed or removed under UG is untouched under PG. See models/taxonomy.py.
+# ---------------------------------------------------------------------------
+
+def _clean(value: str, what: str) -> str:
+    cleaned = " ".join((value or "").split())
+    if not cleaned:
+        raise HTTPException(status_code=422, detail=f"{what} cannot be empty")
+    return cleaned
+
+
+def _find(names, wanted: str) -> Optional[str]:
+    """The existing spelling of `wanted`, matched case-insensitively."""
+    low = wanted.lower()
+    return next((n for n in names if n.lower() == low), None)
+
+
+async def _level_state(db: AsyncSession):
+    levels_rec = await _get_or_create_record(db, "course_levels", DEFAULT_COURSE_LEVELS)
+    lh_rec = await _get_or_create_record(db, "level_hierarchy", {})
+    levels = list(levels_rec.data or [])
+    lh = copy.deepcopy(lh_rec.data or {})
+    return levels_rec, lh_rec, levels, lh
+
+
+async def _save(db: AsyncSession, levels_rec, lh_rec, levels, lh):
+    # Reassign rather than mutate: SQLAlchemy only notices a JSON change when
+    # the attribute itself is replaced.
+    levels_rec.data = list(levels)
+    lh_rec.data = {lvl: lh.get(lvl, {}) for lvl in levels}
+    await db.commit()
+    return await get_taxonomy(db)
+
+
+def _require_level(levels, level: str) -> str:
+    found = _find(levels, level)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f'Level "{level}" not found')
+    return found
+
+
+def _require_category(lh, level: str, category: str) -> str:
+    found = _find(lh.get(level, {}).keys(), category)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f'"{category}" is not under {level}')
+    return found
+
+
+@router.post("/level-hierarchy/items", response_model=TaxonomyResponse)
+async def add_level_items(
+    payload: LevelItemsRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    """Add a category (with branches) under each ticked level — only those."""
+    levels_rec, lh_rec, levels, lh = await _level_state(db)
+    category = _clean(payload.category, "Category")
+    subs = [_clean(s, "Branch") for s in payload.subcategories if (s or "").strip()]
+
+    for raw_level in payload.levels:
+        name = _clean(raw_level, "Level")
+        level = _find(levels, name)
+        if level is None:
+            levels.append(name)
+            level = name
+        cats = lh.setdefault(level, {})
+        cat = _find(cats.keys(), category) or category
+        current = cats.setdefault(cat, [])
+        for sub in subs:
+            if _find(current, sub) is None:
+                current.append(sub)
+
+    return await _save(db, levels_rec, lh_rec, levels, lh)
+
+
+@router.post("/level-hierarchy/subcategory", response_model=TaxonomyResponse)
+async def add_level_subcategory(
+    payload: LevelSubcategoryRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    levels_rec, lh_rec, levels, lh = await _level_state(db)
+    level = _require_level(levels, payload.level)
+    cat = _require_category(lh, level, payload.category)
+    sub = _clean(payload.subcategory, "Branch")
+    subs = lh[level][cat]
+    if _find(subs, sub) is not None:
+        raise HTTPException(status_code=409, detail=f'"{sub}" is already under {cat}')
+    subs.append(sub)
+    return await _save(db, levels_rec, lh_rec, levels, lh)
+
+
+@router.patch("/level-hierarchy/level", response_model=TaxonomyResponse)
+async def rename_level(
+    payload: RenameLevelRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    levels_rec, lh_rec, levels, lh = await _level_state(db)
+    level = _require_level(levels, payload.level)
+    new = _clean(payload.new_name, "Level")
+    clash = _find(levels, new)
+    if clash is not None and clash != level:
+        raise HTTPException(status_code=409, detail=f'A level named "{clash}" already exists')
+    levels = [new if l == level else l for l in levels]
+    lh[new] = lh.pop(level, {})
+    return await _save(db, levels_rec, lh_rec, levels, lh)
+
+
+@router.patch("/level-hierarchy/category", response_model=TaxonomyResponse)
+async def rename_level_category(
+    payload: RenameCategoryRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    """Rename a category under one level. Its position and branches are kept."""
+    levels_rec, lh_rec, levels, lh = await _level_state(db)
+    level = _require_level(levels, payload.level)
+    cat = _require_category(lh, level, payload.category)
+    new = _clean(payload.new_name, "Category")
+    clash = _find(lh[level].keys(), new)
+    if clash is not None and clash != cat:
+        raise HTTPException(status_code=409, detail=f'"{clash}" already exists under {level}')
+    lh[level] = {(new if k == cat else k): v for k, v in lh[level].items()}
+    return await _save(db, levels_rec, lh_rec, levels, lh)
+
+
+@router.patch("/level-hierarchy/subcategory", response_model=TaxonomyResponse)
+async def rename_level_subcategory(
+    payload: RenameSubcategoryRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    levels_rec, lh_rec, levels, lh = await _level_state(db)
+    level = _require_level(levels, payload.level)
+    cat = _require_category(lh, level, payload.category)
+    subs = lh[level][cat]
+    old = _find(subs, payload.subcategory)
+    if old is None:
+        raise HTTPException(status_code=404, detail=f'"{payload.subcategory}" is not under {cat}')
+    new = _clean(payload.new_name, "Branch")
+    clash = _find(subs, new)
+    if clash is not None and clash != old:
+        raise HTTPException(status_code=409, detail=f'"{clash}" is already under {cat}')
+    lh[level][cat] = [new if s_ == old else s_ for s_ in subs]
+    return await _save(db, levels_rec, lh_rec, levels, lh)
+
+
+@router.delete("/level-hierarchy/category", response_model=TaxonomyResponse)
+async def delete_level_category(
+    level: str = Query(...),
+    category: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    levels_rec, lh_rec, levels, lh = await _level_state(db)
+    lvl = _require_level(levels, level)
+    cat = _require_category(lh, lvl, category)
+    lh[lvl].pop(cat)
+    return await _save(db, levels_rec, lh_rec, levels, lh)
+
+
+@router.delete("/level-hierarchy/subcategory", response_model=TaxonomyResponse)
+async def delete_level_subcategory(
+    level: str = Query(...),
+    category: str = Query(...),
+    subcategory: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    levels_rec, lh_rec, levels, lh = await _level_state(db)
+    lvl = _require_level(levels, level)
+    cat = _require_category(lh, lvl, category)
+    lh[lvl][cat] = [s_ for s_ in lh[lvl][cat] if s_.lower() != subcategory.lower()]
+    return await _save(db, levels_rec, lh_rec, levels, lh)
+
+
+# ---------------------------------------------------------------------------
+# Serviced locations and affiliations
+# ---------------------------------------------------------------------------
+
+async def _locations(db: AsyncSession):
+    rec = await _get_or_create_record(db, "locations", DEFAULT_LOCATIONS)
+    return rec, list(rec.data if rec.data is not None else DEFAULT_LOCATIONS)
+
+
+@router.post("/locations", response_model=TaxonomyResponse)
+async def add_location(
+    payload: LocationRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    rec, items = await _locations(db)
+    name = _clean(payload.name, "Location")
+    if _find(items, name) is not None:
+        raise HTTPException(status_code=409, detail=f'"{name}" is already listed')
+    rec.data = items + [name]
+    await db.commit()
+    return await get_taxonomy(db)
+
+
+@router.patch("/locations", response_model=TaxonomyResponse)
+async def rename_location(
+    payload: RenameLocationRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    rec, items = await _locations(db)
+    old = _find(items, payload.name)
+    if old is None:
+        raise HTTPException(status_code=404, detail=f'"{payload.name}" is not listed')
+    new = _clean(payload.new_name, "Location")
+    clash = _find(items, new)
+    if clash is not None and clash != old:
+        raise HTTPException(status_code=409, detail=f'"{clash}" is already listed')
+    rec.data = [new if i == old else i for i in items]
+    await db.commit()
+    return await get_taxonomy(db)
+
+
+@router.delete("/locations", response_model=TaxonomyResponse)
+async def delete_location(
+    name: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    rec, items = await _locations(db)
+    rec.data = [i for i in items if i.lower() != name.lower()]
+    await db.commit()
+    return await get_taxonomy(db)
+
+
+async def _affiliations(db: AsyncSession, institute_type: str):
+    if institute_type not in INSTITUTE_TYPES:
+        raise HTTPException(status_code=422, detail=f"institute_type must be one of {INSTITUTE_TYPES}")
+    rec = await _get_or_create_record(db, "affiliations", DEFAULT_AFFILIATIONS)
+    data = copy.deepcopy(rec.data if rec.data is not None else DEFAULT_AFFILIATIONS)
+    return rec, data, list(data.get(institute_type, []))
+
+
+@router.post("/affiliations", response_model=TaxonomyResponse)
+async def add_affiliation(
+    payload: AffiliationRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    rec, data, items = await _affiliations(db, payload.institute_type)
+    name = _clean(payload.name, "Affiliation")
+    if _find(items, name) is not None:
+        raise HTTPException(status_code=409, detail=f'"{name}" is already listed for {payload.institute_type}')
+    data[payload.institute_type] = items + [name]
+    rec.data = data
+    await db.commit()
+    return await get_taxonomy(db)
+
+
+@router.patch("/affiliations", response_model=TaxonomyResponse)
+async def rename_affiliation(
+    payload: RenameAffiliationRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    rec, data, items = await _affiliations(db, payload.institute_type)
+    old = _find(items, payload.name)
+    if old is None:
+        raise HTTPException(status_code=404, detail=f'"{payload.name}" is not listed for {payload.institute_type}')
+    new = _clean(payload.new_name, "Affiliation")
+    clash = _find(items, new)
+    if clash is not None and clash != old:
+        raise HTTPException(status_code=409, detail=f'"{clash}" is already listed for {payload.institute_type}')
+    data[payload.institute_type] = [new if i == old else i for i in items]
+    rec.data = data
+    await db.commit()
+    return await get_taxonomy(db)
+
+
+@router.delete("/affiliations", response_model=TaxonomyResponse)
+async def delete_affiliation(
+    institute_type: str = Query(...),
+    name: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_main_admin),
+):
+    rec, data, items = await _affiliations(db, institute_type)
+    data[institute_type] = [i for i in items if i.lower() != name.lower()]
+    rec.data = data
+    await db.commit()
     return await get_taxonomy(db)
